@@ -16,7 +16,8 @@ app.register_blueprint(github_bp, url_prefix="/login")
 
 @app.route("/")
 def index():
-    catalog = services.get_catalog()
+    # El catálogo principal se lee de ismyself de JesusQuijada34
+    catalog = services.get_catalog("JesusQuijada34")
     return render_template("index.html", packages=catalog.get("packages", []))
 
 @app.route("/login")
@@ -37,8 +38,9 @@ def developer_profile(username):
     ondev_accounts = services.load_ondev_accounts()
     is_ondev = username in ondev_accounts
     
-    # Intentar cargar perfil desde repo ismyself
+    # Intentar cargar perfil y catálogo desde repo ismyself del usuario
     profile_data = services.get_github_user_profile(username)
+    user_catalog = services.get_catalog(username)
     
     if not profile_data and not is_ondev:
         return render_template("error.html", message="Usuario no encontrado o sin perfil público."), 404
@@ -46,6 +48,7 @@ def developer_profile(username):
     return render_template("developer_profile.html", 
                            username=username, 
                            profile=profile_data, 
+                           packages=user_catalog.get("packages", []),
                            is_ondev=is_ondev)
 
 @app.route("/packages/<package_name>/")

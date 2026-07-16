@@ -33,13 +33,27 @@ def get_github_user_profile(username, access_token=None):
         headers['Authorization'] = f"token {access_token}"
     
     response = requests.get(url, headers=headers)
-    if response.status_status == 200:
+    if response.status_code == 200:
         import base64
         content = base64.b64decode(response.json()['content']).decode('utf-8')
         return json.loads(content)
     return None
 
-def get_catalog():
+def get_catalog(username="JesusQuijada34"):
+    """
+    Obtiene el catálogo desde el repositorio 'ismyself' del usuario principal.
+    """
+    url = f"https://api.github.com/repos/{username}/ismyself/contents/catalog.json"
+    try:
+        response = requests.get(url)
+        if response.status_code == 200:
+            import base64
+            content = base64.b64decode(response.json()['content']).decode('utf-8')
+            return json.loads(content)
+    except Exception as e:
+        print(f"Error cargando catálogo: {e}")
+    
+    # Fallback al catálogo local si falla el remoto
     if os.path.exists(Config.CATALOG_PATH):
         with open(Config.CATALOG_PATH, 'r') as f:
             return json.load(f)

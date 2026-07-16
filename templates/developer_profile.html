@@ -23,8 +23,18 @@
 
 <h2>Repositorios y Paquetes</h2>
 <div class="package-grid">
-    <!-- Aquí se listarían los paquetes del desarrollador -->
-    <p>Cargando paquetes de {{ username }}...</p>
+    {% for package in packages %}
+    <a href="{{ package.url }}" class="package-card">
+        <div class="package-banner" style="background-image: url('{{ package.banner }}')"></div>
+        <div class="package-info">
+            <h3>{{ package.display_name }}</h3>
+            <p>{{ package.description }}</p>
+            <small>v{{ package.version }}</small>
+        </div>
+    </a>
+    {% else %}
+    <p>Este desarrollador aún no tiene paquetes públicos.</p>
+    {% endfor %}
 </div>
 {% endblock %}
 
