@@ -19,6 +19,7 @@
             <div class="nav-links">
                 <a href="/">Explorar</a>
                 {% if session.get('github_oauth_token') %}
+                    <a href="/me">Mi Perfil</a>
                     <a href="/panel">Panel Pro</a>
                     <a href="/logout">Cerrar Sesión</a>
                 {% else %}

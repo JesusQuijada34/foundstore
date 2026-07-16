@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}Mi Perfil - foundstore{% endblock %}
+
+{% block content %}
+<div class="user-profile-container">
+    <div class="profile-card liquid-glass">
+        <div class="profile-banner-container" style="background-image: url('{{ profile.banner or 'https://via.placeholder.com/1200x300' }}');">
+            <div class="profile-avatar-wrapper">
+                <img src="{{ profile.logo or 'https://github.com/' + username + '.png' }}" alt="{{ username }}" class="profile-avatar-large">
+            </div>
+        </div>
+        
+        <div class="profile-info-section">
+            <div class="profile-main-info">
+                <h1>{{ profile.name or username }}</h1>
+                <p class="profile-username">@{{ username }}</p>
+                <p class="profile-bio">{{ profile.description or 'Sin descripción disponible.' }}</p>
+                
+                <div class="profile-stats-grid">
+                    <div class="stat-box">
+                        <span class="stat-value">{{ follower_count }}</span>
+                        <span class="stat-name">Seguidores</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-value">{{ following_count }}</span>
+                        <span class="stat-name">Siguiendo</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-value">{{ package_count }}</span>
+                        <span class="stat-name">Paquetes</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="profile-extra-info">
+                <div class="info-group">
+                    <h3>Enlaces</h3>
+                    <div class="social-links-list">
+                        {% if profile.links %}
+                            {% for link in profile.links %}
+                                <a href="{{ link.url }}" target="_blank" class="social-link-item">
+                                    <span class="material-icons">link</span> {{ link.name }}
+                                </a>
+                            {% endfor %}
+                        {% else %}
+                            <a href="https://github.com/{{ username }}" target="_blank" class="social-link-item">
+                                <span class="material-icons">code</span> GitHub
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                {% if is_ondev %}
+                <div class="info-group">
+                    <h3>Estado OnDev</h3>
+                    <span class="badge-ondev-large">Creador Verificado</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="user-packages-section">
+        <h2>Tus Paquetes Publicados</h2>
+        <div class="package-grid">
+            {% for package in packages %}
+            <a href="{{ package.url }}" class="package-card">
+                <div class="package-banner" style="background-image: url('{{ package.banner }}')"></div>
+                <div class="package-info">
+                    <h3>{{ package.display_name }}</h3>
+                    <p>{{ package.description }}</p>
+                    <small>v{{ package.version }}</small>
+                </div>
+            </a>
+            {% else %}
+            <div class="empty-packages">
+                <p>Aún no has publicado ningún paquete.</p>
+                <a href="/panel" class="btn-secondary">Gestionar paquetes</a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+.user-profile-container {
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+.profile-card {
+    border-radius: 24px;
+    overflow: hidden;
+    margin-bottom: 40px;
+}
+
+.profile-banner-container {
+    height: 250px;
+    background-size: cover;
+    background-position: center;
+    position: relative;
+}
+
+.profile-avatar-wrapper {
+    position: absolute;
+    bottom: -60px;
+    left: 40px;
+}
+
+.profile-avatar-large {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    border: 6px solid white;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    background: white;
+}
+
+.profile-info-section {
+    padding: 80px 40px 40px;
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 40px;
+}
+
+.profile-main-info h1 {
+    margin: 0;
+    font-size: 2.5rem;
+}
+
+.profile-username {
+    color: var(--accent-color);
+    font-weight: 600;
+    margin: 5px 0 20px;
+}
+
+.profile-bio {
+    font-size: 1.1rem;
+    color: #444;
+    line-height: 1.6;
+    margin-bottom: 30px;
+}
+
+.profile-stats-grid {
+    display: flex;
+    gap: 40px;
+}
+
+.stat-box {
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #1a1a1a;
+}
+
+.stat-name {
+    font-size: 0.9rem;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.info-group h3 {
+    font-size: 1.1rem;
+    margin-bottom: 15px;
+    color: #333;
+}
+
+.social-links-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.social-link-item {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+    color: #555;
+    transition: color 0.2s;
+}
+
+.social-link-item .material-icons {
+    margin-right: 8px;
+    font-size: 1.2rem;
+}
+
+.social-link-item:hover {
+    color: var(--accent-color);
+}
+
+.badge-ondev-large {
+    display: inline-block;
+    background: linear-gradient(135deg, #0078d4, #00c6ff);
+    color: white;
+    padding: 8px 20px;
+    border-radius: 30px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    box-shadow: 0 4px 10px rgba(0,120,212,0.3);
+}
+
+.user-packages-section h2 {
+    margin-bottom: 25px;
+}
+
+.empty-packages {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 60px;
+    background: rgba(255,255,255,0.5);
+    border-radius: 20px;
+    border: 2px dashed #ccc;
+}
+</style>
+{% endblock %}

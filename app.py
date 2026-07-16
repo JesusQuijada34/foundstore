@@ -75,6 +75,34 @@ def package_detail(package_name):
     
     return render_template("package_detail.html", package=package)
 
+@app.route("/me")
+def my_profile():
+    if not github.authorized:
+        return redirect(url_for("github.login"))
+    
+    resp = github.get("/user")
+    if not resp.ok:
+        return "Error obteniendo información de GitHub", 500
+    
+    username = resp.json()["login"]
+    ondev_accounts = services.load_ondev_accounts()
+    is_ondev = username in ondev_accounts
+    
+    # Cargar perfil y catálogo desde ismyself
+    profile_data = services.get_github_user_profile(username)
+    user_catalog = services.get_catalog(username)
+    
+    user_data = ondev_accounts.get(username, {"followers": [], "following": []})
+    
+    return render_template("user_profile.html", 
+                           username=username, 
+                           profile=profile_data, 
+                           packages=user_catalog.get("packages", []),
+                           is_ondev=is_ondev,
+                           follower_count=len(user_data.get("followers", [])),
+                           following_count=len(user_data.get("following", [])),
+                           package_count=len(user_catalog.get("packages", [])))
+
 @app.route("/panel")
 def ondev_panel():
     if not github.authorized:
