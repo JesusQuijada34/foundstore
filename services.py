@@ -19,6 +19,7 @@ def load_ondev_accounts():
     return accounts
 
 def save_ondev_account(account_data):
+    os.makedirs(os.path.dirname(Config.ONDEV_DB_PATH), exist_ok=True)
     accounts = load_ondev_accounts()
     # Mantener seguidores y seguidos existentes si ya existen
     if account_data['github_username'] in accounts:
@@ -36,6 +37,7 @@ def save_ondev_account(account_data):
             f.write(json.dumps(acc) + '\n')
 
 def update_local_profile(username, profile_data):
+    os.makedirs(os.path.dirname(Config.ONDEV_DB_PATH), exist_ok=True)
     accounts = load_ondev_accounts()
     if username not in accounts:
         accounts[username] = {
@@ -59,6 +61,7 @@ def get_local_profile(username):
     return None
 
 def toggle_follow(follower_username, target_username):
+    os.makedirs(os.path.dirname(Config.ONDEV_DB_PATH), exist_ok=True)
     accounts = load_ondev_accounts()
     
     # Asegurar que ambos existan en la DB local (aunque sean perfiles básicos)
@@ -130,5 +133,6 @@ def get_catalog(username="JesusQuijada34"):
     return {"packages": []}
 
 def save_catalog(catalog_data):
+    os.makedirs(os.path.dirname(Config.CATALOG_PATH), exist_ok=True)
     with open(Config.CATALOG_PATH, 'w') as f:
         json.dump(catalog_data, f, indent=4)
