@@ -6,9 +6,31 @@
     <div class="profile-details">
         <h1>{{ profile.name or username }}</h1>
         <p>{{ profile.description or 'Desarrollador en foundstore' }}</p>
-        {% if is_ondev %}
-            <span class="badge-ondev">Verificado OnDev</span>
-        {% endif %}
+        <div class="profile-stats">
+            <div class="stat-item">
+                <span class="stat-count" id="follower-count">{{ follower_count }}</span>
+                <span class="stat-label">Seguidores</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-count">{{ following_count }}</span>
+                <span class="stat-label">Siguiendo</span>
+            </div>
+        </div>
+
+        <div class="profile-actions">
+            {% if session.get('github_oauth_token') %}
+                <button id="follow-btn" class="btn-follow {{ 'following' if is_following else '' }}" data-username="{{ username }}">
+                    {{ 'Siguiendo' if is_following else 'Seguir' }}
+                </button>
+            {% else %}
+                <a href="/login" class="btn-follow">Seguir</a>
+            {% endif %}
+            
+            {% if is_ondev %}
+                <span class="badge-ondev">Verificado OnDev</span>
+            {% endif %}
+        </div>
+
         <div class="social-links">
             {% if profile.links %}
                 {% for link in profile.links %}
@@ -40,13 +62,56 @@
 
 {% block extra_head %}
 <style>
-.badge-ondev {
+.profile-stats {
+    display: flex;
+    gap: 30px;
+    margin: 15px 0;
+}
+.stat-item {
+    display: flex;
+    flex-direction: column;
+}
+.stat-count {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #1a1a1a;
+}
+.stat-label {
+    font-size: 0.85rem;
+    color: #666;
+}
+.profile-actions {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+.btn-follow {
     background: #0078d4;
-    color: white;
-    padding: 4px 12px;
-    border-radius: 12px;
-    font-size: 0.8rem;
+    color: white !important;
+    border: none;
+    padding: 8px 24px;
+    border-radius: 20px;
     font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+}
+.btn-follow.following {
+    background: #e1e1e1;
+    color: #333 !important;
+}
+.btn-follow:hover {
+    transform: scale(1.05);
+}
+.badge-ondev {
+    background: rgba(0, 120, 212, 0.1);
+    color: #0078d4;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border: 1px solid #0078d4;
 }
 </style>
 {% endblock %}
