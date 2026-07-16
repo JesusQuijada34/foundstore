@@ -1,0 +1,95 @@
+from flask import Flask, render_template, redirect, url_for, session, request, jsonify
+from flask_dance.contrib.github import make_github_blueprint, github
+import os
+from config import Config
+import services
+
+app = Flask(__name__)
+app.config.from_object(Config)
+
+# Configuración de GitHub OAuth
+github_bp = make_github_blueprint(
+    client_id=Config.GITHUB_OAUTH_CLIENT_ID,
+    client_secret=Config.GITHUB_OAUTH_CLIENT_SECRET,
+)
+app.register_blueprint(github_bp, url_prefix="/login")
+
+@app.route("/")
+def index():
+    catalog = services.get_catalog()
+    return render_template("index.html", packages=catalog.get("packages", []))
+
+@app.route("/login")
+def login():
+    if not github.authorized:
+        return redirect(url_for("github.login"))
+    return redirect(url_for("index"))
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("index"))
+
+@app.route("/<username>/")
+@app.route("/<username>/repo/")
+def developer_profile(username):
+    # Verificar si es una cuenta ondev
+    ondev_accounts = services.load_ondev_accounts()
+    is_ondev = username in ondev_accounts
+    
+    # Intentar cargar perfil desde repo ismyself
+    profile_data = services.get_github_user_profile(username)
+    
+    if not profile_data and not is_ondev:
+        return render_template("error.html", message="Usuario no encontrado o sin perfil público."), 404
+    
+    return render_template("developer_profile.html", 
+                           username=username, 
+                           profile=profile_data, 
+                           is_ondev=is_ondev)
+
+@app.route("/packages/<package_name>/")
+def package_detail(package_name):
+    catalog = services.get_catalog()
+    package = next((p for p in catalog.get("packages", []) if p["name"] == package_name), None)
+    
+    if not package:
+        return render_template("error.html", message="Paquete no encontrado."), 404
+    
+    return render_template("package_detail.html", package=package)
+
+@app.route("/panel")
+def ondev_panel():
+    if not github.authorized:
+        return redirect(url_for("github.login"))
+    
+    resp = github.get("/user")
+    if not resp.ok:
+        return "Error obteniendo información de GitHub", 500
+    
+    username = resp.json()["login"]
+    ondev_accounts = services.load_ondev_accounts()
+    
+    if username not in ondev_accounts:
+        return render_template("error.html", message="No tienes acceso al panel profesional."), 403
+    
+    return render_template("ondev_panel.html", account=ondev_accounts[username])
+
+@app.route("/api/register_ondev", methods=["POST"])
+def register_ondev():
+    if not github.authorized:
+        return jsonify({"error": "No autorizado"}), 401
+    
+    resp = github.get("/user")
+    username = resp.json()["login"]
+    
+    account_data = {
+        "github_username": username,
+        "is_ondev": True,
+        "packages": []
+    }
+    services.save_ondev_account(account_data)
+    return jsonify({"success": True})
+
+if __name__ == "__main__":
+    app.run(debug=True, port=8000)

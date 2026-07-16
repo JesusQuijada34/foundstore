@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}foundstore{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="fluent-ui">
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="/" class="nav-logo">
+                <img src="/static/img/logo.png" alt="foundstore logo" onerror="this.src='https://via.placeholder.com/32'">
+                <span>foundstore</span>
+            </a>
+            <div class="nav-links">
+                <a href="/">Explorar</a>
+                {% if session.get('github_oauth_token') %}
+                    <a href="/panel">Panel Pro</a>
+                    <a href="/logout">Cerrar Sesión</a>
+                {% else %}
+                    <a href="/login" class="btn-login">Iniciar con GitHub</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2026 foundstore - Powered by Fluthin</p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

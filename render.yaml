@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: foundstore
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: SECRET_KEY
+        generateValue: true
+      - key: GITHUB_OAUTH_CLIENT_ID
+        sync: false
+      - key: GITHUB_OAUTH_CLIENT_SECRET
+        sync: false
+    disk:
+      name: data
+      mountPath: /home/ubuntu/foundstore/data
+      sizeGB: 1

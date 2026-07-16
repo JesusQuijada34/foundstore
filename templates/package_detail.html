@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="package-detail-container">
+    <div class="package-header">
+        <img src="{{ package.icon }}" alt="{{ package.display_name }}" class="package-icon">
+        <div class="package-title-section">
+            <h1>{{ package.display_name }}</h1>
+            <p>Versión {{ package.version }} | Desarrollado por <a href="/{{ package.author }}/">{{ package.author }}</a></p>
+        </div>
+        <div class="package-actions">
+            <button class="btn-install">Instalar iflapp</button>
+        </div>
+    </div>
+
+    <div class="package-body">
+        <div class="package-banner-large" style="background-image: url('{{ package.banner }}')"></div>
+        <div class="package-description">
+            <h2>Sobre este paquete</h2>
+            <p>{{ package.description }}</p>
+            <!-- Aquí iría más contenido dinámico del paquete -->
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+.package-header {
+    display: flex;
+    align-items: center;
+    background: var(--surface-color);
+    backdrop-filter: var(--blur-effect);
+    padding: 30px;
+    border-radius: var(--border-radius);
+    margin-bottom: 30px;
+}
+.package-icon {
+    width: 80px;
+    height: 80px;
+    margin-right: 25px;
+}
+.package-title-section {
+    flex-grow: 1;
+}
+.btn-install {
+    background: #107c10;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 4px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.package-banner-large {
+    height: 300px;
+    background-size: cover;
+    background-position: center;
+    border-radius: var(--border-radius);
+    margin-bottom: 30px;
+}
+</style>
+{% endblock %}

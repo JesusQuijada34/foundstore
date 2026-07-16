@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sin Conexión | Flarm Store</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Roboto, -apple-system, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #202020 100%);
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+    .container {
+      padding: 40px;
+      max-width: 500px;
+    }
+    .icon {
+      width: 120px;
+      height: 120px;
+      margin: 0 auto 30px;
+      background: rgba(0, 120, 212, 0.2);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 60px;
+    }
+    h1 { font-size: 2.5rem; margin-bottom: 15px; font-weight: 600; }
+    p { color: #a0a0a0; font-size: 1.1rem; line-height: 1.6; margin-bottom: 30px; }
+    .btn {
+      background: #0078d4;
+      color: white;
+      border: none;
+      padding: 14px 32px;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .btn:hover { background: #106ebe; transform: translateY(-2px); }
+    .retry { margin-top: 15px; background: transparent; border: 1px solid rgba(255,255,255,0.2); }
+    .retry:hover { background: rgba(255,255,255,0.1); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">📡</div>
+    <h1>Sin Conexión</h1>
+    <p>Parece que no tienes acceso a internet en este momento. Algunas funciones pueden no estar disponibles.</p>
+    <a href="/index.html" class="btn">Volver al Inicio</a>
+    <br>
+    <button class="btn retry" onclick="location.reload()">Intentar de Nuevo</button>
+  </div>
+  <script>
+    // Check if back online
+    window.addEventListener('online', () => {
+      window.location.href = '/index.html';
+    });
+  </script>
+</body>
+</html>

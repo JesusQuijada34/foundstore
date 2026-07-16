@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+    <h1>Descubre el futuro con iflapp</h1>
+    <p>La tienda virtual definitiva para desarrolladores y paquetes Fluthin.</p>
+</section>
+
+<div class="package-grid">
+    {% for package in packages %}
+    <a href="{{ package.url }}" class="package-card">
+        <div class="package-banner" style="background-image: url('{{ package.banner }}')"></div>
+        <div class="package-info">
+            <h3>{{ package.display_name }}</h3>
+            <p>{{ package.description }}</p>
+            <small>v{{ package.version }} por {{ package.author }}</small>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% endblock %}

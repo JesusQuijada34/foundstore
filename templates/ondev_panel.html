@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="panel-container">
+    <h1>Panel Profesional OnDev</h1>
+    <p>Bienvenido, {{ account.github_username }}. Aquí puedes gestionar tus paquetes y perfil.</p>
+
+    <div class="panel-grid">
+        <div class="panel-card">
+            <h3>Tus Paquetes</h3>
+            <ul class="package-list">
+                {% for pkg in account.packages %}
+                    <li>{{ pkg }} <button class="btn-edit">Editar</button></li>
+                {% else %}
+                    <li>Aún no tienes paquetes registrados.</li>
+                {% endfor %}
+            </ul>
+            <button class="btn-add">+ Agregar Paquete</button>
+        </div>
+
+        <div class="panel-card">
+            <h3>Configuración de Perfil</h3>
+            <p>Tu perfil se sincroniza automáticamente con el archivo <code>profile.json</code> en tu repositorio <code>ismyself</code>.</p>
+            <a href="https://github.com/{{ account.github_username }}/ismyself" target="_blank" class="btn-secondary">Ir a mi repositorio</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+.panel-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-top: 30px;
+}
+.panel-card {
+    background: var(--surface-color);
+    backdrop-filter: var(--blur-effect);
+    padding: 30px;
+    border-radius: var(--border-radius);
+    border: 1px solid rgba(0,0,0,0.1);
+}
+.package-list {
+    list-style: none;
+    padding: 0;
+}
+.package-list li {
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+    display: flex;
+    justify-content: space-between;
+}
+.btn-add, .btn-edit, .btn-secondary {
+    padding: 8px 16px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    background: white;
+    cursor: pointer;
+}
+.btn-add {
+    background: var(--accent-color);
+    color: white;
+    border: none;
+    margin-top: 20px;
+}
+</style>
+{% endblock %}

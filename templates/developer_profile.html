@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="profile-header">
+    <img src="{{ profile.logo or 'https://github.com/' + username + '.png' }}" alt="{{ username }}" class="profile-avatar">
+    <div class="profile-details">
+        <h1>{{ profile.name or username }}</h1>
+        <p>{{ profile.description or 'Desarrollador en foundstore' }}</p>
+        {% if is_ondev %}
+            <span class="badge-ondev">Verificado OnDev</span>
+        {% endif %}
+        <div class="social-links">
+            {% if profile.links %}
+                {% for link in profile.links %}
+                    <a href="{{ link.url }}" target="_blank">{{ link.name }}</a>
+                {% endfor %}
+            {% else %}
+                <a href="https://github.com/{{ username }}" target="_blank">GitHub</a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<h2>Repositorios y Paquetes</h2>
+<div class="package-grid">
+    <!-- Aquí se listarían los paquetes del desarrollador -->
+    <p>Cargando paquetes de {{ username }}...</p>
+</div>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+.badge-ondev {
+    background: #0078d4;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+</style>
+{% endblock %}
