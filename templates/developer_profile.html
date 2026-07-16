@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="profile-header">
+<div class="profile-header" style="background-image: linear-gradient(rgba(255,255,255,0.8), rgba(255,255,255,0.8)), url('{{ profile.banner }}'); background-size: cover; background-position: center;">
     <img src="{{ profile.logo or 'https://github.com/' + username + '.png' }}" alt="{{ username }}" class="profile-avatar">
     <div class="profile-details">
         <h1>{{ profile.name or username }}</h1>
