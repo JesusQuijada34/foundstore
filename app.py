@@ -20,6 +20,10 @@ def index():
     catalog = services.get_catalog("JesusQuijada34")
     return render_template("index.html", packages=catalog.get("packages", []))
 
+@app.route("/help")
+def help_page():
+    return render_template("help.html")
+
 @app.route("/login")
 def login():
     if not github.authorized:
