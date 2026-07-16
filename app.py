@@ -38,8 +38,12 @@ def developer_profile(username):
     ondev_accounts = services.load_ondev_accounts()
     is_ondev = username in ondev_accounts
     
-    # Intentar cargar perfil y catálogo desde repo ismyself del usuario
+    # Intentar cargar perfil y catálogo
     profile_data = services.get_github_user_profile(username)
+    local_profile = services.get_local_profile(username)
+    if local_profile:
+        profile_data = local_profile
+        
     user_catalog = services.get_catalog(username)
     
     if not profile_data and not is_ondev:
@@ -75,6 +79,44 @@ def package_detail(package_name):
     
     return render_template("package_detail.html", package=package)
 
+@app.route("/me/edit", methods=["GET", "POST"])
+def edit_profile():
+    if not github.authorized:
+        return redirect(url_for("github.login"))
+    
+    resp = github.get("/user")
+    username = resp.json()["login"]
+    
+    if request.method == "POST":
+        # Procesar el formulario
+        links = []
+        names = request.form.getlist("link_name[]")
+        urls = request.form.getlist("link_url[]")
+        for n, u in zip(names, urls):
+            if n and u:
+                links.append({"name": n, "url": u})
+        
+        updated_profile = {
+            "name": request.form.get("name"),
+            "description": request.form.get("description"),
+            "logo": request.form.get("logo"),
+            "banner": request.form.get("banner"),
+            "links": links
+        }
+        
+        # Guardar localmente
+        services.update_local_profile(username, updated_profile)
+        return redirect(url_for("my_profile"))
+
+    # Cargar datos actuales
+    profile_data = services.get_github_user_profile(username)
+    # Si hay cambios locales, priorizarlos (puedes implementar esto en services)
+    local_profile = services.get_local_profile(username)
+    if local_profile:
+        profile_data = local_profile
+
+    return render_template("edit_profile.html", username=username, profile=profile_data)
+
 @app.route("/me")
 def my_profile():
     if not github.authorized:
@@ -88,10 +130,13 @@ def my_profile():
     ondev_accounts = services.load_ondev_accounts()
     is_ondev = username in ondev_accounts
     
-    # Cargar perfil y catálogo desde ismyself
+    # Cargar perfil y catálogo
     profile_data = services.get_github_user_profile(username)
+    local_profile = services.get_local_profile(username)
+    if local_profile:
+        profile_data = local_profile
+        
     user_catalog = services.get_catalog(username)
-    
     user_data = ondev_accounts.get(username, {"followers": [], "following": []})
     
     return render_template("user_profile.html", 

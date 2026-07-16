@@ -35,6 +35,29 @@ def save_ondev_account(account_data):
         for acc in accounts.values():
             f.write(json.dumps(acc) + '\n')
 
+def update_local_profile(username, profile_data):
+    accounts = load_ondev_accounts()
+    if username not in accounts:
+        accounts[username] = {
+            "github_username": username,
+            "is_ondev": False,
+            "packages": [],
+            "followers": [],
+            "following": []
+        }
+    
+    accounts[username]["profile_override"] = profile_data
+    
+    with open(Config.ONDEV_DB_PATH, 'w') as f:
+        for acc in accounts.values():
+            f.write(json.dumps(acc) + '\n')
+
+def get_local_profile(username):
+    accounts = load_ondev_accounts()
+    if username in accounts:
+        return accounts[username].get("profile_override")
+    return None
+
 def toggle_follow(follower_username, target_username):
     accounts = load_ondev_accounts()
     

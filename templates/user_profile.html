@@ -35,6 +35,11 @@
             
             <div class="profile-extra-info">
                 <div class="info-group">
+                    <a href="/me/edit" class="btn-edit-profile">
+                        <span class="material-icons">edit</span> Editar Perfil
+                    </a>
+                </div>
+                <div class="info-group">
                     <h3>Enlaces</h3>
                     <div class="social-links-list">
                         {% if profile.links %}
@@ -205,6 +210,33 @@
     font-weight: 600;
     font-size: 0.9rem;
     box-shadow: 0 4px 10px rgba(0,120,212,0.3);
+}
+
+.btn-edit-profile {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: white;
+    color: #333;
+    border: 1px solid #ddd;
+    padding: 10px 20px;
+    border-radius: 12px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+    margin-bottom: 20px;
+}
+
+.btn-edit-profile .material-icons {
+    font-size: 1.1rem;
+    margin-right: 8px;
+}
+
+.btn-edit-profile:hover {
+    background: #f5f5f5;
+    border-color: #ccc;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 
 .user-packages-section h2 {
