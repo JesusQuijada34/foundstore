@@ -14,6 +14,10 @@ github_bp = make_github_blueprint(
 )
 app.register_blueprint(github_bp, url_prefix="/login")
 
+@app.context_processor
+def inject_github():
+    return dict(github=github)
+
 @app.route("/")
 def index():
     if not github.authorized:
