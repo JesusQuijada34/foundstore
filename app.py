@@ -18,9 +18,39 @@ app.register_blueprint(github_bp, url_prefix="/login")
 def index():
     if not github.authorized:
         return redirect(url_for("login"))
+    
+    # Verificar si completó el paso 2 (Telegram)
+    if not session.get("telegram_user"):
+        return redirect(url_for("onboarding_step2"))
+        
     # El catálogo principal se lee de ismyself de JesusQuijada34
     catalog = services.get_catalog("JesusQuijada34")
     return render_template("index.html", packages=catalog.get("packages", []))
+
+@app.route("/onboarding/step2")
+def onboarding_step2():
+    if not github.authorized:
+        return redirect(url_for("login"))
+    if session.get("telegram_user"):
+        return redirect(url_for("index"))
+    
+    resp = github.get("/user")
+    github_username = resp.json()["login"]
+    return render_template("onboarding_telegram.html", github_username=github_username)
+
+@app.route("/api/telegram_callback")
+def telegram_callback():
+    # Aquí se recibirían los datos del widget de Telegram
+    # Por ahora simulamos la recepción para el flujo
+    auth_data = request.args.to_dict()
+    if auth_data.get("id"):
+        session["telegram_user"] = auth_data
+        # Vincular en la DB local
+        resp = github.get("/user")
+        github_username = resp.json()["login"]
+        services.link_telegram_to_github(github_username, auth_data)
+        return redirect(url_for("my_profile"))
+    return redirect(url_for("onboarding_step2"))
 
 @app.route("/help")
 def help_page():

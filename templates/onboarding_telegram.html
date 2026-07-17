@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block title %}Paso 2: Conexión Telegram - foundstore{% endblock %}
+
+{% block content %}
+<div class="onboarding-wrapper">
+    <div class="liquid-glass onboarding-card">
+        <div class="adventure-progress">
+            <div class="step completed">1</div>
+            <div class="line"></div>
+            <div class="step active">2</div>
+        </div>
+
+        <div class="adventure-tutorial">
+            <div class="guide-avatar">
+                <img src="https://raw.githubusercontent.com/JesusQuijada34/ismyself/master/product_logo.png" alt="Guía Fluthin">
+            </div>
+            <div class="guide-speech">
+                <h3>¡Genial, {{ github_username }}!</h3>
+                <p>Ya tenemos tu identidad de código. Ahora, para que nunca te pierdas una tendencia y puedas hablar con otros devs en tiempo real, necesitamos conectarte a <strong>Telegram</strong>.</p>
+                <div class="tutorial-note">
+                    <span class="material-icons">info</span>
+                    <p>Usamos Telegram para enviarte alertas de paquetes iflapp y habilitar el chat cifrado entre desarrolladores.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="onboarding-actions">
+            <div id="telegram-widget-container">
+                <!-- El widget de Telegram se cargará aquí -->
+                <script async src="https://telegram.org/js/telegram-widget.js?22" 
+                    data-telegram-login="foundstore_bot" 
+                    data-size="large" 
+                    data-userpic="false" 
+                    data-auth-url="/api/telegram_callback" 
+                    data-request-access="write"></script>
+            </div>
+            
+            <p class="skip-info">¿Por qué es obligatorio? Telegram es el corazón de nuestras notificaciones en tiempo real.</p>
+        </div>
+    </div>
+</div>
+
+<style>
+.adventure-progress {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 40px;
+}
+
+.step {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--surface-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    border: 2px solid rgba(255,255,255,0.1);
+}
+
+.step.completed {
+    background: var(--accent-color);
+    color: white;
+    border-color: var(--accent-color);
+}
+
+.step.active {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 15px rgba(56, 189, 248, 0.5);
+}
+
+.line {
+    width: 60px;
+    height: 2px;
+    background: rgba(255,255,255,0.1);
+    margin: 0 10px;
+}
+
+.adventure-tutorial {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    text-align: left;
+    margin-bottom: 40px;
+    background: rgba(255,255,255,0.03);
+    padding: 24px;
+    border-radius: 20px;
+}
+
+.guide-avatar img {
+    width: 60px;
+    height: 60px;
+    border-radius: 15px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.guide-speech h3 {
+    margin: 0 0 8px 0;
+    font-size: 1.4rem;
+}
+
+.guide-speech p {
+    color: var(--text-muted);
+    font-size: 1rem;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.tutorial-note {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 15px;
+    padding: 12px;
+    background: rgba(56, 189, 248, 0.1);
+    border-radius: 12px;
+    border-left: 4px solid var(--accent-color);
+}
+
+.tutorial-note p {
+    font-size: 0.85rem;
+    color: var(--accent-color);
+}
+
+.onboarding-actions {
+    margin-top: 30px;
+}
+
+.skip-info {
+    margin-top: 24px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+</style>
+{% endblock %}

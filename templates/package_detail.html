@@ -1,63 +1,271 @@
 {% extends "base.html" %}
 
+{% block title %}{{ package.display_name }} - foundstore{% endblock %}
+
 {% block content %}
 <div class="package-detail-container">
-    <div class="package-header">
-        <img src="{{ package.icon }}" alt="{{ package.display_name }}" class="package-icon">
-        <div class="package-title-section">
-            <h1>{{ package.display_name }}</h1>
-            <p>Versión {{ package.version }} | Desarrollado por <a href="/{{ package.author }}/">{{ package.author }}</a></p>
+    <div class="liquid-glass detail-card">
+        <div class="detail-header" style="background-image: url('{{ package.banner if package.banner else 'https://via.placeholder.com/800x300' }}')">
+            <div class="header-overlay">
+                <div class="package-identity">
+                    <img src="{{ package.logo if package.logo else 'https://via.placeholder.com/100' }}" alt="{{ package.display_name }}" class="package-logo">
+                    <div class="package-titles">
+                        <h1>{{ package.display_name }}</h1>
+                        <p>v{{ package.version }} por <a href="/{{ package.author }}">{{ package.author }}</a></p>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="package-actions">
-            <button class="btn-install">Instalar iflapp</button>
-        </div>
-    </div>
 
-    <div class="package-body">
-        <div class="package-banner-large" style="background-image: url('{{ package.banner }}')"></div>
-        <div class="package-description">
-            <h2>Sobre este paquete</h2>
-            <p>{{ package.description }}</p>
-            <!-- Aquí iría más contenido dinámico del paquete -->
+        <div class="detail-body">
+            <div class="detail-main">
+                <section class="description">
+                    <h2>Descripción</h2>
+                    <p>{{ package.description }}</p>
+                </section>
+
+                <section class="platform-selector">
+                    <h2>Descargar Paquete iflapp</h2>
+                    <p class="section-hint">Selecciona tu plataforma para generar un mirror cifrado:</p>
+                    
+                    <div class="platform-grid">
+                        <button class="platform-btn" onclick="generateMirror('android')">
+                            <span class="material-icons">android</span>
+                            <span>Android</span>
+                        </button>
+                        <button class="platform-btn" onclick="generateMirror('ios')">
+                            <span class="material-icons">apple</span>
+                            <span>iOS</span>
+                        </button>
+                        <button class="platform-btn" onclick="generateMirror('web')">
+                            <span class="material-icons">public</span>
+                            <span>Web</span>
+                        </button>
+                        <button class="platform-btn" onclick="generateMirror('desktop')">
+                            <span class="material-icons">computer</span>
+                            <span>Desktop</span>
+                        </button>
+                    </div>
+
+                    <div id="mirror-result" class="mirror-box" style="display: none;">
+                        <div class="mirror-info">
+                            <span class="material-icons">lock</span>
+                            <p id="mirror-url">Generando enlace cifrado...</p>
+                        </div>
+                        <button class="btn-copy" onclick="copyMirror()">Copiar</button>
+                    </div>
+                </section>
+            </div>
+            
+            <aside class="detail-sidebar">
+                <div class="sidebar-box">
+                    <h3>Estadísticas</h3>
+                    <div class="stat-row">
+                        <span>Descargas</span>
+                        <strong>1.2k</strong>
+                    </div>
+                    <div class="stat-row">
+                        <span>Likes</span>
+                        <strong>342</strong>
+                    </div>
+                </div>
+                
+                <div class="sidebar-box">
+                    <h3>Repositorio</h3>
+                    <a href="{{ package.url }}" target="_blank" class="btn-github-link">
+                        <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GitHub">
+                        Ver Código
+                    </a>
+                </div>
+            </aside>
         </div>
     </div>
 </div>
-{% endblock %}
 
-{% block extra_head %}
+<script>
+function generateMirror(platform) {
+    const resultBox = document.getElementById('mirror-result');
+    const urlText = document.getElementById('mirror-url');
+    
+    resultBox.style.display = 'flex';
+    urlText.innerText = 'Cifrando mirror para ' + platform + '...';
+    
+    setTimeout(() => {
+        const fakeToken = Math.random().toString(36).substring(2, 15);
+        urlText.innerText = `https://mirror-crypted.foundstore.im/dl/{{ package.name }}/${platform}?t=${fakeToken}`;
+    }, 1000);
+}
+
+function copyMirror() {
+    const text = document.getElementById('mirror-url').innerText;
+    navigator.clipboard.writeText(text);
+    alert('¡Enlace copiado al portapapeles!');
+}
+</script>
+
 <style>
-.package-header {
-    display: flex;
-    align-items: center;
-    background: var(--surface-color);
-    backdrop-filter: var(--blur-effect);
-    padding: 30px;
-    border-radius: var(--border-radius);
-    margin-bottom: 30px;
+.detail-card {
+    overflow: hidden;
+    margin-top: 20px;
 }
-.package-icon {
-    width: 80px;
-    height: 80px;
-    margin-right: 25px;
-}
-.package-title-section {
-    flex-grow: 1;
-}
-.btn-install {
-    background: #107c10;
-    color: white;
-    border: none;
-    padding: 12px 24px;
-    border-radius: 4px;
-    font-weight: 600;
-    cursor: pointer;
-}
-.package-banner-large {
+
+.detail-header {
     height: 300px;
     background-size: cover;
     background-position: center;
-    border-radius: var(--border-radius);
-    margin-bottom: 30px;
+    position: relative;
+}
+
+.header-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, var(--bg-color), transparent);
+    display: flex;
+    align-items: flex-end;
+    padding: 40px;
+}
+
+.package-identity {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+}
+
+.package-logo {
+    width: 100px;
+    height: 100px;
+    border-radius: 24px;
+    border: 4px solid rgba(255,255,255,0.1);
+    backdrop-filter: blur(10px);
+}
+
+.package-titles h1 {
+    margin: 0;
+    font-size: 2.5rem;
+    font-weight: 800;
+}
+
+.package-titles p {
+    margin: 8px 0 0 0;
+    color: var(--text-muted);
+}
+
+.package-titles a {
+    color: var(--accent-color);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.detail-body {
+    padding: 40px;
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 40px;
+}
+
+.description h2, .platform-selector h2 {
+    font-size: 1.5rem;
+    margin-bottom: 20px;
+}
+
+.platform-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin-top: 24px;
+}
+
+.platform-btn {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    padding: 20px;
+    border-radius: 16px;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.platform-btn:hover {
+    background: rgba(56, 189, 248, 0.1);
+    border-color: var(--accent-color);
+    transform: translateY(-4px);
+}
+
+.platform-btn .material-icons {
+    font-size: 2rem;
+    color: var(--accent-color);
+}
+
+.mirror-box {
+    margin-top: 30px;
+    background: rgba(0,0,0,0.3);
+    padding: 20px;
+    border-radius: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: 1px dashed var(--accent-color);
+}
+
+.mirror-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--text-muted);
+    font-family: monospace;
+    font-size: 0.9rem;
+    overflow: hidden;
+}
+
+.btn-copy {
+    background: var(--accent-color);
+    border: none;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.sidebar-box {
+    background: rgba(255,255,255,0.03);
+    padding: 24px;
+    border-radius: 20px;
+    margin-bottom: 24px;
+    border: 1px solid rgba(255,255,255,0.05);
+}
+
+.sidebar-box h3 {
+    margin: 0 0 16px 0;
+    font-size: 1.1rem;
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    color: var(--text-muted);
+}
+
+.btn-github-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: white;
+    color: black !important;
+    text-decoration: none;
+    padding: 12px;
+    border-radius: 12px;
+    font-weight: 700;
+}
+
+@media (max-width: 900px) {
+    .detail-body { grid-template-columns: 1fr; }
 }
 </style>
 {% endblock %}

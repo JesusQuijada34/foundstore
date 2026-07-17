@@ -15,6 +15,52 @@ if Config.MONGO_URI:
     except Exception as e:
         print(f"Error conectando a MongoDB: {e}")
 
+def link_telegram_to_github(github_username, telegram_data):
+    accounts = load_ondev_accounts()
+    if github_username not in accounts:
+        accounts[github_username] = {
+            "github_username": github_username,
+            "is_ondev": False,
+            "packages": [],
+            "followers": [],
+            "following": []
+        }
+    
+    accounts[github_username]["telegram_id"] = telegram_data.get("id")
+    accounts[github_username]["telegram_username"] = telegram_data.get("username")
+    accounts[github_username]["telegram_name"] = f"{telegram_data.get('first_name', '')} {telegram_data.get('last_name', '')}".strip()
+    
+    # Crear links predeterminados
+    if "profile_override" not in accounts[github_username]:
+        accounts[github_username]["profile_override"] = {
+            "links": []
+        }
+    
+    links = accounts[github_username]["profile_override"].get("links", [])
+    # Evitar duplicados
+    if not any(l['name'] == 'GitHub' for l in links):
+        links.append({"name": "GitHub", "url": f"https://github.com/{github_username}"})
+    if telegram_data.get("username") and not any(l['name'] == 'Telegram' for l in links):
+        links.append({"name": "Telegram", "url": f"https://t.me/{telegram_data.get('username')}"})
+    
+    accounts[github_username]["profile_override"]["links"] = links
+    
+    # Guardar en MongoDB si está disponible
+    if db is not None:
+        try:
+            db.users.update_one(
+                {"github_username": github_username},
+                {"$set": accounts[github_username]},
+                upsert=True
+            )
+        except Exception as e:
+            print(f"Error guardando en MongoDB: {e}")
+            
+    # Fallback local
+    with open(Config.ONDEV_DB_PATH, 'w') as f:
+        for acc in accounts.values():
+            f.write(json.dumps(acc) + '\n')
+
 def load_ondev_accounts():
     accounts = {}
     if os.path.exists(Config.ONDEV_DB_PATH):
