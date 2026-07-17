@@ -2,6 +2,18 @@ import json
 import os
 import requests
 from config import Config
+from pymongo import MongoClient
+from pymongo.server_api import ServerApi
+
+# Inicialización opcional de MongoDB
+db = None
+if Config.MONGO_URI:
+    try:
+        client = MongoClient(Config.MONGO_URI, server_api=ServerApi('1'))
+        db = client.get_default_database()
+        print("Conectado a MongoDB")
+    except Exception as e:
+        print(f"Error conectando a MongoDB: {e}")
 
 def load_ondev_accounts():
     accounts = {}

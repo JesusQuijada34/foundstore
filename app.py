@@ -16,6 +16,8 @@ app.register_blueprint(github_bp, url_prefix="/login")
 
 @app.route("/")
 def index():
+    if not github.authorized:
+        return redirect(url_for("login"))
     # El catálogo principal se lee de ismyself de JesusQuijada34
     catalog = services.get_catalog("JesusQuijada34")
     return render_template("index.html", packages=catalog.get("packages", []))
@@ -26,9 +28,9 @@ def help_page():
 
 @app.route("/login")
 def login():
-    if not github.authorized:
-        return redirect(url_for("github.login"))
-    return redirect(url_for("index"))
+    if github.authorized:
+        return redirect(url_for("index"))
+    return render_template("login.html")
 
 @app.route("/logout")
 def logout():

@@ -8,12 +8,15 @@
 
 <div class="package-grid">
     {% for package in packages %}
-    <a href="{{ package.url }}" class="package-card">
-        <div class="package-banner" style="background-image: url('{{ package.banner }}')"></div>
+    <a href="{{ package.url if package.url else '#' }}" class="package-card">
+        <div class="package-banner" style="background-image: url('{{ package.banner if package.banner else 'https://via.placeholder.com/400x200' }}')"></div>
         <div class="package-info">
             <h3>{{ package.display_name }}</h3>
             <p>{{ package.description }}</p>
-            <small>v{{ package.version }} por {{ package.author }}</small>
+            <div class="package-meta">
+                <span>v{{ package.version }}</span>
+                <span>por {{ package.author }}</span>
+            </div>
         </div>
     </a>
     {% endfor %}
