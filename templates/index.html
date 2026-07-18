@@ -1,24 +1,118 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="hero">
-    <h1>Descubre el futuro con iflapp</h1>
-    <p>La tienda virtual definitiva para desarrolladores y paquetes Fluthin.</p>
-</section>
-
-<div class="package-grid">
-    {% for package in packages %}
-    <a href="{{ package.url if package.url else '#' }}" class="package-card">
-        <div class="package-banner" style="background-image: url('{{ package.banner if package.banner else 'https://via.placeholder.com/400x200' }}')"></div>
-        <div class="package-info">
-            <h3>{{ package.display_name }}</h3>
-            <p>{{ package.description }}</p>
-            <div class="package-meta">
-                <span>v{{ package.version }}</span>
-                <span>por {{ package.author }}</span>
-            </div>
+<div class="fade-in">
+    <section class="hero-fluent">
+        <div class="hero-content">
+            <h1>Descubre el futuro con iflapp</h1>
+            <p>La tienda virtual definitiva para desarrolladores y paquetes Fluthin.</p>
         </div>
-    </a>
-    {% endfor %}
+    </section>
+
+    <div class="package-grid">
+        {% for package in packages %}
+        <a href="/packages/{{ package.name }}/" class="package-card acrilic-card">
+            <div class="package-banner" style="background-image: url('{{ package.banner if package.banner else 'https://via.placeholder.com/400x200' }}')">
+                <div class="banner-overlay"></div>
+            </div>
+            <div class="package-info">
+                <h3>{{ package.display_name }}</h3>
+                <p>{{ package.description }}</p>
+                <div class="package-meta">
+                    <span class="version-badge">v{{ package.version }}</span>
+                    <span class="author-tag">por {{ package.author }}</span>
+                </div>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
 </div>
+
+<style>
+.hero-fluent {
+    padding: 100px 0 60px 0;
+    text-align: center;
+}
+
+.hero-content h1 {
+    font-size: 4rem;
+    font-weight: 800;
+    margin-bottom: 20px;
+    background: linear-gradient(135deg, #fff 0%, var(--accent-secondary) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -2px;
+}
+
+.hero-content p {
+    color: var(--text-dim);
+    font-size: 1.2rem;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.package-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 32px;
+    margin-top: 60px;
+}
+
+.package-card {
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+    color: inherit;
+}
+
+.package-banner {
+    height: 180px;
+    background-size: cover;
+    background-position: center;
+    position: relative;
+}
+
+.banner-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(11,13,17,0.8), transparent);
+}
+
+.package-info {
+    padding: 24px;
+    flex-grow: 1;
+}
+
+.package-info h3 {
+    font-size: 1.4rem;
+    margin-bottom: 12px;
+}
+
+.package-info p {
+    color: var(--text-dim);
+    font-size: 0.95rem;
+    line-height: 1.5;
+    margin-bottom: 24px;
+}
+
+.package-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.version-badge {
+    background: var(--accent-primary);
+    padding: 4px 12px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.author-tag {
+    color: var(--accent-secondary);
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+</style>
 {% endblock %}

@@ -1,138 +1,116 @@
 {% extends "base.html" %}
 
-{% block title %}Paso 2: Conexión Telegram - foundstore{% endblock %}
+{% block title %}Paso 2: Telegram - foundstore{% endblock %}
 
 {% block content %}
-<div class="onboarding-wrapper">
-    <div class="liquid-glass onboarding-card">
-        <div class="adventure-progress">
-            <div class="step completed">1</div>
-            <div class="line"></div>
-            <div class="step active">2</div>
-        </div>
+<div class="onboarding-viewport">
+    <div class="liquid-bg">
+        <div class="liquid-blob" style="top: 20%; left: 80%; background: linear-gradient(135deg, #c084fc, #818cf8);"></div>
+        <div class="liquid-blob" style="bottom: 20%; left: 20%; animation-delay: -3s;"></div>
+    </div>
 
-        <div class="adventure-tutorial">
-            <div class="guide-avatar">
-                <img src="https://raw.githubusercontent.com/JesusQuijada34/ismyself/master/product_logo.png" alt="Guía Fluthin">
+    <div id="onboarding-card" class="acrilic-card onboarding-box fade-in">
+        <div id="step-container" class="step-content">
+            <div class="adventure-header">
+                <div class="step-badge">Paso 2 de 2</div>
+                <h1>Conecta Telegram</h1>
+                <p>Para recibir alertas en tiempo real y habilitar el chat cifrado con otros desarrolladores.</p>
             </div>
-            <div class="guide-speech">
-                <h3>¡Genial, {{ github_username }}!</h3>
-                <p>Ya tenemos tu identidad de código. Ahora, para que nunca te pierdas una tendencia y puedas hablar con otros devs en tiempo real, necesitamos conectarte a <strong>Telegram</strong>.</p>
-                <div class="tutorial-note">
-                    <span class="material-icons">info</span>
-                    <p>Usamos Telegram para enviarte alertas de paquetes iflapp y habilitar el chat cifrado entre desarrolladores.</p>
+
+            <div class="tutorial-box">
+                <div class="guide-text">
+                    <span class="material-icons">security</span>
+                    <p>Tus mensajes estarán protegidos por nuestros mirrors cifrados.</p>
                 </div>
             </div>
-        </div>
-        
-        <div class="onboarding-actions">
-            <div id="telegram-widget-container">
-                <!-- El widget de Telegram se cargará aquí -->
-                <script async src="https://telegram.org/js/telegram-widget.js?22" 
-                    data-telegram-login="foundstore_bot" 
-                    data-size="large" 
-                    data-userpic="false" 
-                    data-auth-url="/api/telegram_callback" 
-                    data-request-access="write"></script>
-            </div>
             
-            <p class="skip-info">¿Por qué es obligatorio? Telegram es el corazón de nuestras notificaciones en tiempo real.</p>
+            <div class="action-area">
+                <div id="telegram-widget-container">
+                    <script async src="https://telegram.org/js/telegram-widget.js?22" 
+                        data-telegram-login="foundstore_bot" 
+                        data-size="large" 
+                        data-userpic="false" 
+                        data-auth-url="/api/telegram_callback" 
+                        data-request-access="write"></script>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
+<script>
+// Al cargar, aplicamos el efecto de "agua inquieta" para simular la llegada desde el paso anterior
+document.addEventListener('DOMContentLoaded', () => {
+    const card = document.getElementById('onboarding-card');
+    card.classList.add('water-ripple');
+    setTimeout(() => card.classList.remove('water-ripple'), 800);
+});
+</script>
+
 <style>
-.adventure-progress {
+.onboarding-viewport {
+    height: 80vh;
     display: flex;
-    align-items: center;
     justify-content: center;
-    margin-bottom: 40px;
-}
-
-.step {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: var(--surface-color);
-    display: flex;
     align-items: center;
-    justify-content: center;
-    font-weight: 800;
-    border: 2px solid rgba(255,255,255,0.1);
 }
 
-.step.completed {
-    background: var(--accent-color);
-    color: white;
-    border-color: var(--accent-color);
+.onboarding-box {
+    width: 100%;
+    max-width: 500px;
+    padding: 60px 40px;
+    text-align: center;
 }
 
-.step.active {
-    border-color: var(--accent-color);
-    box-shadow: 0 0 15px rgba(56, 189, 248, 0.5);
-}
-
-.line {
-    width: 60px;
-    height: 2px;
-    background: rgba(255,255,255,0.1);
-    margin: 0 10px;
-}
-
-.adventure-tutorial {
-    display: flex;
-    align-items: flex-start;
-    gap: 20px;
-    text-align: left;
-    margin-bottom: 40px;
-    background: rgba(255,255,255,0.03);
-    padding: 24px;
+.step-badge {
+    background: var(--accent-primary);
+    display: inline-block;
+    padding: 6px 16px;
     border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    margin-bottom: 20px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
 }
 
-.guide-avatar img {
-    width: 60px;
-    height: 60px;
-    border-radius: 15px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+.adventure-header h1 {
+    font-size: 2rem;
+    font-weight: 800;
+    margin-bottom: 15px;
+    color: white;
 }
 
-.guide-speech h3 {
-    margin: 0 0 8px 0;
-    font-size: 1.4rem;
+.adventure-header p {
+    color: var(--text-dim);
+    line-height: 1.6;
+    margin-bottom: 30px;
 }
 
-.guide-speech p {
-    color: var(--text-muted);
-    font-size: 1rem;
-    line-height: 1.5;
-    margin: 0;
+.tutorial-box {
+    background: rgba(255,255,255,0.03);
+    padding: 20px;
+    border-radius: 16px;
+    margin-bottom: 40px;
+    border: 1px solid rgba(255,255,255,0.05);
 }
 
-.tutorial-note {
+.guide-text {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-top: 15px;
-    padding: 12px;
-    background: rgba(56, 189, 248, 0.1);
-    border-radius: 12px;
-    border-left: 4px solid var(--accent-color);
+    gap: 12px;
+    text-align: left;
+    color: var(--accent-secondary);
 }
 
-.tutorial-note p {
-    font-size: 0.85rem;
-    color: var(--accent-color);
+.guide-text p {
+    font-size: 0.9rem;
+    font-weight: 500;
 }
 
-.onboarding-actions {
-    margin-top: 30px;
-}
-
-.skip-info {
-    margin-top: 24px;
-    font-size: 0.85rem;
-    color: var(--text-muted);
+.action-area {
+    display: flex;
+    justify-content: center;
 }
 </style>
 {% endblock %}
