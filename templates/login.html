@@ -1,31 +1,30 @@
 {% extends "base.html" %}
 
-{% block title %}Onboarding - foundstore{% endblock %}
+{% block title %}Paso 1: Identidad - foundstore{% endblock %}
 
 {% block content %}
-<div class="onboarding-viewport">
-    <div class="liquid-bg">
-        <div class="liquid-blob" style="top: -10%; left: -10%; width: 400px; height: 400px; background: #4e54c8;"></div>
-        <div class="liquid-blob" style="bottom: -10%; right: -10%; width: 500px; height: 500px; background: #8f94fb; animation-delay: -5s;"></div>
-        <div class="liquid-blob" style="top: 50%; left: 50%; width: 300px; height: 300px; background: #c084fc; animation-delay: -10s;"></div>
+<div class="acrilic-card">
+    <!-- Logo del producto -->
+    <img src="https://raw.githubusercontent.com/JesusQuijada34/ismyself/master/product_logo.png" 
+         alt="foundstore logo" 
+         class="onboarding-logo">
+
+    <!-- Cabecera de la Aventura -->
+    <div class="onboarding-header">
+        <h1 class="title-main">Paso 1: Identidad</h1>
+        <p class="desc-main">
+            Vincula tu cuenta de GitHub para sincronizar tus proyectos y empezar tu aventura en el ecosistema iflapp.
+        </p>
     </div>
 
-    <div id="onboarding-card" class="acrilic-card fade-in">
-        <div class="logo-container">
-            <img src="https://raw.githubusercontent.com/JesusQuijada34/ismyself/master/product_logo.png" alt="foundstore logo">
-        </div>
-        
-        <div class="adventure-header">
-            <h1>Paso 1: Identidad</h1>
-            <p>Conecta tu cuenta de GitHub para sincronizar tus proyectos y empezar tu aventura en foundstore.</p>
-        </div>
-        
-        <div class="action-area">
-            <a href="{{ url_for('github.login') }}" class="btn-fluent">
-                <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GH" style="width: 24px; filter: invert(1); margin-right: 12px;">
-                Continuar con GitHub
-            </a>
-        </div>
+    <!-- Acción Principal -->
+    <div class="onboarding-actions">
+        <a href="{{ url_for('github.login') }}" class="btn-primary">
+            <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" 
+                 alt="GitHub Icon" 
+                 style="width: 24px; filter: invert(1);">
+            <span>Continuar con GitHub</span>
+        </a>
     </div>
 </div>
 {% endblock %}
