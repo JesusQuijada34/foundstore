@@ -1,18 +1,27 @@
 from flask import Flask, render_template, redirect, url_for, session, request, jsonify
 from flask_dance.contrib.github import make_github_blueprint, github
+from werkzeug.middleware.proxy_fix import ProxyFix
 import os
 from config import Config
 import services
 
 app = Flask(__name__)
+# Aplicar ProxyFix para que Flask entienda que está detrás de un proxy (Render)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 app.config.from_object(Config)
 
 # Configuración de GitHub OAuth
 github_bp = make_github_blueprint(
     client_id=Config.GITHUB_OAUTH_CLIENT_ID,
     client_secret=Config.GITHUB_OAUTH_CLIENT_SECRET,
+    scope="user:email,repo",
+    redirect_to="index"
 )
 app.register_blueprint(github_bp, url_prefix="/login")
+
+# Forzar HTTPS en Flask-Dance para entornos de producción como Render
+os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1' # Solo para pruebas locales si fuera necesario, pero en Render usaremos ProxyFix
+os.environ['PREFERRED_URL_SCHEME'] = 'https'
 
 @app.context_processor
 def inject_github():
