@@ -44,17 +44,27 @@ def onboarding_step2():
 
 @app.route("/api/telegram_callback")
 def telegram_callback():
-    # Aquí se recibirían los datos del widget de Telegram
-    # Por ahora simulamos la recepción para el flujo
     auth_data = request.args.to_dict()
     if auth_data.get("id"):
         session["telegram_user"] = auth_data
-        # Vincular en la DB local
         resp = github.get("/user")
         github_username = resp.json()["login"]
         services.link_telegram_to_github(github_username, auth_data)
         return redirect(url_for("my_profile"))
     return redirect(url_for("onboarding_step2"))
+
+@app.route("/api/generate_mirror/<package_name>/<platform>")
+def generate_mirror(package_name, platform):
+    if not github.authorized or not session.get("telegram_user"):
+        return jsonify({"error": "Debes completar el onboarding para descargar"}), 401
+    
+    # Lógica de cifrado de mirrors
+    import hashlib
+    import time
+    token = hashlib.sha256(f"{package_name}{platform}{time.time()}".encode()).hexdigest()[:16]
+    mirror_url = f"https://mirror-crypted.foundstore.im/dl/{package_name}/{platform}?t={token}"
+    
+    return jsonify({"mirror_url": mirror_url})
 
 @app.route("/help")
 def help_page():

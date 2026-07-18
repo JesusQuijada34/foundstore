@@ -90,10 +90,18 @@ function generateMirror(platform) {
     resultBox.style.display = 'flex';
     urlText.innerText = 'Cifrando mirror para ' + platform + '...';
     
-    setTimeout(() => {
-        const fakeToken = Math.random().toString(36).substring(2, 15);
-        urlText.innerText = `https://mirror-crypted.foundstore.im/dl/{{ package.name }}/${platform}?t=${fakeToken}`;
-    }, 1000);
+    fetch(`/api/generate_mirror/{{ package.name }}/${platform}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.mirror_url) {
+                urlText.innerText = data.mirror_url;
+            } else {
+                urlText.innerText = 'Error: ' + (data.error || 'No se pudo generar el mirror');
+            }
+        })
+        .catch(err => {
+            urlText.innerText = 'Error de conexión con el servidor de mirrors';
+        });
 }
 
 function copyMirror() {
