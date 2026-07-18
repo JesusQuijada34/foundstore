@@ -5,112 +5,27 @@
 {% block content %}
 <div class="onboarding-viewport">
     <div class="liquid-bg">
-        <div class="liquid-blob" style="top: 10%; left: 10%;"></div>
-        <div class="liquid-blob" style="bottom: 10%; right: 10%; animation-delay: -5s;"></div>
+        <div class="liquid-blob" style="top: -10%; left: -10%; width: 400px; height: 400px; background: #4e54c8;"></div>
+        <div class="liquid-blob" style="bottom: -10%; right: -10%; width: 500px; height: 500px; background: #8f94fb; animation-delay: -5s;"></div>
+        <div class="liquid-blob" style="top: 50%; left: 50%; width: 300px; height: 300px; background: #c084fc; animation-delay: -10s;"></div>
     </div>
 
-    <div id="onboarding-card" class="acrilic-card onboarding-box fade-in">
-        <div id="step-container" class="step-content">
-            <!-- Paso 1: GitHub -->
-            <div id="step-1" class="step-pane active">
-                <div class="adventure-header">
-                    <div class="logo-container">
-                        <img src="https://raw.githubusercontent.com/JesusQuijada34/ismyself/master/product_logo.png" alt="Logo">
-                    </div>
-                    <h1>Paso 1: Identidad</h1>
-                    <p>Comienza tu aventura vinculando tu cuenta de GitHub para sincronizar tus repositorios y paquetes.</p>
-                </div>
-                
-                <div class="action-area">
-                    <a href="{{ url_for('github.login') }}" class="btn-fluent github-btn">
-                        <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GH" style="width: 20px; filter: invert(1); margin-right: 10px;">
-                        Continuar con GitHub
-                    </a>
-                </div>
-            </div>
+    <div id="onboarding-card" class="acrilic-card fade-in">
+        <div class="logo-container">
+            <img src="https://raw.githubusercontent.com/JesusQuijada34/ismyself/master/product_logo.png" alt="foundstore logo">
+        </div>
+        
+        <div class="adventure-header">
+            <h1>Paso 1: Identidad</h1>
+            <p>Conecta tu cuenta de GitHub para sincronizar tus proyectos y empezar tu aventura en foundstore.</p>
+        </div>
+        
+        <div class="action-area">
+            <a href="{{ url_for('github.login') }}" class="btn-fluent">
+                <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GH" style="width: 24px; filter: invert(1); margin-right: 12px;">
+                Continuar con GitHub
+            </a>
         </div>
     </div>
 </div>
-
-<script>
-// Función para simular el cambio de paso con efectos de agua (para probar la UI)
-function transitionToStep2() {
-    const card = document.getElementById('onboarding-card');
-    const container = document.getElementById('step-container');
-    
-    // Efecto de agua inquieta en el cuadro
-    card.classList.add('water-ripple');
-    
-    // Efecto de difuminado y desplazamiento en el contenido
-    container.classList.add('step-exit');
-    
-    setTimeout(() => {
-        // Aquí se cargaría el contenido del paso 2 (Telegram)
-        // Por ahora es demostrativo del efecto visual pedido
-        card.classList.remove('water-ripple');
-    }, 800);
-}
-
-// Si el usuario ya viene de GitHub (simulado por lógica de servidor), podríamos disparar esto
-{% if github.authorized and not session.get('telegram_user') %}
-    window.location.href = "{{ url_for('onboarding_step2') }}";
-{% endif %}
-</script>
-
-<style>
-.onboarding-viewport {
-    height: 80vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    perspective: 1000px;
-}
-
-.onboarding-box {
-    width: 100%;
-    max-width: 500px;
-    padding: 60px 40px;
-    text-align: center;
-    position: relative;
-    overflow: hidden;
-}
-
-.step-pane {
-    display: none;
-}
-
-.step-pane.active {
-    display: block;
-}
-
-.logo-container img {
-    width: 80px;
-    height: 80px;
-    margin-bottom: 30px;
-    filter: drop-shadow(0 0 15px var(--accent-glow));
-}
-
-.adventure-header h1 {
-    font-size: 2rem;
-    font-weight: 800;
-    margin-bottom: 15px;
-    background: linear-gradient(to right, #fff, var(--accent-secondary));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-.adventure-header p {
-    color: var(--text-dim);
-    line-height: 1.6;
-    margin-bottom: 40px;
-}
-
-.github-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    font-size: 1.1rem;
-}
-</style>
 {% endblock %}
