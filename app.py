@@ -11,19 +11,24 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 app.config.from_object(Config)
 
 # Configuración de GitHub OAuth
+# Nota: Los scopes deben ser exactos. 'user:email' y 'repo' son correctos.
+# Si el error persiste, asegúrate de que tu App en GitHub tenga permisos para estos scopes.
 github_bp = make_github_blueprint(
     client_id=Config.GITHUB_OAUTH_CLIENT_ID,
     client_secret=Config.GITHUB_OAUTH_CLIENT_SECRET,
-    scope="user:email,repo",
+    scope=["user:email", "repo"], # Usar lista para mayor compatibilidad
     redirect_to="index"
 )
 app.register_blueprint(github_bp, url_prefix="/login")
 
 # Configurar la redirect_uri explícita si se proporciona en variables de entorno
+# IMPORTANTE: Flask-Dance usa 'redirect_url' internamente en la sesión si se pre-configura
 redirect_uri = os.environ.get('GITHUB_OAUTH_REDIRECT_URI', None)
 if redirect_uri:
-    # Actualizar la configuración del cliente OAuth con la redirect_uri personalizada
+    # Forzar la redirect_uri en el blueprint para que se use en todas las peticiones
     github_bp.session.redirect_uri = redirect_uri
+    # También asegurar que el generador de URL la use
+    os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1' # Ayuda si GitHub devuelve scopes ligeramente diferentes
 
 # Forzar HTTPS en Flask-Dance para entornos de producción como Render
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1' # Solo para pruebas locales si fuera necesario, pero en Render usaremos ProxyFix
