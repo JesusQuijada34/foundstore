@@ -19,6 +19,12 @@ github_bp = make_github_blueprint(
 )
 app.register_blueprint(github_bp, url_prefix="/login")
 
+# Configurar la redirect_uri explícita si se proporciona en variables de entorno
+redirect_uri = os.environ.get('GITHUB_OAUTH_REDIRECT_URI', None)
+if redirect_uri:
+    # Actualizar la configuración del cliente OAuth con la redirect_uri personalizada
+    github_bp.session.redirect_uri = redirect_uri
+
 # Forzar HTTPS en Flask-Dance para entornos de producción como Render
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1' # Solo para pruebas locales si fuera necesario, pero en Render usaremos ProxyFix
 os.environ['PREFERRED_URL_SCHEME'] = 'https'
