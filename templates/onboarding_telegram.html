@@ -26,12 +26,21 @@
             
             <div class="action-area">
                 <div id="telegram-widget-container">
-                    <script async src="https://telegram.org/js/telegram-widget.js?22" 
-                        data-telegram-login="foundstore_bot" 
-                        data-size="large" 
-                        data-userpic="false" 
-                        data-auth-url="/api/telegram_callback" 
-                        data-request-access="write"></script>
+                    {% if github_username %}
+                        <!-- Widget de Telegram -->
+                        <script async src="https://telegram.org/js/telegram-widget.js?22" 
+                            data-telegram-login="foundstore_bot" 
+                            data-size="large" 
+                            data-userpic="false" 
+                            data-auth-url="/api/telegram_callback" 
+                            data-request-access="write"></script>
+                        <p class="debug-info" style="font-size: 0.7rem; color: var(--text-dim); margin-top: 10px;">
+                            Identificado como: <strong>{{ github_username }}</strong>
+                        </p>
+                    {% else %}
+                        <p class="error-text">Error: No se pudo verificar tu cuenta de GitHub. Por favor, intenta iniciar sesión de nuevo.</p>
+                        <a href="/logout" class="btn-primary">Reiniciar Sesión</a>
+                    {% endif %}
                 </div>
             </div>
         </div>

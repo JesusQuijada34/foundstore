@@ -58,8 +58,16 @@ def onboarding_step2():
     if session.get("telegram_user"):
         return redirect(url_for("index"))
     
-    resp = github.get("/user")
-    github_username = resp.json()["login"]
+    try:
+        resp = github.get("/user")
+        if not resp.ok:
+            return redirect(url_for("logout"))
+        github_username = resp.json().get("login")
+        if not github_username:
+            return redirect(url_for("logout"))
+    except Exception:
+        return redirect(url_for("logout"))
+        
     return render_template("onboarding_telegram.html", github_username=github_username)
 
 @app.route("/api/telegram_callback")
