@@ -57,9 +57,16 @@ def link_telegram_to_github(github_username, telegram_data):
             print(f"Error guardando en MongoDB: {e}")
             
     # Fallback local
-    with open(Config.ONDEV_DB_PATH, 'w') as f:
-        for acc in accounts.values():
-            f.write(json.dumps(acc) + '\n')
+    # Persistencia atómica para evitar corrupción de archivos
+    os.makedirs(os.path.dirname(Config.ONDEV_DB_PATH), exist_ok=True)
+    temp_path = f"{Config.ONDEV_DB_PATH}.tmp"
+    try:
+        with open(temp_path, 'w') as f:
+            for acc in accounts.values():
+                f.write(json.dumps(acc) + '\n')
+        os.replace(temp_path, Config.ONDEV_DB_PATH)
+    except Exception as e:
+        print(f"Error en persistencia de datos: {e}")
 
 def load_ondev_accounts():
     accounts = {}
@@ -90,9 +97,16 @@ def save_ondev_account(account_data):
         
     accounts[account_data['github_username']] = account_data
     
-    with open(Config.ONDEV_DB_PATH, 'w') as f:
-        for acc in accounts.values():
-            f.write(json.dumps(acc) + '\n')
+    # Persistencia atómica para evitar corrupción de archivos
+    os.makedirs(os.path.dirname(Config.ONDEV_DB_PATH), exist_ok=True)
+    temp_path = f"{Config.ONDEV_DB_PATH}.tmp"
+    try:
+        with open(temp_path, 'w') as f:
+            for acc in accounts.values():
+                f.write(json.dumps(acc) + '\n')
+        os.replace(temp_path, Config.ONDEV_DB_PATH)
+    except Exception as e:
+        print(f"Error en persistencia de datos: {e}")
 
 def update_local_profile(username, profile_data):
     os.makedirs(os.path.dirname(Config.ONDEV_DB_PATH), exist_ok=True)
@@ -108,9 +122,16 @@ def update_local_profile(username, profile_data):
     
     accounts[username]["profile_override"] = profile_data
     
-    with open(Config.ONDEV_DB_PATH, 'w') as f:
-        for acc in accounts.values():
-            f.write(json.dumps(acc) + '\n')
+    # Persistencia atómica para evitar corrupción de archivos
+    os.makedirs(os.path.dirname(Config.ONDEV_DB_PATH), exist_ok=True)
+    temp_path = f"{Config.ONDEV_DB_PATH}.tmp"
+    try:
+        with open(temp_path, 'w') as f:
+            for acc in accounts.values():
+                f.write(json.dumps(acc) + '\n')
+        os.replace(temp_path, Config.ONDEV_DB_PATH)
+    except Exception as e:
+        print(f"Error en persistencia de datos: {e}")
 
 def get_local_profile(username):
     accounts = load_ondev_accounts()
@@ -148,9 +169,16 @@ def toggle_follow(follower_username, target_username):
         action = "followed"
         
     # Guardar cambios
-    with open(Config.ONDEV_DB_PATH, 'w') as f:
-        for acc in accounts.values():
-            f.write(json.dumps(acc) + '\n')
+    # Persistencia atómica para evitar corrupción de archivos
+    os.makedirs(os.path.dirname(Config.ONDEV_DB_PATH), exist_ok=True)
+    temp_path = f"{Config.ONDEV_DB_PATH}.tmp"
+    try:
+        with open(temp_path, 'w') as f:
+            for acc in accounts.values():
+                f.write(json.dumps(acc) + '\n')
+        os.replace(temp_path, Config.ONDEV_DB_PATH)
+    except Exception as e:
+        print(f"Error en persistencia de datos: {e}")
             
     return action, len(target['followers'])
 
