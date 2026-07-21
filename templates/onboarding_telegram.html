@@ -28,12 +28,12 @@
                 <div id="telegram-widget-container">
                     {% if github_username %}
                         <!-- Widget de Telegram -->
-                        <script async src="https://telegram.org/js/telegram-widget.js?22" 
-                            data-telegram-login="foundstore_bot" 
-                            data-size="large" 
-                            data-userpic="false" 
-                            data-auth-url="/api/telegram_callback" 
-                            data-request-access="write"></script>
+                        <script async src="https://telegram.org/js/telegram-widget.js?24" data-telegram-login="infl_foundstorebot" data-size="large" data-radius="3" data-onauth="onTelegramAuth(user)" data-request-access="write"></script>
+                        <script type="text/javascript">
+                          function onTelegramAuth(user) {
+                            alert('Logged in as ' + user.first_name + ' ' + user.last_name + ' (' + user.id + (user.username ? ', @' + user.username : '') + ')');
+                          }
+                        </script>
                         <p class="debug-info" style="font-size: 0.7rem; color: var(--text-dim); margin-top: 10px;">
                             Identificado como: <strong>{{ github_username }}</strong>
                         </p>

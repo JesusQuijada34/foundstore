@@ -1,118 +1,815 @@
 {% extends "base.html" %}
 
-{% block content %}
-<div class="fade-in">
-    <section class="hero-fluent">
-        <div class="hero-content">
-            <h1>Descubre el futuro con iflapp</h1>
-            <p>La tienda virtual definitiva para desarrolladores y paquetes Fluthin.</p>
-        </div>
-    </section>
-
-    <div class="package-grid">
-        {% for package in packages %}
-        <a href="/packages/{{ package.name }}/" class="package-card acrilic-card">
-            <div class="package-banner" style="background-image: url('{{ package.banner if package.banner else 'https://via.placeholder.com/400x200' }}')">
-                <div class="banner-overlay"></div>
-            </div>
-            <div class="package-info">
-                <h3>{{ package.display_name }}</h3>
-                <p>{{ package.description }}</p>
-                <div class="package-meta">
-                    <span class="version-badge">v{{ package.version }}</span>
-                    <span class="author-tag">por {{ package.author }}</span>
-                </div>
-            </div>
-        </a>
-        {% endfor %}
-    </div>
-</div>
-
+{% block extra_head %}
 <style>
-.hero-fluent {
-    padding: 100px 0 60px 0;
-    text-align: center;
+:root {
+    --bg-main: #0a0a0f;
+    --bg-secondary: #12121a;
+    --bg-tertiary: #1a1a25;
+    --accent: #0078d4;
+    --accent-glow: rgba(0, 120, 212, 0.3);
+    --text-primary: #ffffff;
+    --text-secondary: #a0a0a0;
 }
 
-.hero-content h1 {
-    font-size: 4rem;
-    font-weight: 800;
-    margin-bottom: 20px;
-    background: linear-gradient(135deg, #fff 0%, var(--accent-secondary) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    letter-spacing: -2px;
+body {
+    background: var(--bg-main);
+    color: var(--text-primary);
 }
 
-.hero-content p {
-    color: var(--text-dim);
-    font-size: 1.2rem;
-    max-width: 600px;
-    margin: 0 auto;
-}
-
-.package-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 32px;
-    margin-top: 60px;
-}
-
-.package-card {
+.sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 64px;
+    background: rgba(18, 18, 26, 0.95);
+    backdrop-filter: blur(20px);
+    border-right: 1px solid rgba(255,255,255,0.08);
     display: flex;
     flex-direction: column;
-    text-decoration: none;
-    color: inherit;
-}
-
-.package-banner {
-    height: 180px;
-    background-size: cover;
-    background-position: center;
-    position: relative;
-}
-
-.banner-overlay {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(to top, rgba(11,13,17,0.8), transparent);
-}
-
-.package-info {
-    padding: 24px;
-    flex-grow: 1;
-}
-
-.package-info h3 {
-    font-size: 1.4rem;
-    margin-bottom: 12px;
-}
-
-.package-info p {
-    color: var(--text-dim);
-    font-size: 0.95rem;
-    line-height: 1.5;
-    margin-bottom: 24px;
-}
-
-.package-meta {
-    display: flex;
-    justify-content: space-between;
     align-items: center;
+    padding: 16px 0;
+    z-index: 100;
 }
 
-.version-badge {
-    background: var(--accent-primary);
-    padding: 4px 12px;
+.sidebar-logo {
+    padding: 8px;
+    margin-bottom: 16px;
+    transition: transform 0.3s;
+}
+
+.sidebar-logo:hover {
+    transform: scale(1.1) rotate(5deg);
+}
+
+.sidebar-logo img {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0, 120, 212, 0.3);
+}
+
+.sidebar-icon {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+    border-left: 2px solid transparent;
     border-radius: 8px;
-    font-size: 0.8rem;
-    font-weight: 700;
+    margin: 2px 0;
 }
 
-.author-tag {
-    color: var(--accent-secondary);
+.sidebar-icon:hover {
+    color: var(--text-primary);
+    background: rgba(255,255,255,0.06);
+}
+
+.sidebar-icon.active {
+    color: var(--accent);
+    background: rgba(0, 120, 212, 0.15);
+    border-left-color: var(--accent);
+}
+
+.main-content {
+    margin-left: 64px;
+    padding: 0 24px;
+    min-height: 100vh;
+}
+
+.top-header {
+    position: sticky;
+    top: 0;
+    background: rgba(10, 10, 15, 0.9);
+    backdrop-filter: blur(20px);
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    z-index: 90;
+}
+
+.header-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: 0.5px;
+}
+
+.search-container {
+    flex: 1;
+    max-width: 600px;
+}
+
+.search-box {
+    display: flex;
+    align-items: center;
+    background: var(--bg-tertiary);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 8px 16px;
+    transition: all 0.3s;
+}
+
+.search-box:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.2);
+}
+
+.search-box input {
+    border: none;
+    background: none;
+    outline: none;
+    flex: 1;
+    margin-left: 8px;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.content-area {
+    padding: 24px 0;
+}
+
+.featured-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 24px;
+    margin-bottom: 40px;
+}
+
+.featured-card {
+    position: relative;
+    border-radius: 16px;
+    overflow: hidden;
+    height: 200px;
+    cursor: pointer;
+    transition: transform 0.3s;
+}
+
+.featured-card:hover {
+    transform: translateY(-4px);
+}
+
+.featured-splash {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.featured-splash.blur-splash {
+    filter: blur(20px);
+    transform: scale(1.1);
+}
+
+.featured-info {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 20px;
+    background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+}
+
+.featured-name {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.featured-meta {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.section-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 20px;
+    padding-top: 20px;
+}
+
+.popular-row {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding-bottom: 16px;
+    margin-bottom: 40px;
+}
+
+.popular-card {
+    flex: 0 0 140px;
+    background: var(--bg-secondary);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.popular-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--accent);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+
+.popular-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 12px;
+    margin-bottom: 8px;
+}
+
+.popular-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.popular-rating {
+    font-size: 0.75rem;
+    color: #ffc107;
+}
+
+.ranked-container {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    margin-bottom: 40px;
+}
+
+.ranked-column {
+    background: var(--bg-secondary);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px;
+    padding: 20px;
+}
+
+.ranked-tab {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid transparent;
+}
+
+.ranked-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+
+.ranked-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.ranked-item:hover {
+    opacity: 0.8;
+}
+
+.rank-number {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--accent);
+    width: 24px;
+}
+
+.ranked-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+}
+
+.ranked-info {
+    flex: 1;
+}
+
+.ranked-name {
     font-size: 0.9rem;
     font-weight: 600;
 }
+
+.ranked-meta {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.ranked-rating {
+    font-size: 0.75rem;
+    color: #ffc107;
+}
+
+.collection-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+.collection-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--bg-secondary);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 16px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.collection-card:hover {
+    transform: translateX(4px);
+    border-color: var(--accent);
+}
+
+.collection-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 10px;
+    flex-shrink: 0;
+}
+
+.collection-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.collection-name {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.collection-author {
+    font-size: 0.8rem;
+    color: var(--accent);
+    margin-bottom: 4px;
+}
+
+.collection-desc {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.collection-meta {
+    font-size: 0.75rem;
+    color: #ffc107;
+    margin-top: 4px;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-secondary);
+}
+
+.empty-state .material-icons {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.loading-spinner {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 60px;
+}
+
+.loading-spinner::after {
+    content: '';
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(255,255,255,0.1);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.collection-card, .featured-card, .popular-card, .ranked-item {
+    animation: slideIn 0.4s ease-out forwards;
+}
+
+@media (max-width: 768px) {
+    .sidebar { width: 0; overflow: hidden; }
+    .main-content { margin-left: 0; }
+    .ranked-container { grid-template-columns: 1fr; }
+    .featured-grid { grid-template-columns: 1fr; }
+}
 </style>
+{% endblock %}
+
+{% block content %}
+<nav class="sidebar">
+    <div class="sidebar-logo">
+        <img src="{{ url_for('static', filename='logo_foundstore_transparent.png') }}" alt="Fluthin">
+    </div>
+    <div class="sidebar-icon active" onclick="switchTab('apps')">
+        <span class="material-icons">apps</span>
+    </div>
+    <div class="sidebar-icon" onclick="switchTab('updates')">
+        <span class="material-icons">system_update</span>
+    </div>
+    <div class="sidebar-icon" onclick="switchTab('search')">
+        <span class="material-icons">search</span>
+    </div>
+</nav>
+
+<div class="main-content">
+    <header class="top-header">
+        <span class="header-title">FLUTHIN STORE</span>
+        <div class="search-container">
+            <div class="search-box">
+                <span class="material-icons" style="color: var(--text-secondary);">search</span>
+                <input type="text" id="searchInput" placeholder="Buscar paquetes...">
+            </div>
+        </div>
+    </header>
+
+    <main class="content-area" id="contentArea">
+        <div class="loading-spinner"></div>
+    </main>
+</div>
+
+<script>
+const CATALOG_URL = "https://raw.githubusercontent.com/JesusQuijada34/catalog/refs/heads/main/repo.list";
+const XML_PATH = "refs/heads/main/details.xml";
+const DEFAULT_ICON = "{{ url_for('static', filename='logo_foundstore_transparent.png') }}";
+
+let allApps = [];
+let cachedApps = [];
+let currentTab = 'apps';
+
+const contentArea = document.getElementById('contentArea');
+const searchInput = document.getElementById('searchInput');
+
+window.addEventListener('DOMContentLoaded', async () => {
+    const cached = localStorage.getItem('fluthin_cached_apps');
+    if (cached) cachedApps = JSON.parse(cached);
+    
+    await loadCatalog();
+    renderHome();
+    
+    searchInput.addEventListener('input', (e) => {
+        if (e.target.value.length > 0) renderSearch(e.target.value);
+        else renderHome();
+    });
+});
+
+async function loadCatalog() {
+    try {
+        const res = await fetch(CATALOG_URL);
+        const txt = await res.text();
+        const repos = txt.split(',').map(x => x.trim()).filter(x => x);
+        
+        const fetchedApps = await Promise.all(repos.map(fetchApp));
+        allApps = fetchedApps.filter(app => app !== null);
+        
+        console.log(`[INFO] ${allApps.length} apps válidas`);
+        
+        if (cachedApps.length === 0) updateCache();
+    } catch (e) {
+        console.error('[ERROR]', e);
+        contentArea.innerHTML = '<div class="empty-state"><span class="material-icons">error</span><div>Error al cargar el catálogo</div></div>';
+    }
+}
+
+async function fetchApp(repo) {
+    const xmlUrl = `https://raw.githubusercontent.com/JesusQuijada34/${repo}/${XML_PATH}`;
+    let app = { repo, name: "", publisher: "", version: "", author: "", platform: "", rate: "" };
+    
+    try {
+        const res = await fetch(xmlUrl);
+        if (!res.ok) return null;
+        
+        const xml = await res.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(xml, "application/xml");
+        
+        const parserError = doc.querySelector("parsererror");
+        if (parserError) return null;
+        
+        const node = doc.querySelector("app");
+        if (!node) return null;
+        
+        app = {
+            repo,
+            publisher: node?.querySelector("publisher")?.textContent?.trim() || "",
+            name: node?.querySelector("name")?.textContent?.trim() || "",
+            version: node?.querySelector("version")?.textContent?.trim() || "",
+            rate: node?.querySelector("rate")?.textContent?.trim() || "",
+            author: node?.querySelector("author")?.textContent?.trim() || "",
+            platform: node?.querySelector("platform")?.textContent?.trim() || "",
+            description: node?.querySelector("description")?.textContent?.trim() || ""
+        };
+        
+        if (!app.name || !app.publisher || !app.author || !app.version) return null;
+        
+    } catch (e) {
+        return null;
+    }
+    
+    app.icon = await getIconUrl(repo);
+    app.splash = await getSplashUrl(repo) || app.icon;
+    app.useBlurSplash = !await getSplashUrl(repo);
+    
+    if (app.platform === "Knosthalij") app.category = "Windows";
+    else if (app.platform === "Danenone") app.category = "Linux/Mac";
+    else if (app.platform === "AlphaCube") app.category = "Multiplataforma";
+    else app.category = "Otros";
+    
+    // Detectar releases por plataforma
+    app.releases = await getReleases(repo, app.author, app.version);
+    
+    return app;
+}
+
+async function getSplashUrl(repo) {
+    const url = `https://raw.githubusercontent.com/JesusQuijada34/${repo}/main/assets/splash.png`;
+    try {
+        const res = await fetch(url, { method: 'HEAD' });
+        return res.ok ? url : null;
+    } catch { return null; }
+}
+
+async function getIconUrl(repo) {
+    const urls = [
+        `https://raw.githubusercontent.com/JesusQuijada34/${repo}/main/app/app-icon.ico`,
+        `https://raw.githubusercontent.com/JesusQuijada34/${repo}/main/assets/product_logo`
+    ];
+    for (const url of urls) {
+        try {
+            const res = await fetch(url, { method: 'HEAD' });
+            if (res.ok) return url;
+        } catch { }
+    }
+    return DEFAULT_ICON;
+}
+
+async function getReleases(repo, author, version) {
+    const releases = { Knosthalij: null, Danenone: null, AlphaCube: null };
+    const platforms = ['Knosthalij', 'Danenone', 'AlphaCube'];
+    
+    try {
+        const res = await fetch(`https://api.github.com/repos/JesusQuijada34/${repo}/releases/latest`);
+        if (!res.ok) return releases;
+        
+        const data = await res.json();
+        if (!data.assets) return releases;
+        
+        for (const asset of data.assets) {
+            for (const platform of platforms) {
+                if (asset.name.includes(platform) && asset.name.endsWith('.iflapp')) {
+                    releases[platform] = {
+                        name: asset.name,
+                        url: asset.browser_download_url,
+                        size: formatSize(asset.size)
+                    };
+                }
+            }
+        }
+    } catch (e) {
+        console.error(`[ERROR] Releases for ${repo}:`, e);
+    }
+    
+    return releases;
+}
+
+function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+}
+
+function updateCache() {
+    cachedApps = JSON.parse(JSON.stringify(allApps));
+    localStorage.setItem('fluthin_cached_apps', JSON.stringify(cachedApps));
+}
+
+function renderHome() {
+    const featuredApps = allApps.slice(0, 3);
+    const popularApps = allApps.slice(3, 9);
+    
+    const byCategory = {
+        'Windows': allApps.filter(a => a.platform === "Knosthalij"),
+        'Linux/Mac': allApps.filter(a => a.platform === "Danenone"),
+        'Multiplataforma': allApps.filter(a => a.platform === "AlphaCube")
+    };
+    
+    const topFree = byCategory['Windows'].length > 0 ? byCategory['Windows'].slice(0, 3) : allApps.slice(0, 3);
+    const topGrossing = byCategory['Linux/Mac'].length > 0 ? byCategory['Linux/Mac'].slice(0, 3) : allApps.slice(3, 6);
+    const topPaid = byCategory['Multiplataforma'].length > 0 ? byCategory['Multiplataforma'].slice(0, 3) : allApps.slice(6, 9);
+    
+    let html = `
+        <div class="featured-grid">
+            ${featuredApps.map(renderFeaturedCard).join('')}
+        </div>
+        
+        <h2 class="section-title">Aplicaciones populares</h2>
+        <div class="popular-row">
+            ${popularApps.map(renderPopularCard).join('')}
+        </div>
+        
+        <h2 class="section-title">Más populares</h2>
+        <div class="ranked-container">
+            <div class="ranked-column">
+                <div class="ranked-tab active">Top Windows</div>
+                ${topFree.map((app, i) => renderRankedCard(app, i + 1)).join('')}
+            </div>
+            <div class="ranked-column">
+                <div class="ranked-tab">Top Linux/Mac</div>
+                ${topGrossing.map((app, i) => renderRankedCard(app, i + 1)).join('')}
+            </div>
+            <div class="ranked-column">
+                <div class="ranked-tab">Top Multiplataforma</div>
+                ${topPaid.map((app, i) => renderRankedCard(app, i + 1)).join('')}
+            </div>
+        </div>
+        
+        <h2 class="section-title">Full colección</h2>
+        <div class="collection-grid">
+            ${allApps.map(renderCollectionCard).join('')}
+        </div>
+    `;
+    
+    contentArea.innerHTML = html;
+}
+
+function renderFeaturedCard(app) {
+    return `
+        <div class="featured-card" onclick="openApp('${app.repo}')">
+            <img src="${app.splash}" class="featured-splash ${app.useBlurSplash ? 'blur-splash' : ''}" alt="${app.name}">
+            <div class="featured-info">
+                <div class="featured-name">${app.name}</div>
+                <div class="featured-meta">${app.author} • ${app.version} • ${app.category}</div>
+            </div>
+        </div>
+    `;
+}
+
+function renderPopularCard(app) {
+    return `
+        <div class="popular-card" onclick="openApp('${app.repo}')">
+            <img src="${app.icon}" class="popular-icon" alt="${app.name}">
+            <div class="popular-name">${app.name}</div>
+            <div class="popular-rating">${app.rate || '4.5'} ★</div>
+        </div>
+    `;
+}
+
+function renderRankedCard(app, rank) {
+    return `
+        <div class="ranked-item" onclick="openApp('${app.repo}')">
+            <div class="rank-number">${rank}</div>
+            <img src="${app.icon}" class="ranked-icon" alt="${app.name}">
+            <div class="ranked-info">
+                <div class="ranked-name">${app.name}</div>
+                <div class="ranked-meta">${app.publisher}</div>
+                <div class="ranked-rating">${app.rate || '4.7'} ★</div>
+            </div>
+        </div>
+    `;
+}
+
+function renderCollectionCard(app) {
+    const hasWindows = app.releases?.Knosthalij;
+    const hasLinux = app.releases?.Danenone;
+    const hasMulti = app.releases?.AlphaCube;
+    
+    return `
+        <div class="collection-card" onclick="openApp('${app.repo}')">
+            <img src="${app.icon}" class="collection-icon" alt="${app.name}">
+            <div class="collection-info">
+                <div class="collection-name">${app.name}</div>
+                <div class="collection-author">@${app.author}</div>
+                <div class="collection-desc">${app.publisher} • ${app.category}</div>
+                <div class="collection-meta">${app.rate || '4.5'} ★ • ${app.version}</div>
+                ${(hasWindows || hasLinux || hasMulti) ? `
+                    <div style="margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap;">
+                        ${hasWindows ? '<span style="background: var(--accent); padding: 2px 8px; border-radius: 4px; font-size: 0.7rem;">Windows</span>' : ''}
+                        ${hasLinux ? '<span style="background: #4caf50; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem;">Linux/Mac</span>' : ''}
+                        ${hasMulti ? '<span style="background: #ff9800; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem;">Multi</span>' : ''}
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
+function renderSearch(query) {
+    const lower = query.toLowerCase();
+    const results = allApps.filter(a =>
+        a.name.toLowerCase().includes(lower) ||
+        a.publisher.toLowerCase().includes(lower) ||
+        a.author.toLowerCase().includes(lower)
+    );
+    
+    contentArea.innerHTML = `
+        <h2 class="section-title">Resultados para "${query}"</h2>
+        <div class="collection-grid">
+            ${results.length ? results.map(renderCollectionCard).join('') : '<div class="empty-state"><span class="material-icons">search_off</span><div>No se encontraron resultados</div></div>'}
+        </div>
+    `;
+}
+
+function renderUpdates() {
+    const updates = allApps.filter(app => {
+        const cached = cachedApps.find(c => c.repo === app.repo);
+        return !cached || cached.version !== app.version;
+    });
+    
+    if (updates.length === 0) {
+        contentArea.innerHTML = `
+            <div class="empty-state">
+                <span class="material-icons">check_circle</span>
+                <div>Todo está actualizado</div>
+            </div>
+        `;
+        return;
+    }
+    
+    contentArea.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+            <h2 class="section-title" style="margin: 0;">Actualizaciones (${updates.length})</h2>
+            <button onclick="updateCache()" style="background: var(--accent); color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer;">Actualizar todo</button>
+        </div>
+        <div class="collection-grid">
+            ${updates.map(renderCollectionCard).join('')}
+        </div>
+    `;
+}
+
+function switchTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.sidebar-icon').forEach((el, i) => {
+        el.classList.remove('active');
+        if ((tab === 'apps' && i === 0) || (tab === 'updates' && i === 1) || (tab === 'search' && i === 2)) {
+            el.classList.add('active');
+        }
+    });
+    
+    if (tab === 'search') {
+        searchInput.focus();
+        return;
+    }
+    
+    if (tab === 'updates') {
+        renderUpdates();
+        return;
+    }
+    
+    renderHome();
+}
+
+function openApp(repo) {
+    window.location.href = `/${repo}`;
+}
+
+// Intersection Observer for animations
+const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            entry.target.style.opacity = '1';
+            entry.target.style.transform = 'translateY(0)';
+        }
+    });
+}, { threshold: 0.1 });
+
+// Re-attach observer after render
+const originalRenderHome = renderHome;
+renderHome = function() {
+    originalRenderHome();
+    setTimeout(() => {
+        document.querySelectorAll('.collection-card, .ranked-column').forEach(el => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(20px)';
+            observer.observe(el);
+        });
+    }, 100);
+};
+</script>
 {% endblock %}
