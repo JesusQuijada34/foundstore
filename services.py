@@ -1,19 +1,105 @@
 import json
 import os
+import time
 import requests
 from config import Config
-from pymongo import MongoClient
-from pymongo.server_api import ServerApi
 
-# Inicialización opcional de MongoDB
+# =====================================================================
+# MongoDB: conexion opcional con retry + fallback 100% a JSONL local.
+# Esto es el "as bajo la manga": si MongoDB falla por IP whitelist,
+# credenciales, cluster pausado, lo que sea, la app sigue funcionando
+# usando el archivo ondev_accounts.list como persistencia principal.
+# =====================================================================
+try:
+    from pymongo import MongoClient
+    from pymongo.server_api import ServerApi
+    from pymongo.errors import (
+        ServerSelectionTimeoutError,
+        ConfigurationError,
+        OperationFailure,
+        ConnectionFailure,
+        AutoReconnect,
+    )
+    _MONGO_IMPORT_OK = True
+except Exception:
+    _MONGO_IMPORT_OK = False
+
+
 db = None
-if Config.MONGO_URI:
-    try:
-        client = MongoClient(Config.MONGO_URI, server_api=ServerApi('1'))
-        db = client.get_default_database()
-        print("Conectado a MongoDB")
-    except Exception as e:
-        print(f"Error conectando a MongoDB: {e}")
+_mongo_status = {"ok": False, "error": None, "retries": 0}
+
+
+def _try_connect_mongo():
+    """Intenta conectar a MongoDB con reintentos cortos. Devuelve cliente o None."""
+    global db, _mongo_status
+    if not Config.MONGO_URI:
+        _mongo_status = {"ok": False, "error": "MONGO_URI no configurado (usando solo JSONL local)", "retries": 0}
+        return None
+    if not _MONGO_IMPORT_OK:
+        _mongo_status = {"ok": False, "error": "pymongo no instalado (pip install pymongo dnspython)", "retries": 0}
+        return None
+
+    # Reintentar hasta 3 veces con backoff corto. Si Atlas esta pausado
+    # o haciendo failover, normalmente vuelve en segundos.
+    last_err = None
+    for attempt in range(3):
+        try:
+            client = MongoClient(
+                Config.MONGO_URI,
+                server_api=ServerApi('1'),
+                serverSelectionTimeoutMS=4000,
+                connectTimeoutMS=4000,
+                socketTimeoutMS=4000,
+            )
+            # Forzar un ping: si el cluster no responde, falla aqui
+            client.admin.command('ping')
+            db = client.get_default_database()
+            _mongo_status = {"ok": True, "error": None, "retries": attempt}
+            print(f"[mongo] Conectado OK a MongoDB (intento {attempt + 1})")
+            return client
+        except ServerSelectionTimeoutError as e:
+            last_err = (
+                f"Timeout al seleccionar servidor. Lo mas probable: "
+                f"IP no whitelisteada en Atlas o cluster pausado. "
+                f"({e})"
+            )
+        except ConfigurationError as e:
+            last_err = f"URI mal formada: {e}"
+            break  # no reintentar, el error es de config
+        except OperationFailure as e:
+            last_err = f"Auth/permiso denegado: {e}"
+            break
+        except (ConnectionFailure, AutoReconnect) as e:
+            last_err = f"Error de conexion: {e}"
+        except Exception as e:
+            last_err = f"Error inesperado: {type(e).__name__}: {e}"
+        time.sleep(0.5 * (attempt + 1))
+
+    db = None
+    _mongo_status = {"ok": False, "error": last_err, "retries": 3}
+    print(f"[mongo] No se pudo conectar: {last_err}")
+    print("[mongo] >> La app seguira funcionando con el fallback JSONL local.")
+    if Config.MONGO_URI and "mongodb+srv" in Config.MONGO_URI:
+        print("[mongo] >> Si usas Atlas: revisa Network Access (0.0.0.0/0)")
+        print("[mongo]   y que el cluster no este pausado (Free tier pausa tras inactividad).")
+    return None
+
+
+def mongo_ping():
+    """Endpoint de health para diagnosticar MongoDB sin reiniciar."""
+    if not Config.MONGO_URI:
+        return {"enabled": False, "ok": False, "error": "MONGO_URI no configurado"}
+    if not _MONGO_IMPORT_OK:
+        return {"enabled": True, "ok": False, "error": "pymongo no instalado"}
+    if _mongo_status["ok"]:
+        return {"enabled": True, "ok": True, "retries": _mongo_status["retries"]}
+    # Reintentar una vez si la conexion previa fallo
+    _try_connect_mongo()
+    return {"enabled": True, "ok": _mongo_status["ok"], "error": _mongo_status["error"]}
+
+
+# Conexion inicial en arranque (no bloquea si falla)
+_try_connect_mongo()
 
 def link_telegram_to_github(github_username, telegram_data):
     accounts = load_ondev_accounts()
@@ -349,6 +435,48 @@ def get_global_fluthin_catalog(force_refresh=False):
     _global_catalog_cache["data"] = apps
     _global_catalog_cache["ts"] = now
     return apps
+
+
+def get_packages_by_author(author_username, force_refresh=False):
+    """
+    Devuelve la lista de paquetes Fluthin publicados por un autor concreto
+    (case-insensitive). Usa el mismo catalogo global que /global, asi que
+    es O(N) sobre la cache. Si la cache esta fria, la refresca.
+    """
+    if not author_username:
+        return []
+    target = author_username.strip().lower()
+    apps = get_global_fluthin_catalog(force_refresh=force_refresh)
+    return [a for a in apps if (a.get("author") or "").strip().lower() == target]
+
+
+def get_all_authors(force_refresh=False):
+    """
+    Devuelve la lista de autores unicos del catalogo global,
+    ordenada alfabeticamente. Se usa para popular el filtro / global.
+    """
+    apps = get_global_fluthin_catalog(force_refresh=force_refresh)
+    seen = {}
+    for a in apps:
+        name = (a.get("author") or "").strip()
+        if not name:
+            continue
+        key = name.lower()
+        if key not in seen:
+            seen[key] = {
+                "username": name,
+                "package_count": 0,
+                "platforms": set(),
+            }
+        seen[key]["package_count"] += 1
+        cat = a.get("category") or "Otros"
+        seen[key]["platforms"].add(cat)
+    authors = []
+    for v in seen.values():
+        v["platforms"] = sorted(v["platforms"])
+        authors.append(v)
+    authors.sort(key=lambda x: x["username"].lower())
+    return authors
 
 
 # =====================================================================

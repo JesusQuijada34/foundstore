@@ -3,11 +3,18 @@
 {% block title %}Tienda Global - foundstore{% endblock %}
 
 {% block content %}
-<div class="fade-in">
+<div class="fade-in global-store">
+
     <section class="hero-fluent">
-        <h1>Paquetes Fluthin de todo el mundo</h1>
-        <p>Descubre e instala paquetes <strong>.iflapp</strong> publicados por cualquier desarrollador,
-           identificados directamente desde su <code>details.xml</code>.</p>
+        <h1>{% if author_filter %}Paquetes de @{{ author_filter }}{% else %}Paquetes Fluthin de todo el mundo{% endif %}</h1>
+        <p>
+            {% if author_filter %}
+                Filtrado por autor: <strong>@{{ author_filter }}</strong>. <a href="/global" class="link-reset">Quitar filtro</a>
+            {% else %}
+                Descubre e instala paquetes <strong>.iflapp</strong> publicados por cualquier desarrollador,
+                identificados directamente desde su <code>details.xml</code>.
+            {% endif %}
+        </p>
 
         <div class="visitor-platform-chip">
             <span class="material-icons">devices</span>
@@ -17,14 +24,41 @@
 
         <div class="global-search-bar">
             <span class="material-icons">search</span>
-            <input type="text" id="global-search" placeholder="Buscar por nombre, autor o publisher...">
+            <input type="text" id="global-search"
+                   placeholder="Buscar por nombre, autor o publisher...">
         </div>
 
         <div class="global-filters">
-            <button class="filter-chip active" data-filter="all">Todos</button>
+            <button class="filter-chip {% if not author_filter and not request.args.get('cat') %}active{% endif %}" data-filter="all">Todos</button>
             <button class="filter-chip" data-filter="Windows">Windows</button>
             <button class="filter-chip" data-filter="Linux/Mac">Linux / Mac</button>
             <button class="filter-chip" data-filter="Multiplataforma">Multiplataforma</button>
+
+            <div class="filter-divider"></div>
+
+            <div class="author-filter-wrap">
+                <button class="filter-chip author-trigger {% if author_filter %}active{% endif %}" type="button">
+                    <span class="material-icons" style="font-size:1rem;">person</span>
+                    {% if author_filter %}@{{ author_filter }}{% else %}Por autor{% endif %}
+                    <span class="material-icons" style="font-size:1rem;">expand_more</span>
+                </button>
+                <div class="author-dropdown" id="author-dropdown" hidden>
+                    <input type="text" id="author-search" placeholder="Buscar autor..." autocomplete="off">
+                    <ul id="author-list">
+                        {% for a in authors %}
+                        <li>
+                            <a href="/global?author={{ a.username }}" class="{% if author_filter|lower == a.username|lower %}active{% endif %}">
+                                <span class="author-name">@{{ a.username }}</span>
+                                <span class="author-meta">{{ a.package_count }} pkg · {{ a.platforms | join(', ') }}</span>
+                            </a>
+                        </li>
+                        {% endfor %}
+                        {% if not authors %}
+                        <li class="empty">No hay autores aún.</li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
         </div>
     </section>
 
@@ -35,35 +69,59 @@
 
     <div class="package-grid" id="global-package-grid">
         {% for app in apps %}
-        <div class="package-card acrilic-card global-app-card" data-category="{{ app.category }}"
-             data-search="{{ (app.name ~ ' ' ~ app.author ~ ' ' ~ app.publisher)|lower }}">
-            <div class="package-banner" style="background-image: url('{{ app.splash }}')">
+        <article class="package-card acrilic-card global-app-card"
+                 data-category="{{ app.category }}"
+                 data-search="{{ (app.name ~ ' ' ~ app.author ~ ' ' ~ app.publisher)|lower }}">
+            <div class="package-banner" style="background-image: url('{{ app.splash or app.icon or '' }}')">
                 <div class="banner-overlay"></div>
                 <span class="category-badge">{{ app.category }}</span>
+                {% if app.rate %}
+                <span class="rate-badge" title="Clasificación">{{ app.rate }}</span>
+                {% endif %}
             </div>
+
             <div class="package-info">
                 <div class="global-app-header">
-                    <img class="global-app-icon" src="{{ app.icon }}" alt="{{ app.name }}" onerror="this.style.display='none'">
-                    <div>
-                        <h3>{{ app.name }}</h3>
+                    <img class="global-app-icon" src="{{ app.icon }}" alt="{{ app.name }}"
+                         onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 48 48%22><rect width=%2248%22 height=%2248%22 rx=%2212%22 fill=%22%23334155%22/><text x=%2224%22 y=%2230%22 text-anchor=%22middle%22 fill=%22%23cbd5e1%22 font-size=%2218%22 font-family=%22sans-serif%22>{{ app.name[0] | upper }}</text></svg>'">
+                    <div class="global-app-titles">
+                        <h3 title="{{ app.name }}">{{ app.name }}</h3>
                         <p class="global-publisher">{{ app.publisher }}</p>
                     </div>
                 </div>
+
                 <div class="package-meta">
                     <span class="version-badge">v{{ app.version }}</span>
-                    <span class="author-tag">por {{ app.author }}</span>
-                </div>
-                <div class="global-identity">
-                    <span>ID de correlación: <code>{{ app.correlationid }}</code></span>
-                    <span>Clasificación: <code>{{ app.rate }}</code></span>
+                    <a class="author-tag" href="/author/{{ app.author }}">por @{{ app.author }}</a>
                 </div>
 
-                <button class="btn-primary global-download-btn"
-                        data-repo="{{ app.repo }}" data-package="{{ app.packagename }}">
-                    <span class="material-icons">download</span>
-                    Descargar para {{ visitor_category }}
-                </button>
+                <div class="global-identity">
+                    <span>ID: <code>{{ app.correlationid }}</code></span>
+                </div>
+
+                <div class="package-actions">
+                    <a class="btn-secondary btn-icon" href="/package/{{ app.packagename }}" title="Ver detalle">
+                        <span class="material-icons">info</span>
+                    </a>
+                    <button class="btn-primary global-download-btn"
+                            data-repo="{{ app.repo }}" data-package="{{ app.packagename }}">
+                        <span class="material-icons">download</span>
+                        <span>Descargar para {{ visitor_category }}</span>
+                    </button>
+                </div>
+
                 <div class="global-download-result" style="display:none;"></div>
+            </div>
+        </article>
+        {% else %}
+        <div class="empty-state" style="grid-column: 1 / -1;">
+            <span class="material-icons-round">inventory_2</span>
+            <div>
+                {% if author_filter %}
+                    @{{ author_filter }} aún no tiene paquetes publicados en foundstore.
+                {% else %}
+                    No hay paquetes en el catálogo global todavía.
+                {% endif %}
             </div>
         </div>
         {% endfor %}
@@ -71,6 +129,8 @@
 </div>
 
 <style>
+.global-store { padding-bottom: 60px; }
+
 .visitor-platform-chip {
     display: inline-flex;
     align-items: center;
@@ -83,14 +143,10 @@
     margin: 18px auto 0 auto;
     font-size: 0.9rem;
 }
-
-.visitor-platform-chip .platform-key {
-    opacity: 0.6;
-    font-size: 0.8rem;
-}
+.visitor-platform-chip .platform-key { opacity: 0.6; font-size: 0.8rem; }
 
 .global-search-bar {
-    max-width: 480px;
+    max-width: 520px;
     margin: 28px auto 0 auto;
     display: flex;
     align-items: center;
@@ -99,23 +155,27 @@
     border: 1px solid rgba(255,255,255,0.08);
     border-radius: 14px;
     padding: 12px 18px;
+    transition: border-color 0.2s;
 }
-
-.global-search-bar input {
-    flex: 1;
-    background: transparent;
-    border: none;
-    outline: none;
-    color: white;
-    font-size: 1rem;
-}
+.global-search-bar:focus-within { border-color: var(--accent-color); }
+.global-search-bar input { flex: 1; background: transparent; border: none; outline: none; color: white; font-size: 1rem; }
+.global-search-bar input::placeholder { color: var(--text-dim); }
 
 .global-filters {
     display: flex;
     justify-content: center;
+    align-items: center;
     gap: 10px;
-    margin-top: 20px;
+    margin-top: 22px;
     flex-wrap: wrap;
+    position: relative;
+}
+
+.filter-divider {
+    width: 1px;
+    height: 24px;
+    background: rgba(255,255,255,0.1);
+    margin: 0 4px;
 }
 
 .filter-chip {
@@ -128,20 +188,97 @@
     font-weight: 600;
     font-size: 0.85rem;
     transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: inherit;
 }
+.filter-chip:hover { border-color: var(--accent-color); color: white; }
+.filter-chip.active { background: var(--accent-color); color: white; border-color: var(--accent-color); }
 
-.filter-chip:hover { border-color: var(--accent-color); }
-
-.filter-chip.active {
-    background: var(--accent-color);
+.author-filter-wrap { position: relative; }
+.author-trigger { cursor: pointer; }
+.author-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    min-width: 280px;
+    max-width: 360px;
+    background: var(--bg-color-2, #1a1d24);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    z-index: 50;
+    padding: 12px;
+    max-height: 360px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+.author-dropdown[hidden] { display: none; }
+#author-search {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 8px 12px;
     color: white;
-    border-color: var(--accent-color);
+    font-size: 0.9rem;
+    outline: none;
+    margin-bottom: 8px;
+}
+#author-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; max-height: 280px; }
+#author-list li a {
+    display: flex;
+    flex-direction: column;
+    padding: 10px 12px;
+    border-radius: 10px;
+    text-decoration: none;
+    color: var(--text-dim);
+    transition: background 0.15s;
+}
+#author-list li a:hover, #author-list li a.active { background: rgba(56, 189, 248, 0.12); color: white; }
+#author-list .author-name { font-weight: 600; font-size: 0.95rem; }
+#author-list .author-meta { font-size: 0.75rem; opacity: 0.7; margin-top: 2px; }
+#author-list .empty { padding: 14px; color: var(--text-dim); font-size: 0.85rem; text-align: center; }
+
+/* === Cards === */
+.package-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 24px;
+    margin-top: 32px;
 }
 
+.package-card {
+    overflow: hidden;
+    border-radius: 22px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    transition: transform 0.25s, box-shadow 0.25s, border-color 0.25s;
+    display: flex;
+    flex-direction: column;
+}
+.package-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(56, 189, 248, 0.35);
+    box-shadow: 0 18px 40px rgba(0,0,0,0.35);
+}
+
+.package-banner {
+    position: relative;
+    height: 140px;
+    background-size: cover;
+    background-position: center;
+    background-color: #0f1115;
+}
+.banner-overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(to top, rgba(11,13,17,0.95) 0%, rgba(11,13,17,0.4) 50%, transparent 100%);
+}
 .category-badge {
     position: absolute;
-    top: 12px;
-    right: 12px;
+    top: 12px; right: 12px;
     background: rgba(11,13,17,0.75);
     border: 1px solid rgba(255,255,255,0.15);
     color: white;
@@ -151,55 +288,111 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    backdrop-filter: blur(8px);
+}
+.rate-badge {
+    position: absolute;
+    top: 12px; left: 12px;
+    background: rgba(34, 197, 94, 0.18);
+    border: 1px solid rgba(34, 197, 94, 0.4);
+    color: #4ade80;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    backdrop-filter: blur(8px);
 }
 
-.global-app-header {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin-bottom: 12px;
-}
-
-.global-app-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-    object-fit: cover;
-    background: rgba(255,255,255,0.06);
-}
-
-.global-publisher {
-    color: var(--text-dim);
-    font-size: 0.8rem;
-    margin: 2px 0 0 0;
-}
-
-.global-identity {
+.package-info {
+    padding: 20px;
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    font-size: 0.75rem;
-    color: var(--text-dim);
-    margin: 14px 0;
+    gap: 12px;
+    flex: 1;
 }
 
+.global-app-header { display: flex; align-items: center; gap: 14px; }
+.global-app-icon {
+    width: 52px; height: 52px;
+    border-radius: 14px;
+    object-fit: cover;
+    background: rgba(255,255,255,0.06);
+    flex-shrink: 0;
+}
+.global-app-titles { min-width: 0; flex: 1; }
+.global-app-titles h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.global-publisher { color: var(--text-dim); font-size: 0.8rem; margin: 2px 0 0 0; }
+
+.package-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.version-badge {
+    background: rgba(56, 189, 248, 0.12);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    padding: 3px 10px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-family: monospace;
+}
+.author-tag {
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 0.78rem;
+    padding: 3px 10px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.04);
+    transition: all 0.2s;
+}
+.author-tag:hover { color: white; background: rgba(56, 189, 248, 0.15); }
+
+.global-identity { font-size: 0.72rem; color: var(--text-dim); }
 .global-identity code {
     background: rgba(255,255,255,0.06);
     padding: 1px 6px;
     border-radius: 6px;
+    font-family: monospace;
 }
 
+.package-actions { display: flex; gap: 8px; margin-top: auto; padding-top: 8px; }
+.btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    flex-shrink: 0;
+}
+.btn-secondary {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: white;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+.btn-secondary:hover { background: rgba(255,255,255,0.1); border-color: var(--accent-color); }
+
 .global-download-btn {
-    width: 100%;
+    flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
-    margin-top: 6px;
+    font-size: 0.9rem;
+    padding: 12px 16px;
+    border-radius: 12px;
+    min-height: 44px;
 }
 
 .global-download-result {
-    margin-top: 12px;
+    margin-top: 10px;
     background: rgba(0,0,0,0.3);
     border: 1px dashed var(--accent-color);
     border-radius: 10px;
@@ -209,22 +402,26 @@
     color: var(--text-dim);
     word-break: break-all;
 }
+.global-download-result a { color: var(--accent-color); font-weight: 700; }
 
-.global-download-result a {
-    color: var(--accent-color);
-    font-weight: 700;
-}
+.link-reset { color: var(--accent-color); text-decoration: none; }
+.link-reset:hover { text-decoration: underline; }
 
 .empty-state {
     text-align: center;
     padding: 80px 20px;
     color: var(--text-dim);
 }
-
 .empty-state .material-icons-round {
     font-size: 3rem;
     display: block;
     margin-bottom: 12px;
+    opacity: 0.6;
+}
+
+@media (max-width: 640px) {
+    .package-grid { grid-template-columns: 1fr; }
+    .filter-divider { display: none; }
 }
 </style>
 
@@ -234,7 +431,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const grid = document.getElementById('global-package-grid');
     const emptyState = document.getElementById('global-empty');
     const searchInput = document.getElementById('global-search');
-    const filterChips = document.querySelectorAll('.filter-chip');
+    const filterChips = document.querySelectorAll('.filter-chip:not(.author-trigger)');
     let activeFilter = 'all';
 
     function applyFilters() {
@@ -261,27 +458,62 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // === Author dropdown ===
+    const authorTrigger = document.querySelector('.author-trigger');
+    const authorDropdown = document.getElementById('author-dropdown');
+    const authorSearch = document.getElementById('author-search');
+    const authorList = document.getElementById('author-list');
+
+    if (authorTrigger && authorDropdown) {
+        authorTrigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isHidden = authorDropdown.hasAttribute('hidden');
+            if (isHidden) {
+                authorDropdown.removeAttribute('hidden');
+                authorSearch.focus();
+            } else {
+                authorDropdown.setAttribute('hidden', '');
+            }
+        });
+        document.addEventListener('click', (e) => {
+            if (!authorDropdown.contains(e.target) && !authorTrigger.contains(e.target)) {
+                authorDropdown.setAttribute('hidden', '');
+            }
+        });
+        authorSearch.addEventListener('input', () => {
+            const q = authorSearch.value.toLowerCase().trim();
+            authorList.querySelectorAll('li').forEach(li => {
+                const text = li.textContent.toLowerCase();
+                li.style.display = !q || text.includes(q) ? '' : 'none';
+            });
+        });
+    }
+
+    // === Download buttons ===
     document.querySelectorAll('.global-download-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
             const repo = btn.dataset.repo;
             const packageName = btn.dataset.package;
-            const resultBox = btn.nextElementSibling;
+            const resultBox = btn.parentElement.nextElementSibling;
             resultBox.style.display = 'block';
-            resultBox.innerText = 'Detectando tu plataforma y buscando el release correcto...';
+            resultBox.innerText = 'Detectando plataforma y buscando release...';
+            btn.disabled = true;
 
             try {
                 const res = await fetch(`/api/global_download/${encodeURIComponent(repo)}?package_name=${encodeURIComponent(packageName)}`);
                 const data = await res.json();
 
                 if (data.direct_url) {
-                    resultBox.innerHTML = `Release <strong>${data.release_tag || ''}</strong> detectado para <strong>${data.category}</strong>:<br>`
-                        + `<a href="${data.direct_url}" target="_blank">${data.asset_name}</a>`;
+                    resultBox.innerHTML = `Release <strong>${data.release_tag || ''}</strong> · ${data.category}:<br>`
+                        + `<a href="${data.direct_url}" target="_blank" rel="noopener">${data.asset_name}</a>`;
                 } else {
-                    resultBox.innerHTML = `No hay build nativo para <strong>${data.category}</strong> todavía. `
-                        + `Puedes abrirlo con Fluthin:<br><a href="${data.fluthin_url}">${data.fluthin_url}</a>`;
+                    resultBox.innerHTML = `No hay build nativo para <strong>${data.category}</strong> todavía.<br>`
+                        + `Ábrelo con Fluthin: <a href="${data.fluthin_url}">${data.fluthin_url}</a>`;
                 }
             } catch (e) {
                 resultBox.innerText = 'Error al resolver la descarga para tu plataforma.';
+            } finally {
+                btn.disabled = false;
             }
         });
     });

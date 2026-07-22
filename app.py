@@ -101,11 +101,49 @@ def global_packages():
     TODOS los desarrolladores (misma lógica de identificación que
     jesusquijada34.netlify.app), sin importar la plataforma que estén
     visitando el sitio.
+    Soporta filtro por autor via ?author=<username> (case-insensitive).
     """
-    apps = services.get_global_fluthin_catalog()
     visitor_platform = services.detect_platform_key(request.headers.get("User-Agent"))
+    author_filter = request.args.get("author", "").strip()
+
+    if author_filter:
+        apps = services.get_packages_by_author(author_filter)
+    else:
+        apps = services.get_global_fluthin_catalog()
+
+    authors = services.get_all_authors()
     return render_template(
         "global_packages.html",
+        apps=apps,
+        authors=authors,
+        author_filter=author_filter,
+        visitor_platform=visitor_platform,
+        visitor_category=services.PLATFORM_TO_CATEGORY.get(visitor_platform, "Otros"),
+    )
+
+
+@app.route("/author/<username>")
+def author_packages(username):
+    """
+    Página dedicada para un autor concreto. Muestra todos sus paquetes
+    Fluthin con la misma UI que /global, pero filtrada y con cabecera
+    de autor visible.
+    """
+    if not username or len(username) > 64:
+        abort(404)
+    visitor_platform = services.detect_platform_key(request.headers.get("User-Agent"))
+    apps = services.get_packages_by_author(username)
+
+    if not apps:
+        # Distinguimos "no existe" de "existe pero sin paquetes" solo si
+        # el autor aparece en la lista global de autores conocidos
+        known = {a["username"].lower() for a in services.get_all_authors()}
+        if username.lower() not in known:
+            abort(404)
+
+    return render_template(
+        "author_packages.html",
+        author=username,
         apps=apps,
         visitor_platform=visitor_platform,
         visitor_category=services.PLATFORM_TO_CATEGORY.get(visitor_platform, "Otros"),
@@ -189,11 +227,54 @@ def developer_profile(username):
 def package_detail(package_name):
     catalog = services.get_catalog()
     package = next((p for p in catalog.get("packages", []) if p["name"] == package_name), None)
-    
+
     if not package:
         return render_template("error.html", message="Paquete no encontrado."), 404
-    
+
     return render_template("package_detail.html", package=package)
+
+
+@app.route("/package/<package_name>")
+def package_detail_global(package_name):
+    """
+    Detalle de un paquete del catalogo global Fluthin.
+    Lo busca por <packagename> (el campo <app> del details.xml)
+    entre todos los repos del catalogo.
+    """
+    apps = services.get_global_fluthin_catalog()
+    app_match = next((a for a in apps if a.get("packagename") == package_name), None)
+
+    if not app_match:
+        return render_template("error.html", message="Paquete no encontrado en el catalogo global."), 404
+
+    visitor_platform = services.detect_platform_key(request.headers.get("User-Agent"))
+    return render_template(
+        "package_detail.html",
+        app=app_match,
+        visitor_platform=visitor_platform,
+        visitor_category=services.PLATFORM_TO_CATEGORY.get(visitor_platform, "Otros"),
+    )
+
+
+@app.route("/health/mongo")
+def health_mongo():
+    """
+    Diagnostico de MongoDB. Devuelve JSON con el estado actual
+    y reintenta la conexion si la anterior fallo. Util para debug
+    en Render sin tener que reiniciar el servicio.
+    """
+    from flask import jsonify
+    return jsonify(services.mongo_ping())
+
+
+@app.route("/health")
+def health():
+    """Health check basico del servicio."""
+    from flask import jsonify
+    return jsonify({
+        "status": "ok",
+        "mongo": services._mongo_status,
+    })
 
 @app.route("/me/edit", methods=["GET", "POST"])
 def edit_profile():

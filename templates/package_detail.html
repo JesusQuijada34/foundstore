@@ -1,80 +1,133 @@
 {% extends "base.html" %}
 
-{% block title %}{{ package.display_name }} - foundstore{% endblock %}
+{% block title %}{{ app.name }} - foundstore{% endblock %}
 
 {% block content %}
-<div class="package-detail-container">
-    <div class="liquid-glass detail-card">
-        <div class="detail-header" style="background-image: url('{{ package.banner if package.banner else 'https://via.placeholder.com/800x300' }}')">
+<div class="fade-in package-detail-viewport">
+    <div class="detail-card acrilic-card">
+
+        <div class="detail-header" style="background-image: url('{{ app.splash or app.icon or '' }}')">
             <div class="header-overlay">
+                <a href="/global" class="back-link">
+                    <span class="material-icons">arrow_back</span> Volver
+                </a>
                 <div class="package-identity">
-                    <img src="{{ package.logo if package.logo else 'https://via.placeholder.com/100' }}" alt="{{ package.display_name }}" class="package-logo">
+                    <img src="{{ app.icon }}" alt="{{ app.name }}" class="package-logo"
+                         onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2224%22 fill=%22%23334155%22/><text x=%2250%22 y=%2262%22 text-anchor=%22middle%22 fill=%22%23cbd5e1%22 font-size=%2240%22 font-family=%22sans-serif%22>{{ app.name[0] | upper }}</text></svg>'">
                     <div class="package-titles">
-                        <h1>{{ package.display_name }}</h1>
-                        <p>v{{ package.version }} por <a href="/{{ package.author }}">{{ package.author }}</a></p>
+                        <h1>{{ app.name }}</h1>
+                        <p class="package-publisher">{{ app.publisher }} · v{{ app.version }}</p>
                     </div>
                 </div>
+                <span class="detail-category-badge">{{ app.category }}</span>
             </div>
         </div>
 
         <div class="detail-body">
             <div class="detail-main">
-                <section class="description">
-                    <h2>Descripción</h2>
-                    <p>{{ package.description }}</p>
+
+                <section class="detail-section">
+                    <h2>Información del paquete</h2>
+                    <div class="info-grid">
+                        <div class="info-cell">
+                            <span class="info-label">Autor</span>
+                            <a href="/author/{{ app.author }}" class="info-value">@{{ app.author }}</a>
+                        </div>
+                        <div class="info-cell">
+                            <span class="info-label">Plataforma</span>
+                            <span class="info-value">{{ app.platform }} <small>({{ app.category }})</small></span>
+                        </div>
+                        <div class="info-cell">
+                            <span class="info-label">Versión</span>
+                            <span class="info-value"><code>{{ app.version }}</code></span>
+                        </div>
+                        <div class="info-cell">
+                            <span class="info-label">Clasificación</span>
+                            <span class="info-value"><code>{{ app.rate }}</code></span>
+                        </div>
+                        <div class="info-cell info-cell-wide">
+                            <span class="info-label">ID de correlación</span>
+                            <code class="info-value info-code">{{ app.correlationid }}</code>
+                        </div>
+                        <div class="info-cell info-cell-wide">
+                            <span class="info-label">Nombre del paquete</span>
+                            <code class="info-value info-code">{{ app.packagename }}</code>
+                        </div>
+                    </div>
                 </section>
 
-                <section class="platform-selector">
-                    <h2>Descargar Paquete iflapp</h2>
-                    <p class="section-hint">Selecciona tu plataforma para generar un mirror cifrado:</p>
-                    
+                <section class="detail-section download-section">
+                    <h2>Descargar</h2>
+                    <p class="section-hint">
+                        Detectamos tu plataforma automáticamente. Si no hay build nativo,
+                        te damos un enlace <code>fluthin://</code> para abrirlo con el cliente.
+                    </p>
+
                     <div class="platform-grid">
-                        <button class="platform-btn" onclick="generateMirror('android')">
-                            <span class="material-icons">android</span>
-                            <span>Android</span>
+                        <button class="platform-btn {% if visitor_platform == 'Knosthalij' %}active{% endif %}"
+                                data-platform="windows" data-category="Windows">
+                            <span class="material-icons">desktop_windows</span>
+                            <strong>Windows</strong>
+                            <small>build .exe / .msi</small>
                         </button>
-                        <button class="platform-btn" onclick="generateMirror('ios')">
-                            <span class="material-icons">apple</span>
-                            <span>iOS</span>
+                        <button class="platform-btn {% if visitor_platform == 'Danenone' %}active{% endif %}"
+                                data-platform="linux" data-category="Linux / Mac">
+                            <span class="material-icons">terminal</span>
+                            <strong>Linux / Mac</strong>
+                            <small>build ELF / .dmg</small>
                         </button>
-                        <button class="platform-btn" onclick="generateMirror('web')">
-                            <span class="material-icons">public</span>
-                            <span>Web</span>
-                        </button>
-                        <button class="platform-btn" onclick="generateMirror('desktop')">
-                            <span class="material-icons">computer</span>
-                            <span>Desktop</span>
+                        <button class="platform-btn {% if visitor_platform == 'AlphaCube' %}active{% endif %}"
+                                data-platform="multi" data-category="Multiplataforma">
+                            <span class="material-icons">devices_other</span>
+                            <strong>Multiplataforma</strong>
+                            <small>lo que haya disponible</small>
                         </button>
                     </div>
 
-                    <div id="mirror-result" class="mirror-box" style="display: none;">
-                        <div class="mirror-info">
-                            <span class="material-icons">lock</span>
-                            <p id="mirror-url">Generando enlace cifrado...</p>
+                    <div id="download-result" class="download-box" style="display:none;">
+                        <div class="download-result-info">
+                            <span class="material-icons result-icon">download_done</span>
+                            <div class="result-text" id="result-text"></div>
                         </div>
-                        <button class="btn-copy" onclick="copyMirror()">Copiar</button>
                     </div>
+
+                    <details class="advanced-options">
+                        <summary>Opciones avanzadas</summary>
+                        <div class="platform-grid" style="margin-top: 14px;">
+                            <button class="platform-btn" data-platform="android" data-category="Android">
+                                <span class="material-icons">android</span>
+                                <span>Android</span>
+                            </button>
+                            <button class="platform-btn" data-platform="ios" data-category="iOS">
+                                <span class="material-icons">apple</span>
+                                <span>iOS</span>
+                            </button>
+                            <button class="platform-btn" data-platform="web" data-category="Web">
+                                <span class="material-icons">public</span>
+                                <span>Web</span>
+                            </button>
+                            <button class="platform-btn" data-platform="desktop" data-category="Desktop">
+                                <span class="material-icons">computer</span>
+                                <span>Desktop</span>
+                            </button>
+                        </div>
+                    </details>
                 </section>
             </div>
-            
+
             <aside class="detail-sidebar">
                 <div class="sidebar-box">
-                    <h3>Estadísticas</h3>
-                    <div class="stat-row">
-                        <span>Descargas</span>
-                        <strong>1.2k</strong>
-                    </div>
-                    <div class="stat-row">
-                        <span>Likes</span>
-                        <strong>342</strong>
-                    </div>
-                </div>
-                
-                <div class="sidebar-box">
                     <h3>Repositorio</h3>
-                    <a href="{{ package.url }}" target="_blank" class="btn-github-link">
-                        <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GitHub">
-                        Ver Código
+                    <a href="https://github.com/{{ app.repo }}" target="_blank" rel="noopener" class="btn-github-link">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.04-.02-2.05-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.3 3.5 1 .1-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.11-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.3-1.55 3.3-1.23 3.3-1.23.65 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.8 5.62-5.48 5.92.43.37.81 1.1.81 2.22 0 1.6-.01 2.89-.01 3.29 0 .32.22.69.83.58A12 12 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+                        Ver en GitHub
+                    </a>
+                </div>
+
+                <div class="sidebar-box">
+                    <h3>Otros paquetes de @{{ app.author }}</h3>
+                    <a href="/author/{{ app.author }}" class="btn-secondary-link">
+                        Ver todos <span class="material-icons">arrow_forward</span>
                     </a>
                 </div>
             </aside>
@@ -82,198 +135,281 @@
     </div>
 </div>
 
-<script>
-function generateMirror(platform) {
-    const resultBox = document.getElementById('mirror-result');
-    const urlText = document.getElementById('mirror-url');
-    
-    resultBox.style.display = 'flex';
-    urlText.innerText = 'Cifrando mirror para ' + platform + '...';
-    
-    fetch(`/api/generate_mirror/{{ package.name }}/${platform}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.mirror_url) {
-                urlText.innerText = data.mirror_url;
-            } else {
-                urlText.innerText = 'Error: ' + (data.error || 'No se pudo generar el mirror');
-            }
-        })
-        .catch(err => {
-            urlText.innerText = 'Error de conexión con el servidor de mirrors';
-        });
-}
-
-function copyMirror() {
-    const text = document.getElementById('mirror-url').innerText;
-    navigator.clipboard.writeText(text);
-    alert('¡Enlace copiado al portapapeles!');
-}
-</script>
-
 <style>
-.detail-card {
-    overflow: hidden;
-    margin-top: 20px;
-}
+.package-detail-viewport { padding-bottom: 60px; }
+
+.detail-card { overflow: hidden; margin-top: 20px; }
 
 .detail-header {
-    height: 300px;
+    position: relative;
+    height: 320px;
     background-size: cover;
     background-position: center;
-    position: relative;
+    background-color: #0f1115;
 }
-
 .header-overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(to top, rgba(11,13,17,0.98) 0%, rgba(11,13,17,0.55) 60%, transparent 100%);
+    padding: 30px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 16px;
+}
+.back-link {
     position: absolute;
-    inset: 0;
-    background: linear-gradient(to top, var(--bg-color), transparent);
-    display: flex;
-    align-items: flex-end;
-    padding: 40px;
-}
-
-.package-identity {
-    display: flex;
+    top: 30px; left: 40px;
+    color: var(--text-dim);
+    text-decoration: none;
+    display: inline-flex;
     align-items: center;
-    gap: 24px;
+    gap: 4px;
+    font-size: 0.9rem;
+    padding: 8px 14px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    transition: all 0.2s;
+    backdrop-filter: blur(8px);
 }
+.back-link:hover { color: white; background: rgba(56, 189, 248, 0.12); border-color: var(--accent-color); }
 
+.package-identity { display: flex; align-items: center; gap: 24px; }
 .package-logo {
-    width: 100px;
-    height: 100px;
-    border-radius: 24px;
+    width: 110px; height: 110px;
+    border-radius: 26px;
     border: 4px solid rgba(255,255,255,0.1);
     backdrop-filter: blur(10px);
+    object-fit: cover;
+    background: rgba(0,0,0,0.4);
+    flex-shrink: 0;
 }
+.package-titles h1 { margin: 0; font-size: 2.4rem; font-weight: 800; }
+.package-publisher { margin: 6px 0 0 0; color: var(--text-dim); font-size: 0.95rem; }
 
-.package-titles h1 {
-    margin: 0;
-    font-size: 2.5rem;
-    font-weight: 800;
-}
-
-.package-titles p {
-    margin: 8px 0 0 0;
-    color: var(--text-muted);
-}
-
-.package-titles a {
-    color: var(--accent-color);
-    text-decoration: none;
-    font-weight: 600;
+.detail-category-badge {
+    position: absolute;
+    top: 30px; right: 40px;
+    background: rgba(56, 189, 248, 0.18);
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    color: #38bdf8;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    backdrop-filter: blur(8px);
 }
 
 .detail-body {
     padding: 40px;
     display: grid;
-    grid-template-columns: 1fr 300px;
+    grid-template-columns: 1fr 320px;
     gap: 40px;
 }
 
-.description h2, .platform-selector h2 {
-    font-size: 1.5rem;
-    margin-bottom: 20px;
+.detail-section { margin-bottom: 36px; }
+.detail-section h2 { font-size: 1.3rem; margin: 0 0 18px 0; }
+.section-hint { color: var(--text-dim); font-size: 0.9rem; margin: 0 0 18px 0; }
+.section-hint code { background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 6px; font-size: 0.85em; }
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 16px;
+    padding: 18px;
 }
+.info-cell { display: flex; flex-direction: column; gap: 4px; }
+.info-cell-wide { grid-column: span 2; }
+.info-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim); font-weight: 700; }
+.info-value { font-size: 0.95rem; color: white; text-decoration: none; }
+.info-value code { background: rgba(56, 189, 248, 0.1); color: #38bdf8; padding: 2px 8px; border-radius: 6px; font-size: 0.85em; font-family: monospace; }
+.info-code { word-break: break-all; }
 
 .platform-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 16px;
-    margin-top: 24px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
 }
-
 .platform-btn {
-    background: rgba(255,255,255,0.05);
+    background: rgba(255,255,255,0.04);
     border: 1px solid rgba(255,255,255,0.1);
-    padding: 20px;
+    padding: 22px 18px;
     border-radius: 16px;
     color: white;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: all 0.25s;
+    font-family: inherit;
+    text-align: center;
 }
-
 .platform-btn:hover {
     background: rgba(56, 189, 248, 0.1);
     border-color: var(--accent-color);
-    transform: translateY(-4px);
+    transform: translateY(-3px);
 }
-
-.platform-btn .material-icons {
-    font-size: 2rem;
-    color: var(--accent-color);
+.platform-btn.active {
+    background: rgba(56, 189, 248, 0.18);
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 1px var(--accent-color);
 }
+.platform-btn .material-icons { font-size: 1.8rem; color: var(--accent-color); }
+.platform-btn strong { font-size: 0.95rem; }
+.platform-btn small { font-size: 0.7rem; color: var(--text-dim); }
+.platform-btn span { font-size: 0.9rem; }
 
-.mirror-box {
-    margin-top: 30px;
+.download-box {
+    margin-top: 20px;
     background: rgba(0,0,0,0.3);
-    padding: 20px;
-    border-radius: 16px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    padding: 18px 20px;
+    border-radius: 14px;
     border: 1px dashed var(--accent-color);
 }
+.download-result-info { display: flex; align-items: center; gap: 14px; }
+.result-icon { color: var(--accent-color); font-size: 1.6rem; }
+.result-text { color: var(--text-dim); font-size: 0.9rem; flex: 1; word-break: break-all; }
+.result-text a { color: var(--accent-color); font-weight: 700; }
 
-.mirror-info {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    color: var(--text-muted);
-    font-family: monospace;
-    font-size: 0.9rem;
-    overflow: hidden;
+.advanced-options {
+    margin-top: 18px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 12px;
+    padding: 14px 18px;
 }
-
-.btn-copy {
-    background: var(--accent-color);
-    border: none;
-    color: white;
-    padding: 8px 16px;
-    border-radius: 8px;
-    font-weight: 600;
+.advanced-options summary {
     cursor: pointer;
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    user-select: none;
 }
+.advanced-options summary:hover { color: white; }
 
 .sidebar-box {
     background: rgba(255,255,255,0.03);
     padding: 24px;
-    border-radius: 20px;
-    margin-bottom: 24px;
+    border-radius: 18px;
+    margin-bottom: 18px;
     border: 1px solid rgba(255,255,255,0.05);
 }
-
-.sidebar-box h3 {
-    margin: 0 0 16px 0;
-    font-size: 1.1rem;
-}
-
-.stat-row {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 12px;
-    color: var(--text-muted);
-}
-
+.sidebar-box h3 { margin: 0 0 14px 0; font-size: 1rem; }
 .btn-github-link {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 10px;
     background: white;
-    color: black !important;
+    color: #0f1115 !important;
     text-decoration: none;
     padding: 12px;
     border-radius: 12px;
     font-weight: 700;
+    transition: all 0.2s;
 }
+.btn-github-link:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(255,255,255,0.15); }
+.btn-secondary-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--accent-color);
+    text-decoration: none;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: rgba(56, 189, 248, 0.08);
+    border: 1px solid rgba(56, 189, 248, 0.2);
+    transition: all 0.2s;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+.btn-secondary-link:hover { background: rgba(56, 189, 248, 0.18); }
 
 @media (max-width: 900px) {
-    .detail-body { grid-template-columns: 1fr; }
+    .detail-body { grid-template-columns: 1fr; padding: 24px; }
+    .detail-header { height: 280px; }
+    .package-titles h1 { font-size: 1.8rem; }
+    .info-grid { grid-template-columns: 1fr; }
+    .info-cell-wide { grid-column: span 1; }
+    .platform-grid { grid-template-columns: 1fr; }
+    .header-overlay { padding: 20px; }
+    .back-link, .detail-category-badge { top: 20px; }
+    .back-link { left: 20px; }
+    .detail-category-badge { right: 20px; }
 }
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const repo = "{{ app.repo }}";
+    const packageName = "{{ app.packagename }}";
+    const resultBox = document.getElementById('download-result');
+    const resultText = document.getElementById('result-text');
+
+    // Auto-detect y carga inicial del release correcto
+    const platformKey = "{{ visitor_platform }}";
+    const platformMap = {
+        'Knosthalij': 'windows',
+        'Danenone': 'linux',
+        'AlphaCube': 'multi'
+    };
+    const initialPlatform = platformMap[platformKey] || 'multi';
+
+    async function resolveDownload(platform) {
+        // plataformas nativas (windows/linux/multi) usan el endpoint GitHub releases
+        // el resto (android/ios/web/desktop) caen en fluthin:// o mirror cifrado
+        const native = ['windows', 'linux', 'multi'];
+
+        resultBox.style.display = 'flex';
+        resultText.innerHTML = 'Detectando plataforma y buscando release...';
+
+        try {
+            if (native.includes(platform)) {
+                const url = `/api/global_download/${encodeURIComponent(repo)}?package_name=${encodeURIComponent(packageName)}`;
+                const res = await fetch(url);
+                const data = await res.json();
+
+                if (data.direct_url) {
+                    resultText.innerHTML = `Release <strong>${data.release_tag || ''}</strong> · ${data.category}<br>`
+                        + `<a href="${data.direct_url}" target="_blank" rel="noopener">${data.asset_name}</a>`;
+                } else {
+                    resultText.innerHTML = `No hay build nativo para <strong>${data.category}</strong> todavía.<br>`
+                        + `Ábrelo con Fluthin: <a href="${data.fluthin_url}">${data.fluthin_url}</a>`;
+                }
+            } else {
+                // Para android/ios/web/desktop generamos un mirror cifrado local
+                const res = await fetch(`/api/generate_mirror/${encodeURIComponent(packageName)}/${encodeURIComponent(platform)}`);
+                const data = await res.json();
+                if (data.mirror_url) {
+                    resultText.innerHTML = `Mirror cifrado generado para <strong>${platform}</strong>:<br>`
+                        + `<code>${data.mirror_url}</code>`;
+                } else {
+                    resultText.innerHTML = `Error: ${data.error || 'no se pudo generar el mirror'}`;
+                }
+            }
+        } catch (e) {
+            resultText.innerText = 'Error de conexión con el servidor de mirrors.';
+        }
+    }
+
+    // Auto-click en la plataforma detectada
+    const initialBtn = document.querySelector(`.platform-btn[data-platform="${initialPlatform}"]`);
+    if (initialBtn) {
+        resolveDownload(initialPlatform);
+    }
+
+    document.querySelectorAll('.platform-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.platform-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            resolveDownload(btn.dataset.platform);
+        });
+    });
+});
+</script>
 {% endblock %}
