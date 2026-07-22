@@ -7,6 +7,17 @@
     --text-primary: #ffffff;
     --text-secondary: #94a3b8;
     --border: 1px solid rgba(255, 255, 255, 0.08);
+
+    /* Alias usados en varias plantillas (index, package_detail, onboarding,
+       profiles, help, panels) que antes no estaban definidos y hacían que
+       fondos, textos atenuados y acentos no se aplicaran (quedaban en
+       transparent/inherit). Se mapean a las variables base de arriba para
+       no duplicar la paleta. */
+    --bg-color: var(--bg-dark);
+    --accent-color: var(--accent);
+    --accent-secondary: var(--accent-light);
+    --text-dim: var(--text-secondary);
+    --text-muted: var(--text-secondary);
 }
 
 * {
