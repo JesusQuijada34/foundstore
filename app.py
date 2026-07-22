@@ -68,7 +68,7 @@ def onboarding_step2():
     except Exception:
         return redirect(url_for("logout"))
         
-    return render_template("onboarding_telegram.html", github_username=github_username)
+    return render_template("onboarding_telegram.html", github_username=github_username, telegram_bot_username=Config.TELEGRAM_BOT_USERNAME)
 
 @app.route("/api/telegram_callback")
 def telegram_callback():

@@ -14,6 +14,9 @@ class Config:
     # Telegram
     TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
     TELEGRAM_WIDGET_ID = os.environ.get('TELEGRAM_WIDGET_ID')
+    # Username público del bot (sin @). El que muestra telegram-widget.js.
+    # Debe coincidir EXACTAMENTE con el configurado en @BotFather.
+    TELEGRAM_BOT_USERNAME = os.environ.get('TELEGRAM_BOT_USERNAME', 'infl_foundstorebot')
 
     ONDEV_DB_PATH = os.path.join(os.path.dirname(__file__), 'data', 'ondev_accounts.list')
     CATALOG_PATH = os.path.join(os.path.dirname(__file__), 'data', 'catalog.json')
