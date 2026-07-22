@@ -94,6 +94,44 @@ def generate_mirror(package_name, platform):
     
     return jsonify({"mirror_url": mirror_url})
 
+@app.route("/global")
+def global_packages():
+    """
+    Tienda global: descubre y muestra los paquetes Fluthin (.iflapp) de
+    TODOS los desarrolladores (misma lógica de identificación que
+    jesusquijada34.netlify.app), sin importar la plataforma que estén
+    visitando el sitio.
+    """
+    apps = services.get_global_fluthin_catalog()
+    visitor_platform = services.detect_platform_key(request.headers.get("User-Agent"))
+    return render_template(
+        "global_packages.html",
+        apps=apps,
+        visitor_platform=visitor_platform,
+        visitor_category=services.PLATFORM_TO_CATEGORY.get(visitor_platform, "Otros"),
+    )
+
+
+@app.route("/api/global_download/<path:repo>")
+def api_global_download(repo):
+    """
+    Resuelve la descarga correcta para el visitante actual según su
+    plataforma (Windows/Linux/Mac/otros), igual que packagemaker
+    (rama render) hace al generar releases por plataforma.
+    """
+    package_name = request.args.get("package_name")
+    result = services.resolve_download_for_visitor(
+        repo, request.headers.get("User-Agent"), package_name=package_name
+    )
+    return jsonify(result)
+
+
+@app.route("/api/global_catalog")
+def api_global_catalog():
+    force = request.args.get("refresh") == "1"
+    return jsonify({"apps": services.get_global_fluthin_catalog(force_refresh=force)})
+
+
 @app.route("/help")
 def help_page():
     return render_template("help.html")

@@ -27,14 +27,24 @@
             <div class="action-area">
                 <div id="telegram-widget-container">
                     {% if github_username %}
-                        <!-- Widget de Telegram -->
-                        <script async src="https://telegram.org/js/telegram-widget.js?22" 
-                            data-telegram-login="foundstore_bot" 
-                            data-size="large" 
-                            data-userpic="false" 
-                            data-auth-url="/api/telegram_callback" 
-                            data-request-access="write"></script>
-                        <p class="debug-info" style="font-size: 0.7rem; color: var(--text-dim); margin-top: 10px;">
+                        <div class="telegram-widget-frame">
+                            <span class="material-icons telegram-badge-icon">send</span>
+                            <div id="telegram-widget-slot" class="telegram-widget-slot">
+                                <div class="telegram-widget-loader">
+                                    <span class="spinner"></span>
+                                    <span>Cargando widget de Telegram…</span>
+                                </div>
+                                <script async src="https://telegram.org/js/telegram-widget.js?22"
+                                    data-telegram-login="foundstore_bot"
+                                    data-size="large"
+                                    data-radius="12"
+                                    data-userpic="false"
+                                    data-auth-url="/api/telegram_callback"
+                                    data-request-access="write"
+                                    onload="document.querySelector('.telegram-widget-loader')?.remove()"></script>
+                            </div>
+                        </div>
+                        <p class="debug-info" style="font-size: 0.7rem; color: var(--text-dim); margin-top: 14px;">
                             Identificado como: <strong>{{ github_username }}</strong>
                         </p>
                     {% else %}
@@ -120,6 +130,65 @@ document.addEventListener('DOMContentLoaded', () => {
 .action-area {
     display: flex;
     justify-content: center;
+}
+
+.telegram-widget-frame {
+    position: relative;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 24px 28px;
+    background: #ffffff;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06);
+}
+
+.telegram-badge-icon {
+    position: absolute;
+    top: -14px;
+    left: -14px;
+    background: #229ED9;
+    color: white;
+    border-radius: 50%;
+    padding: 8px;
+    font-size: 1.1rem !important;
+    box-shadow: 0 4px 10px rgba(34,158,217,0.5);
+}
+
+.telegram-widget-slot {
+    min-width: 220px;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.telegram-widget-slot iframe {
+    border-radius: 12px !important;
+}
+
+.telegram-widget-loader {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #555;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.telegram-widget-loader .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(34,158,217,0.25);
+    border-top-color: #229ED9;
+    border-radius: 50%;
+    display: inline-block;
+    animation: telegram-spin 0.8s linear infinite;
+}
+
+@keyframes telegram-spin {
+    to { transform: rotate(360deg); }
 }
 </style>
 {% endblock %}

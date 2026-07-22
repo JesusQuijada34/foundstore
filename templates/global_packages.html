@@ -1,0 +1,290 @@
+{% extends "base.html" %}
+
+{% block title %}Tienda Global - foundstore{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+    <section class="hero-fluent">
+        <h1>Paquetes Fluthin de todo el mundo</h1>
+        <p>Descubre e instala paquetes <strong>.iflapp</strong> publicados por cualquier desarrollador,
+           identificados directamente desde su <code>details.xml</code>.</p>
+
+        <div class="visitor-platform-chip">
+            <span class="material-icons">devices</span>
+            Estás visitando desde: <strong>{{ visitor_category }}</strong>
+            <span class="platform-key">({{ visitor_platform }})</span>
+        </div>
+
+        <div class="global-search-bar">
+            <span class="material-icons">search</span>
+            <input type="text" id="global-search" placeholder="Buscar por nombre, autor o publisher...">
+        </div>
+
+        <div class="global-filters">
+            <button class="filter-chip active" data-filter="all">Todos</button>
+            <button class="filter-chip" data-filter="Windows">Windows</button>
+            <button class="filter-chip" data-filter="Linux/Mac">Linux / Mac</button>
+            <button class="filter-chip" data-filter="Multiplataforma">Multiplataforma</button>
+        </div>
+    </section>
+
+    <div id="global-empty" class="empty-state" style="display:none;">
+        <span class="material-icons-round">inventory_2</span>
+        <div>No se encontraron paquetes con ese filtro.</div>
+    </div>
+
+    <div class="package-grid" id="global-package-grid">
+        {% for app in apps %}
+        <div class="package-card acrilic-card global-app-card" data-category="{{ app.category }}"
+             data-search="{{ (app.name ~ ' ' ~ app.author ~ ' ' ~ app.publisher)|lower }}">
+            <div class="package-banner" style="background-image: url('{{ app.splash }}')">
+                <div class="banner-overlay"></div>
+                <span class="category-badge">{{ app.category }}</span>
+            </div>
+            <div class="package-info">
+                <div class="global-app-header">
+                    <img class="global-app-icon" src="{{ app.icon }}" alt="{{ app.name }}" onerror="this.style.display='none'">
+                    <div>
+                        <h3>{{ app.name }}</h3>
+                        <p class="global-publisher">{{ app.publisher }}</p>
+                    </div>
+                </div>
+                <div class="package-meta">
+                    <span class="version-badge">v{{ app.version }}</span>
+                    <span class="author-tag">por {{ app.author }}</span>
+                </div>
+                <div class="global-identity">
+                    <span>ID de correlación: <code>{{ app.correlationid }}</code></span>
+                    <span>Clasificación: <code>{{ app.rate }}</code></span>
+                </div>
+
+                <button class="btn-primary global-download-btn"
+                        data-repo="{{ app.repo }}" data-package="{{ app.packagename }}">
+                    <span class="material-icons">download</span>
+                    Descargar para {{ visitor_category }}
+                </button>
+                <div class="global-download-result" style="display:none;"></div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<style>
+.visitor-platform-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(56, 189, 248, 0.08);
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    color: var(--text-dim);
+    padding: 8px 18px;
+    border-radius: 30px;
+    margin: 18px auto 0 auto;
+    font-size: 0.9rem;
+}
+
+.visitor-platform-chip .platform-key {
+    opacity: 0.6;
+    font-size: 0.8rem;
+}
+
+.global-search-bar {
+    max-width: 480px;
+    margin: 28px auto 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    padding: 12px 18px;
+}
+
+.global-search-bar input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: white;
+    font-size: 1rem;
+}
+
+.global-filters {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+}
+
+.filter-chip {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text-dim);
+    padding: 8px 18px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+}
+
+.filter-chip:hover { border-color: var(--accent-color); }
+
+.filter-chip.active {
+    background: var(--accent-color);
+    color: white;
+    border-color: var(--accent-color);
+}
+
+.category-badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(11,13,17,0.75);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.global-app-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 12px;
+}
+
+.global-app-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    object-fit: cover;
+    background: rgba(255,255,255,0.06);
+}
+
+.global-publisher {
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    margin: 2px 0 0 0;
+}
+
+.global-identity {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    margin: 14px 0;
+}
+
+.global-identity code {
+    background: rgba(255,255,255,0.06);
+    padding: 1px 6px;
+    border-radius: 6px;
+}
+
+.global-download-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.global-download-result {
+    margin-top: 12px;
+    background: rgba(0,0,0,0.3);
+    border: 1px dashed var(--accent-color);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 0.75rem;
+    font-family: monospace;
+    color: var(--text-dim);
+    word-break: break-all;
+}
+
+.global-download-result a {
+    color: var(--accent-color);
+    font-weight: 700;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    color: var(--text-dim);
+}
+
+.empty-state .material-icons-round {
+    font-size: 3rem;
+    display: block;
+    margin-bottom: 12px;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const cards = Array.from(document.querySelectorAll('.global-app-card'));
+    const grid = document.getElementById('global-package-grid');
+    const emptyState = document.getElementById('global-empty');
+    const searchInput = document.getElementById('global-search');
+    const filterChips = document.querySelectorAll('.filter-chip');
+    let activeFilter = 'all';
+
+    function applyFilters() {
+        const query = (searchInput.value || '').toLowerCase().trim();
+        let visibleCount = 0;
+        cards.forEach(card => {
+            const matchesFilter = activeFilter === 'all' || card.dataset.category === activeFilter;
+            const matchesSearch = !query || card.dataset.search.includes(query);
+            const visible = matchesFilter && matchesSearch;
+            card.style.display = visible ? '' : 'none';
+            if (visible) visibleCount++;
+        });
+        emptyState.style.display = visibleCount === 0 ? 'block' : 'none';
+        grid.style.display = visibleCount === 0 ? 'none' : 'grid';
+    }
+
+    searchInput.addEventListener('input', applyFilters);
+    filterChips.forEach(chip => {
+        chip.addEventListener('click', () => {
+            filterChips.forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+            activeFilter = chip.dataset.filter;
+            applyFilters();
+        });
+    });
+
+    document.querySelectorAll('.global-download-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const repo = btn.dataset.repo;
+            const packageName = btn.dataset.package;
+            const resultBox = btn.nextElementSibling;
+            resultBox.style.display = 'block';
+            resultBox.innerText = 'Detectando tu plataforma y buscando el release correcto...';
+
+            try {
+                const res = await fetch(`/api/global_download/${encodeURIComponent(repo)}?package_name=${encodeURIComponent(packageName)}`);
+                const data = await res.json();
+
+                if (data.direct_url) {
+                    resultBox.innerHTML = `Release <strong>${data.release_tag || ''}</strong> detectado para <strong>${data.category}</strong>:<br>`
+                        + `<a href="${data.direct_url}" target="_blank">${data.asset_name}</a>`;
+                } else {
+                    resultBox.innerHTML = `No hay build nativo para <strong>${data.category}</strong> todavía. `
+                        + `Puedes abrirlo con Fluthin:<br><a href="${data.fluthin_url}">${data.fluthin_url}</a>`;
+                }
+            } catch (e) {
+                resultBox.innerText = 'Error al resolver la descarga para tu plataforma.';
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
