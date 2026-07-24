@@ -1,679 +1,616 @@
 {% extends "base.html" %}
 
 {% block title %}Identidad - foundstore{% endblock %}
-{% block breadcrumb %}Inicio de Sesión{% endblock %}
+{% block breadcrumb %}Acceso Seguro{% endblock %}
 
 {% block content %}
-<div class="login-container">
-    <!-- Fondo ilustrado con degradados animados -->
-    <div class="login-bg">
-        <div class="blob blob-1"></div>
-        <div class="blob blob-2"></div>
-        <div class="blob blob-3"></div>
+<div class="auth-viewport">
+    <!-- Capa de fondo con degradados dinámicos -->
+    <div class="auth-background">
+        <div class="mesh-gradient"></div>
+        <div class="floating-blobs">
+            <div class="blob blob-indigo"></div>
+            <div class="blob blob-cyan"></div>
+            <div class="blob blob-violet"></div>
+        </div>
     </div>
 
-    <!-- Tarjeta principal con efecto glassmorphism -->
-    <div class="login-card" id="loginCard">
-        <!-- Tab selector: GitHub vs Telegram -->
-        <div class="login-tabs">
-            <button class="tab-btn active" data-tab="github">
-                <span class="material-icons">github</span>
-                GitHub
-            </button>
-            <button class="tab-btn" data-tab="telegram">
-                <span class="material-icons">send</span>
-                Telegram
-            </button>
-        </div>
-
-        <!-- TAB 1: GitHub OAuth & Telegram Login -->
-        <div class="tab-content active" id="github-tab">
-            <div class="tab-header">
-                <div class="icon-badge github">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.04-.02-2.05-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.3 3.5 1 .1-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.11-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.3-1.55 3.3-1.23 3.3-1.23.65 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.8 5.62-5.48 5.92.43.37.81 1.1.81 2.22 0 1.6-.01 2.89-.01 3.29 0 .32.22.69.83.58A12 12 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
-                    </svg>
-                </div>
-                <h2>Bienvenido</h2>
-                <p class="subtitle">Usa GitHub o tu cuenta de Telegram vinculada</p>
+    <!-- Contenedor principal de la tarjeta -->
+    <div class="auth-card-wrapper">
+        <div class="auth-card" id="authCard">
+            <!-- Selector de pestañas -->
+            <div class="auth-tabs">
+                <button class="tab-trigger active" onclick="showTab('login')">
+                    <span class="material-icons-round">login</span>
+                    Entrar
+                </button>
+                <button class="tab-trigger" onclick="showTab('register')">
+                    <span class="material-icons-round">person_add</span>
+                    Registro
+                </button>
             </div>
 
-            <a href="{{ url_for('github.login') }}" class="btn-primary btn-large">
-                <span class="material-icons">login</span>
-                Continuar con GitHub
-            </a>
-
-            <div class="divider">o usa Telegram ID</div>
-
-            <form id="telegramLoginForm" class="form-group">
-                <div class="form-field">
-                    <div class="input-wrapper">
-                        <span class="material-icons">person</span>
-                        <input type="text" id="loginTelegramId" name="telegramId" placeholder="ID de Telegram" required>
+            <!-- SECCIÓN: INICIO DE SESIÓN -->
+            <div id="tab-login" class="tab-panel active">
+                <div class="panel-header">
+                    <div class="brand-icon-wrapper">
+                        <svg class="brand-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        </svg>
                     </div>
+                    <h2>Bienvenido de nuevo</h2>
+                    <p>Accede a tu cuenta profesional de foundstore</p>
                 </div>
-                <div class="form-field">
-                    <div class="input-wrapper">
-                        <span class="material-icons">lock</span>
-                        <input type="password" id="loginTelegramPassword" name="password" placeholder="Contraseña" required>
+
+                <!-- Acceso con GitHub -->
+                <div class="oauth-section">
+                    <a href="{{ url_for('github.login') }}" class="btn-oauth github">
+                        <svg class="icon-svg" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.04-.02-2.05-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.3 3.5 1 .1-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.11-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.3-1.55 3.3-1.23 3.3-1.23.65 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.8 5.62-5.48 5.92.43.37.81 1.1.81 2.22 0 1.6-.01 2.89-.01 3.29 0 .32.22.69.83.58A12 12 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+                        </svg>
+                        Continuar con GitHub
+                    </a>
+                </div>
+
+                <div class="separator">
+                    <span>o usa tu ID de Telegram</span>
+                </div>
+
+                <!-- Formulario Login Telegram -->
+                <form id="loginForm" class="auth-form">
+                    <div class="input-group">
+                        <label for="loginId">Telegram ID</label>
+                        <div class="input-field">
+                            <span class="material-icons-round">fingerprint</span>
+                            <input type="text" id="loginId" placeholder="Ej: 12345678" required>
+                        </div>
                     </div>
-                </div>
-                <button type="submit" class="btn-secondary btn-large">
-                    Entrar con Telegram
-                </button>
-            </form>
-
-            <p class="footer-text">¿No tienes cuenta? <a href="#" class="link-accent" onclick="switchTab('telegram'); return false;">Regístrate con Telegram</a></p>
-        </div>
-
-        <!-- TAB 2: Telegram ID + Contraseña -->
-        <div class="tab-content" id="telegram-tab">
-            <div class="tab-header">
-                <div class="icon-badge telegram">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 0C5.38 0 0 5.38 0 12s5.38 12 12 12 12-5.38 12-12S18.62 0 12 0zm5.84 8.82l-2.46 11.6c-.18.9-.68 1.13-1.38.7l-3.82-2.82-1.84 1.78c-.2.2-.37.37-.76.37l.28-3.98 7.24-6.54c.31-.28-.07-.43-.48-.15L7.86 12.3l-3.82-1.19c-.83-.26-.84-.83.17-1.23l14.97-5.78c.69-.25 1.3.17 1.07 1.2z"/>
-                    </svg>
-                </div>
-                <h2>Crear Cuenta</h2>
-                <p class="subtitle">Regístrate con tu ID de Telegram para acceder a foundstore</p>
+                    <div class="input-group">
+                        <label for="loginPass">Contraseña</label>
+                        <div class="input-field">
+                            <span class="material-icons-round">lock</span>
+                            <input type="password" id="loginPass" placeholder="••••••••" required>
+                            <button type="button" class="visibility-toggle" onclick="togglePass('loginPass')">
+                                <span class="material-icons-round">visibility</span>
+                            </button>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-submit">
+                        <span>Iniciar Sesión</span>
+                        <span class="material-icons-round">arrow_forward</span>
+                    </button>
+                </form>
             </div>
 
-            <form id="telegramRegisterForm" class="form-group">
-                <div class="form-field">
-                    <label for="telegramId">ID de Telegram</label>
-                    <div class="input-wrapper">
-                        <span class="material-icons">person</span>
-                        <input type="text" id="telegramId" name="telegramId" placeholder="Tu ID de Telegram" required>
+            <!-- SECCIÓN: REGISTRO -->
+            <div id="tab-register" class="tab-panel">
+                <div class="panel-header">
+                    <div class="brand-icon-wrapper reg">
+                        <svg class="brand-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="8.5" cy="7" r="4"></circle>
+                            <line x1="20" y1="8" x2="20" y2="14"></line>
+                            <line x1="23" y1="11" x2="17" y2="11"></line>
+                        </svg>
                     </div>
-                    <small class="help-text">Puedes obtenerlo escribiendo /id en @userinfobot</small>
+                    <h2>Crea tu cuenta</h2>
+                    <p>Únete a la comunidad de desarrolladores</p>
                 </div>
 
-                <div class="form-field">
-                    <label for="telegramPassword">Contraseña</label>
-                    <div class="input-wrapper">
-                        <span class="material-icons">lock</span>
-                        <input type="password" id="telegramPassword" name="telegramPassword" placeholder="Crea una contraseña segura" required>
-                        <button type="button" class="toggle-password" onclick="togglePassword('telegramPassword')">
-                            <span class="material-icons">visibility</span>
-                        </button>
+                <form id="registerForm" class="auth-form">
+                    <div class="input-group">
+                        <label for="regId">ID de Telegram</label>
+                        <div class="input-field">
+                            <span class="material-icons-round">alternate_email</span>
+                            <input type="text" id="regId" placeholder="ID de Telegram" required>
+                        </div>
+                        <p class="field-hint">Obtén tu ID escribiendo /id en @userinfobot</p>
                     </div>
-                </div>
-
-                <div class="form-field">
-                    <label for="telegramPasswordConfirm">Confirmar Contraseña</label>
-                    <div class="input-wrapper">
-                        <span class="material-icons">lock</span>
-                        <input type="password" id="telegramPasswordConfirm" name="telegramPasswordConfirm" placeholder="Confirma tu contraseña" required>
+                    <div class="input-group">
+                        <label for="regPass">Contraseña</label>
+                        <div class="input-field">
+                            <span class="material-icons-round">lock_open</span>
+                            <input type="password" id="regPass" placeholder="Mínimo 8 caracteres" required>
+                        </div>
                     </div>
+                    <div class="input-group">
+                        <label for="regPassConfirm">Confirmar Contraseña</label>
+                        <div class="input-field">
+                            <span class="material-icons-round">verified_user</span>
+                            <input type="password" id="regPassConfirm" placeholder="Repite tu contraseña" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-submit">
+                        <span>Registrarme</span>
+                        <span class="material-icons-round">how_to_reg</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Footer de la tarjeta -->
+            <div class="auth-card-footer">
+                <div class="step-badge-container">
+                    <span class="badge">Paso 1 de 2</span>
+                    <p>Luego vincularemos tu bot de Telegram</p>
                 </div>
-
-                <button type="submit" class="btn-primary btn-large">
-                    <span class="material-icons">app_registration</span>
-                    Crear Cuenta
-                </button>
-            </form>
-
-            <p class="footer-text">¿Ya tienes cuenta? <a href="#" class="link-accent" onclick="switchTab('github'); return false;">Inicia sesión con GitHub</a></p>
-        </div>
-
-        <!-- Indicador de paso -->
-        <div class="step-indicator">
-            <span class="step-badge">Paso 1 de 2</span>
-            <span class="step-text">Después vincularás Telegram para activar descargas</span>
+            </div>
         </div>
     </div>
 </div>
 
 <style>
 /* ============================================================
-   LOGIN PAGE - Glassmorphism + 3D Tilt Effect
+   AUTH SYSTEM - MODERN GLASSMORPHISM (CLEAN VERSION)
    ============================================================ */
 
-.login-container {
+:root {
+    --auth-bg: #0a0c12;
+    --auth-glass: rgba(20, 22, 28, 0.72);
+    --auth-border: rgba(255, 255, 255, 0.08);
+    --auth-accent: #6366f1;
+    --auth-accent-glow: rgba(99, 102, 241, 0.35);
+    --auth-text: #f8fafc;
+    --auth-text-dim: #94a3b8;
+}
+
+.auth-viewport {
     position: relative;
     min-height: 100vh;
+    width: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 20px;
+    padding: 24px;
+    background: var(--auth-bg);
     overflow: hidden;
 }
 
-/* Fondo ilustrado con blobs animados */
-.login-bg {
-    position: fixed;
+/* Background Effects */
+.auth-background {
+    position: absolute;
     inset: 0;
     z-index: 0;
-    pointer-events: none;
+}
+
+.mesh-gradient {
+    position: absolute;
+    inset: 0;
+    background: 
+        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.15) 0px, transparent 50%);
+    filter: blur(40px);
 }
 
 .blob {
     position: absolute;
-    border-radius: 50%;
-    filter: blur(80px);
-    opacity: 0.6;
-    animation: float 8s ease-in-out infinite;
-}
-
-.blob-1 {
     width: 400px;
     height: 400px;
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(139, 92, 246, 0.2));
-    top: -10%;
-    left: 10%;
-    animation-delay: 0s;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.4;
+    animation: blob-float 20s infinite alternate;
 }
 
-.blob-2 {
-    width: 350px;
-    height: 350px;
-    background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(99, 102, 241, 0.15));
-    top: 50%;
-    right: 5%;
-    animation-delay: -2s;
+.blob-indigo { background: #6366f1; top: -100px; left: -100px; }
+.blob-cyan { background: #22d3ee; bottom: -100px; right: -100px; animation-delay: -5s; }
+.blob-violet { background: #a855f7; top: 50%; left: 50%; transform: translate(-50%, -50%); animation-delay: -10s; }
+
+@keyframes blob-float {
+    0% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(30px, -50px) scale(1.1); }
+    66% { transform: translate(-20px, 20px) scale(0.9); }
+    100% { transform: translate(0, 0) scale(1); }
 }
 
-.blob-3 {
-    width: 300px;
-    height: 300px;
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(56, 189, 248, 0.1));
-    bottom: 10%;
-    left: 50%;
-    animation-delay: -4s;
-}
-
-@keyframes float {
-    0%, 100% { transform: translate(0, 0); }
-    25% { transform: translate(20px, -30px); }
-    50% { transform: translate(-20px, 30px); }
-    75% { transform: translate(30px, 20px); }
-}
-
-/* Tarjeta principal */
-.login-card {
+/* Auth Card */
+.auth-card-wrapper {
     position: relative;
-    z-index: 1;
+    z-index: 10;
     width: 100%;
     max-width: 440px;
-    background: rgba(23, 25, 30, 0.75);
-    backdrop-filter: blur(40px) saturate(180%);
-    -webkit-backdrop-filter: blur(40px) saturate(180%);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 28px;
-    padding: 48px 32px;
-    box-shadow: 
-        0 20px 60px rgba(0, 0, 0, 0.4),
-        inset 0 1px 0 rgba(255, 255, 255, 0.08);
-    animation: slideUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    perspective: 1000px;
 }
 
-@keyframes slideUp {
-    from {
-        opacity: 0;
-        transform: translateY(40px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* Efecto tilt 3D sutil */
-.login-card:hover {
-    transform: perspective(1000px) rotateX(2deg) rotateY(-2deg);
+.auth-card {
+    background: var(--auth-glass);
+    backdrop-filter: blur(32px) saturate(180%);
+    -webkit-backdrop-filter: blur(32px) saturate(180%);
+    border: 1px solid var(--auth-border);
+    border-radius: 32px;
+    padding: 40px;
     box-shadow: 
-        0 30px 80px rgba(0, 0, 0, 0.5),
-        inset 0 1px 0 rgba(255, 255, 255, 0.12);
+        0 25px 50px -12px rgba(0, 0, 0, 0.5),
+        inset 0 1px 1px rgba(255, 255, 255, 0.05);
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 /* Tabs */
-.login-tabs {
+.auth-tabs {
     display: flex;
-    gap: 12px;
-    margin-bottom: 32px;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(0, 0, 0, 0.2);
     padding: 6px;
-    border-radius: 14px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    margin-bottom: 32px;
+    border: 1px solid var(--auth-border);
 }
 
-.tab-btn {
+.tab-trigger {
     flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
-    padding: 10px 16px;
-    background: transparent;
+    padding: 10px;
     border: none;
-    border-radius: 10px;
-    color: var(--text-dim);
+    background: transparent;
+    color: var(--auth-text-dim);
     font-weight: 600;
     font-size: 0.9rem;
     cursor: pointer;
-    transition: all 0.2s ease;
+    border-radius: 12px;
+    transition: all 0.3s ease;
 }
 
-.tab-btn:hover {
-    color: var(--text-primary);
+.tab-trigger.active {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--auth-text);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.tab-btn.active {
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.15));
-    color: var(--text-primary);
-    border: 1px solid rgba(99, 102, 241, 0.3);
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
-}
-
-.tab-btn .material-icons {
-    font-size: 1.1rem;
-}
-
-/* Contenido de tabs */
-.tab-content {
+/* Panel Content */
+.tab-panel {
     display: none;
-    animation: fadeIn 0.3s ease;
+    animation: panel-fade 0.4s ease forwards;
 }
 
-.tab-content.active {
-    display: block;
-}
+.tab-panel.active { display: block; }
 
-@keyframes fadeIn {
+@keyframes panel-fade {
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* Header del tab */
-.tab-header {
+.panel-header {
     text-align: center;
     margin-bottom: 32px;
 }
 
-.icon-badge {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    margin: 0 auto 20px;
+.brand-icon-wrapper {
+    width: 64px;
+    height: 64px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    border-radius: 18px;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
-    animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.icon-badge.github {
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(139, 92, 246, 0.25));
-    border: 1px solid rgba(99, 102, 241, 0.4);
-    color: #8b5cf6;
-}
-
-.icon-badge.telegram {
-    background: linear-gradient(135deg, rgba(56, 189, 248, 0.3), rgba(99, 102, 241, 0.25));
-    border: 1px solid rgba(56, 189, 248, 0.4);
-    color: #38bdf8;
-}
-
-@keyframes popIn {
-    0% {
-        opacity: 0;
-        transform: scale(0.8);
-    }
-    50% {
-        transform: scale(1.05);
-    }
-    100% {
-        opacity: 1;
-        transform: scale(1);
-    }
-}
-
-.tab-header h2 {
-    font-size: 1.6rem;
-    margin-bottom: 8px;
-    background: linear-gradient(135deg, var(--text-primary), var(--text-secondary));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-}
-
-.subtitle {
-    color: var(--text-dim);
-    font-size: 0.9rem;
-    line-height: 1.5;
-}
-
-/* Formulario */
-.form-group {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-}
-
-.form-field {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.form-field label {
-    font-weight: 600;
-    font-size: 0.85rem;
-    color: var(--text-primary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.input-wrapper {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
-    padding: 12px 14px;
-    transition: all 0.2s ease;
-}
-
-.input-wrapper:focus-within {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(99, 102, 241, 0.4);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-}
-
-.input-wrapper .material-icons {
-    color: var(--text-dim);
-    font-size: 1.1rem;
-}
-
-.input-wrapper input {
-    flex: 1;
-    background: transparent;
-    border: none;
-    outline: none;
-    color: var(--text-primary);
-    font-size: 0.95rem;
-    font-family: inherit;
-}
-
-.input-wrapper input::placeholder {
-    color: var(--text-mute);
-}
-
-.toggle-password {
-    background: transparent;
-    border: none;
-    color: var(--text-dim);
-    cursor: pointer;
-    padding: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: color 0.2s;
-}
-
-.toggle-password:hover {
-    color: var(--text-primary);
-}
-
-.help-text {
-    font-size: 0.75rem;
-    color: var(--text-mute);
-}
-
-/* Botones */
-.btn-large {
-    width: 100%;
-    padding: 14px 18px;
-    font-size: 1rem;
-    font-weight: 700;
-    border-radius: 12px;
-    border: none;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    margin: 0 auto 16px;
     color: white;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
+    box-shadow: 0 10px 20px var(--auth-accent-glow);
+}
+
+.brand-icon-wrapper.reg {
+    background: linear-gradient(135deg, #0ea5e9, #6366f1);
+}
+
+.brand-svg { width: 32px; height: 32px; }
+
+.panel-header h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--auth-text);
+}
+
+.panel-header p {
+    font-size: 0.9rem;
+    color: var(--auth-text-dim);
+}
+
+/* OAuth Section */
+.oauth-section { margin-bottom: 24px; }
+
+.btn-oauth {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
-}
-
-.btn-large:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 30px rgba(99, 102, 241, 0.4);
-}
-
-.btn-large:active {
-    transform: translateY(0);
-}
-
-.btn-large .material-icons {
-    font-size: 1.2rem;
-}
-
-/* Divider */
-.divider {
-    text-align: center;
-    color: var(--text-mute);
-    margin: 24px 0;
-    position: relative;
-}
-
-.divider::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 50%;
+    gap: 12px;
     width: 100%;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-}
-
-.divider {
-    position: relative;
-    background: rgba(23, 25, 30, 0.75);
-    padding: 0 12px;
-    display: inline-block;
-    width: 100%;
-}
-
-/* Links */
-.link-accent {
-    color: var(--accent-3);
+    padding: 12px;
+    border-radius: 14px;
     font-weight: 600;
-    transition: color 0.2s;
+    text-decoration: none;
+    transition: all 0.3s ease;
 }
 
-.link-accent:hover {
-    color: var(--accent);
+.btn-oauth.github {
+    background: #24292f;
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* Footer */
-.footer-text {
+.btn-oauth.github:hover {
+    background: #30363d;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.icon-svg { width: 20px; height: 20px; }
+
+/* Separator */
+.separator {
+    display: flex;
+    align-items: center;
     text-align: center;
-    font-size: 0.85rem;
-    color: var(--text-dim);
-    margin-top: 20px;
+    margin: 24px 0;
+    color: var(--auth-text-dim);
+    font-size: 0.8rem;
+    font-weight: 500;
 }
 
-/* Step indicator */
-.step-indicator {
-    margin-top: 32px;
-    padding-top: 24px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    text-align: center;
+.separator::before, .separator::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid var(--auth-border);
+}
+
+.separator span { padding: 0 12px; }
+
+/* Form Elements */
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.input-group {
     display: flex;
     flex-direction: column;
     gap: 8px;
 }
 
-.step-badge {
-    display: inline-block;
-    padding: 6px 14px;
-    background: rgba(99, 102, 241, 0.15);
-    border: 1px solid rgba(99, 102, 241, 0.3);
-    border-radius: 20px;
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: var(--accent-3);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    align-self: center;
+.input-group label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--auth-text);
+    padding-left: 4px;
 }
 
-.step-text {
+.input-field {
+    position: relative;
+    display: flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--auth-border);
+    border-radius: 14px;
+    padding: 0 14px;
+    transition: all 0.3s ease;
+}
+
+.input-field:focus-within {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: var(--auth-accent);
+    box-shadow: 0 0 0 4px var(--auth-accent-glow);
+}
+
+.input-field .material-icons-round {
+    font-size: 1.2rem;
+    color: var(--auth-text-dim);
+}
+
+.input-field input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    padding: 12px 10px;
+    color: var(--auth-text);
+    font-size: 0.95rem;
+    outline: none;
+}
+
+.input-field input::placeholder { color: var(--auth-text-mute); }
+
+.visibility-toggle {
+    background: transparent;
+    border: none;
+    color: var(--auth-text-dim);
+    cursor: pointer;
+    display: flex;
+    padding: 4px;
+}
+
+.field-hint {
+    font-size: 0.75rem;
+    color: var(--auth-text-dim);
+    padding-left: 4px;
+}
+
+/* Submit Button */
+.btn-submit {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, var(--auth-accent), #8b5cf6);
+    border: none;
+    border-radius: 14px;
+    color: white;
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 10px 25px -5px var(--auth-accent-glow);
+}
+
+.btn-submit:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 15px 30px -5px var(--auth-accent-glow);
+}
+
+.btn-submit.loading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+/* Footer */
+.auth-card-footer {
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid var(--auth-border);
+}
+
+.step-badge-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.badge {
+    padding: 4px 12px;
+    background: rgba(99, 102, 241, 0.15);
+    color: #818cf8;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.step-badge-container p {
     font-size: 0.8rem;
-    color: var(--text-mute);
+    color: var(--auth-text-dim);
 }
 
 /* Responsive */
 @media (max-width: 480px) {
-    .login-card {
-        padding: 32px 20px;
-        border-radius: 20px;
-    }
-
-    .tab-header h2 {
-        font-size: 1.4rem;
-    }
-
-    .blob-1 { width: 250px; height: 250px; }
-    .blob-2 { width: 200px; height: 200px; }
-    .blob-3 { width: 180px; height: 180px; }
-}
-
-/* Soporte para modo claro */
-@media (prefers-color-scheme: light) {
-    .login-card {
-        background: rgba(255, 255, 255, 0.85);
-        border-color: rgba(15, 23, 42, 0.1);
-    }
-
-    .input-wrapper {
-        background: rgba(15, 23, 42, 0.05);
-        border-color: rgba(15, 23, 42, 0.15);
-    }
-
-    .input-wrapper:focus-within {
-        background: rgba(15, 23, 42, 0.08);
-        border-color: rgba(99, 102, 241, 0.4);
-    }
+    .auth-card { padding: 32px 24px; }
+    .panel-header h2 { font-size: 1.3rem; }
 }
 </style>
 
 <script>
-// Tab switching
-function switchTab(tabName) {
-    const tabs = document.querySelectorAll('.tab-content');
-    const btns = document.querySelectorAll('.tab-btn');
-
-    tabs.forEach(tab => tab.classList.remove('active'));
-    btns.forEach(btn => btn.classList.remove('active'));
-
-    document.getElementById(tabName + '-tab').classList.add('active');
-    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+/**
+ * SISTEMA DE NAVEGACIÓN DE PESTAÑAS
+ */
+function showTab(tabId) {
+    // Ocultar todos los paneles
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-trigger').forEach(t => t.classList.remove('active'));
+    
+    // Mostrar el seleccionado
+    document.getElementById('tab-' + tabId).classList.add('active');
+    event.currentTarget.classList.add('active');
 }
 
-// Tab button listeners
-document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        switchTab(btn.dataset.tab);
-    });
-});
-
-// Toggle password visibility
-function togglePassword(inputId) {
-    const input = document.getElementById(inputId);
-    const btn = event.target.closest('.toggle-password');
+/**
+ * VISIBILIDAD DE CONTRASEÑA
+ */
+function togglePass(id) {
+    const input = document.getElementById(id);
+    const icon = event.currentTarget.querySelector('.material-icons-round');
     if (input.type === 'password') {
         input.type = 'text';
-        btn.innerHTML = '<span class="material-icons">visibility_off</span>';
+        icon.textContent = 'visibility_off';
     } else {
         input.type = 'password';
-        btn.innerHTML = '<span class="material-icons">visibility</span>';
+        icon.textContent = 'visibility';
     }
 }
 
-// 3D Tilt effect
-const card = document.getElementById('loginCard');
-card.addEventListener('mousemove', (e) => {
+/**
+ * EFECTO TILT 3D
+ */
+const card = document.getElementById('authCard');
+document.addEventListener('mousemove', (e) => {
+    if (window.innerWidth < 768) return;
+    
     const rect = card.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-
+    
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
-
-    const rotateX = (y - centerY) / 10;
-    const rotateY = (centerX - x) / 10;
-
+    
+    const rotateX = (y - centerY) / 25;
+    const rotateY = (centerX - x) / 25;
+    
     card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
 });
 
-card.addEventListener('mouseleave', () => {
+document.addEventListener('mouseleave', () => {
     card.style.transform = 'perspective(1000px) rotateX(0) rotateY(0)';
 });
 
-// Form submission - Register
-document.getElementById('telegramRegisterForm')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const btn = e.target.querySelector('button[type="submit"]');
-    const telegramId = document.getElementById('telegramId').value.trim();
-    const password = document.getElementById('telegramPassword').value;
-    const passwordConfirm = document.getElementById('telegramPasswordConfirm').value;
+/**
+ * LÓGICA DE ENVÍO DE FORMULARIOS
+ */
 
-    if (password !== passwordConfirm) {
-        window.fs.toast({ type: 'warning', title: 'Las contraseñas no coinciden' });
+// REGISTRO
+document.getElementById('registerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('.btn-submit');
+    const telegramId = document.getElementById('regId').value.trim();
+    const password = document.getElementById('regPass').value;
+    const confirm = document.getElementById('regPassConfirm').value;
+
+    if (password !== confirm) {
+        window.fs.toast({ type: 'warning', title: 'Error de validación', desc: 'Las contraseñas no coinciden.' });
+        return;
+    }
+
+    if (password.length < 8) {
+        window.fs.toast({ type: 'warning', title: 'Contraseña débil', desc: 'Debe tener al menos 8 caracteres.' });
         return;
     }
 
     btn.classList.add('loading');
     try {
-        const response = await fetch('/api/auth/register_telegram', {
+        const res = await fetch('/api/auth/register_telegram', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ telegram_id: telegramId, password })
         });
-        const data = await response.json();
-        if (response.ok) {
-            window.fs.toast({ type: 'success', title: 'Cuenta creada', desc: 'Iniciando sesión...' });
+        const data = await res.json();
+        
+        if (res.ok) {
+            window.fs.toast({ type: 'success', title: '¡Cuenta creada!', desc: 'Redirigiendo...' });
             setTimeout(() => window.location.href = '/', 1500);
         } else {
-            window.fs.toast({ type: 'danger', title: 'Error', desc: data.message || data.error });
+            window.fs.toast({ type: 'danger', title: 'Registro fallido', desc: data.message || data.error });
         }
     } catch (err) {
-        window.fs.toast({ type: 'danger', title: 'Error de conexión' });
+        window.fs.toast({ type: 'danger', title: 'Error de red', desc: 'No se pudo conectar con el servidor.' });
     } finally {
         btn.classList.remove('loading');
     }
 });
 
-// Form submission - Login
-document.getElementById('telegramLoginForm')?.addEventListener('submit', async (e) => {
+// LOGIN
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const btn = e.target.querySelector('button[type="submit"]');
-    const telegramId = document.getElementById('loginTelegramId').value.trim();
-    const password = document.getElementById('loginTelegramPassword').value;
+    const btn = e.target.querySelector('.btn-submit');
+    const telegramId = document.getElementById('loginId').value.trim();
+    const password = document.getElementById('loginPass').value;
 
     btn.classList.add('loading');
     try {
-        const response = await fetch('/api/auth/login_telegram', {
+        const res = await fetch('/api/auth/login_telegram', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ telegram_id: telegramId, password })
         });
-        const data = await response.json();
-        if (response.ok) {
-            window.fs.toast({ type: 'success', title: 'Sesión iniciada' });
+        const data = await res.json();
+        
+        if (res.ok) {
+            window.fs.toast({ type: 'success', title: 'Bienvenido', desc: 'Iniciando sesión...' });
             setTimeout(() => window.location.href = '/', 1000);
         } else {
-            window.fs.toast({ type: 'danger', title: 'Error', desc: data.message || data.error });
+            window.fs.toast({ type: 'danger', title: 'Acceso denegado', desc: data.message || data.error });
         }
     } catch (err) {
-        window.fs.toast({ type: 'danger', title: 'Error de conexión' });
+        window.fs.toast({ type: 'danger', title: 'Error de red', desc: 'No se pudo conectar con el servidor.' });
     } finally {
         btn.classList.remove('loading');
     }
