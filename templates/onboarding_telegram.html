@@ -1,15 +1,16 @@
 {% extends "base.html" %}
 
 {% block title %}Paso 2: Telegram - foundstore{% endblock %}
+{% block breadcrumb %}Onboarding · Telegram{% endblock %}
 
 {% block content %}
 <div class="onboarding-viewport">
     <div class="liquid-bg">
         <div class="liquid-blob" style="top: 20%; left: 80%; background: linear-gradient(135deg, #c084fc, #818cf8);"></div>
-        <div class="liquid-blob" style="bottom: 20%; left: 20%; animation-delay: -3s;"></div>
+        <div class="liquid-blob" style="bottom: 20%; left: 20%; animation-delay: -3s; background: linear-gradient(135deg, #38bdf8, #6366f1);"></div>
     </div>
 
-    <div id="onboarding-card" class="acrilic-card onboarding-box fade-in">
+    <div id="onboarding-card" class="glass onboarding-box fade-in">
         <div id="step-container" class="step-content">
             <div class="adventure-header">
                 <div class="step-badge">Paso 2 de 2</div>
@@ -23,7 +24,7 @@
                     <p>Tus mensajes estarán protegidos por nuestros mirrors cifrados.</p>
                 </div>
             </div>
-            
+
             <div class="action-area">
                 <div id="telegram-widget-container">
                     {% if github_username %}
@@ -44,7 +45,7 @@
                                     onload="document.querySelector('.telegram-widget-loader')?.remove()"></script>
                             </div>
                         </div>
-                        <p class="debug-info" style="font-size: 0.7rem; color: var(--text-dim); margin-top: 14px;">
+                        <p class="debug-info" style="font-size: 0.75rem; color: var(--text-dim); margin-top: 14px;">
                             Identificado como: <strong>{{ github_username }}</strong>
                         </p>
                     {% else %}
@@ -57,138 +58,35 @@
     </div>
 </div>
 
+<style>
+.onboarding-viewport { min-height: 70vh; display: flex; justify-content: center; align-items: center; }
+.liquid-bg { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.onboarding-box { width: 100%; max-width: 500px; padding: 50px 36px; text-align: center; position: relative; z-index: 1; }
+.step-badge { display: inline-block; padding: 6px 16px; border-radius: 20px; font-size: 0.78rem; font-weight: 700; margin-bottom: 18px; text-transform: uppercase; letter-spacing: 1px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: white; }
+.adventure-header h1 { font-size: 1.9rem; font-weight: 800; margin-bottom: 12px; }
+.adventure-header p { color: var(--text-dim); line-height: 1.6; margin-bottom: 28px; }
+.tutorial-box { background: var(--bg-elev-2); padding: 18px; border-radius: var(--r-md); margin-bottom: 32px; border: 1px solid var(--border-subtle); }
+.guide-text { display: flex; align-items: center; gap: 12px; text-align: left; }
+.guide-text .material-icons { color: var(--accent-3); }
+.guide-text p { font-size: 0.88rem; font-weight: 500; margin: 0; }
+.action-area { display: flex; justify-content: center; }
+.telegram-widget-frame { position: relative; display: inline-flex; flex-direction: column; align-items: center; gap: 6px; padding: 22px 26px; background: #ffffff; border-radius: var(--r-md); box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
+.telegram-badge-icon { position: absolute; top: -14px; left: -14px; background: #229ED9; color: white; border-radius: 50%; padding: 8px; font-size: 1.1rem !important; box-shadow: 0 4px 10px rgba(34,158,217,0.5); }
+.telegram-widget-slot { min-width: 220px; min-height: 48px; display: flex; align-items: center; justify-content: center; }
+.telegram-widget-slot iframe { border-radius: 12px !important; }
+.telegram-widget-loader { display: flex; align-items: center; gap: 10px; color: #555; font-size: 0.85rem; font-weight: 600; }
+.telegram-widget-loader .spinner { width: 16px; height: 16px; border: 2px solid rgba(34,158,217,0.25); border-top-color: #229ED9; border-radius: 50%; display: inline-block; animation: telegram-spin 0.8s linear infinite; }
+@keyframes telegram-spin { to { transform: rotate(360deg); } }
+.error-text { color: var(--danger); margin-bottom: 16px; }
+</style>
+
 <script>
-// Al cargar, aplicamos el efecto de "agua inquieta" para simular la llegada desde el paso anterior
 document.addEventListener('DOMContentLoaded', () => {
     const card = document.getElementById('onboarding-card');
-    card.classList.add('water-ripple');
-    setTimeout(() => card.classList.remove('water-ripple'), 800);
+    if (card) {
+        card.classList.add('water-ripple');
+        setTimeout(() => card.classList.remove('water-ripple'), 800);
+    }
 });
 </script>
-
-<style>
-.onboarding-viewport {
-    height: 80vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-.onboarding-box {
-    width: 100%;
-    max-width: 500px;
-    padding: 60px 40px;
-    text-align: center;
-}
-
-.step-badge {
-    background: var(--accent-primary);
-    display: inline-block;
-    padding: 6px 16px;
-    border-radius: 20px;
-    font-size: 0.8rem;
-    font-weight: 700;
-    margin-bottom: 20px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
-
-.adventure-header h1 {
-    font-size: 2rem;
-    font-weight: 800;
-    margin-bottom: 15px;
-    color: white;
-}
-
-.adventure-header p {
-    color: var(--text-dim);
-    line-height: 1.6;
-    margin-bottom: 30px;
-}
-
-.tutorial-box {
-    background: rgba(255,255,255,0.03);
-    padding: 20px;
-    border-radius: 16px;
-    margin-bottom: 40px;
-    border: 1px solid rgba(255,255,255,0.05);
-}
-
-.guide-text {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    text-align: left;
-    color: var(--accent-secondary);
-}
-
-.guide-text p {
-    font-size: 0.9rem;
-    font-weight: 500;
-}
-
-.action-area {
-    display: flex;
-    justify-content: center;
-}
-
-.telegram-widget-frame {
-    position: relative;
-    display: inline-flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    padding: 24px 28px;
-    background: #ffffff;
-    border-radius: 20px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06);
-}
-
-.telegram-badge-icon {
-    position: absolute;
-    top: -14px;
-    left: -14px;
-    background: #229ED9;
-    color: white;
-    border-radius: 50%;
-    padding: 8px;
-    font-size: 1.1rem !important;
-    box-shadow: 0 4px 10px rgba(34,158,217,0.5);
-}
-
-.telegram-widget-slot {
-    min-width: 220px;
-    min-height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.telegram-widget-slot iframe {
-    border-radius: 12px !important;
-}
-
-.telegram-widget-loader {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    color: #555;
-    font-size: 0.85rem;
-    font-weight: 600;
-}
-
-.telegram-widget-loader .spinner {
-    width: 16px;
-    height: 16px;
-    border: 2px solid rgba(34,158,217,0.25);
-    border-top-color: #229ED9;
-    border-radius: 50%;
-    display: inline-block;
-    animation: telegram-spin 0.8s linear infinite;
-}
-
-@keyframes telegram-spin {
-    to { transform: rotate(360deg); }
-}
-</style>
 {% endblock %}

@@ -1,9 +1,12 @@
-from flask import Flask, render_template, redirect, url_for, session, request, jsonify
+from flask import Flask, render_template, redirect, url_for, session, request, jsonify, Response, stream_with_context, abort
 from flask_dance.contrib.github import make_github_blueprint, github
 from werkzeug.middleware.proxy_fix import ProxyFix
 import os
+import time
 from config import Config
 import services
+import notifications
+import storage
 
 app = Flask(__name__)
 # Aplicar ProxyFix para que Flask entienda que está detrás de un proxy (Render)
@@ -34,9 +37,58 @@ if redirect_uri:
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1' # Solo para pruebas locales si fuera necesario, pero en Render usaremos ProxyFix
 os.environ['PREFERRED_URL_SCHEME'] = 'https'
 
+
+def _current_github_username():
+    """Devuelve el username de GitHub del usuario actual, o None."""
+    cached = session.get("github_username")
+    if cached:
+        return cached
+    try:
+        if not github.authorized:
+            return None
+        resp = github.get("/user")
+        if not resp.ok:
+            return None
+        uname = resp.json().get("login")
+        if uname:
+            session["github_username"] = uname
+        return uname
+    except Exception:
+        return None
+
+
+def _telegram_verified():
+    """Devuelve True si el usuario tiene sesion verificada con Telegram (24h)."""
+    data = session.get("telegram_verified") or {}
+    exp = data.get("expires_at", 0)
+    if exp < time.time():
+        return False
+    return data.get("verified") is True
+
+
+def _mark_telegram_verified():
+    session["telegram_verified"] = {
+        "verified": True,
+        "at": time.time(),
+        "expires_at": time.time() + notifications.VERIFIED_TTL_SECONDS,
+    }
+
+
 @app.context_processor
-def inject_github():
-    return dict(github=github)
+def inject_globals():
+    """
+    Inyecta variables globales a TODOS los templates, en particular:
+    - github: el blueprint (para chequeos .authorized)
+    - github_username: el login actual (o vacio)
+    - telegram_user: la sesion de Telegram del onboarding paso 2
+    - telegram_verified: True si el usuario ya paso la verificacion con code
+    """
+    return dict(
+        github=github,
+        github_username=session.get("github_username") or "",
+        telegram_user=session.get("telegram_user") or None,
+        telegram_verified=_telegram_verified(),
+    )
 
 @app.route("/")
 def index():
@@ -391,6 +443,367 @@ def follow_user(target_username):
     
     action, count = services.toggle_follow(follower_username, target_username)
     return jsonify({"action": action, "follower_count": count})
+
+
+# =====================================================================
+# AUTENTICACION CON CODIGO DE TELEGRAM (v2 - MongoDB + storage.py)
+# =====================================================================
+# Flujo:
+#   1) Usuario va a /settings y pulsa "Vincular Telegram"
+#   2) /api/auth/request_code (POST) genera codigo OTP en MongoDB con TTL
+#   3) Se le muestra el codigo + instrucciones para ir al bot
+#   4) El bot recibe el codigo (en su muro de auth), lo valida contra Mongo
+#      y vincula la cuenta telegram_id -> github_username
+#   5) El bot notifica via notify_user() -> SSE empuja evento a la web
+#   6) La web actualiza el estado en tiempo real
+# =====================================================================
+
+LINK_CODE_TTL = 300  # 5 minutos
+
+
+@app.route("/api/auth/request_code", methods=["POST"])
+def api_request_code():
+    if not github.authorized:
+        return jsonify({"error": "Necesitas iniciar sesion con GitHub primero."}), 401
+    username = _current_github_username()
+    if not username:
+        return jsonify({"error": "Sesion de GitHub invalida."}), 401
+
+    if not storage.mongo.ok:
+        return jsonify({
+            "error": "storage_unavailable",
+            "message": "La vinculacion requiere MongoDB. Revisa /health/mongo.",
+        }), 503
+
+    # Si ya esta vinculado, devolver estado actual
+    status = storage.get_link_status(username)
+    if status.get("is_active") and status.get("telegram_id"):
+        return jsonify({
+            "ok": True,
+            "already_linked": True,
+            "telegram_username": status.get("telegram_username"),
+        })
+
+    # Crear OTP
+    otp = storage.create_otp(username, ttl_seconds=LINK_CODE_TTL)
+    if not otp:
+        return jsonify({"error": "no_se_pudo_generar_codigo"}), 500
+
+    return jsonify({
+        "ok": True,
+        "code": otp["code"],
+        "expires_at": otp["expires_at"],
+        "ttl": otp["ttl"],
+        "bot_username": Config.TELEGRAM_BOT_USERNAME,
+        "web_url": request.host_url.rstrip("/"),
+        "instructions": (
+            f"Abre Telegram, busca @{Config.TELEGRAM_BOT_USERNAME} y "
+            f"escribe el siguiente codigo:"
+        ),
+    })
+
+
+@app.route("/api/auth/verify_code", methods=["POST"])
+def api_verify_code():
+    """
+    Endpoint legacy: la vinculacion real la hace el bot al validar el codigo.
+    Este endpoint solo sirve para que el frontend pueda POLL el estado.
+    Mantenido por compatibilidad - el flujo real es bot-driven.
+    """
+    if not github.authorized:
+        return jsonify({"error": "auth_required"}), 401
+    username = _current_github_username()
+    if not username:
+        return jsonify({"error": "auth_required"}), 401
+
+    # La vinculacion la hace el bot. Aqui solo informamos del estado.
+    status = storage.get_link_status(username)
+    return jsonify({
+        "ok": True,
+        "verified": bool(status.get("is_active") and status.get("telegram_id")),
+        "telegram_username": status.get("telegram_username"),
+        "telegram_name": status.get("telegram_name"),
+        "linked_at": status.get("linked_at"),
+    })
+
+
+@app.route("/api/auth/unlink", methods=["POST"])
+def api_unlink_telegram():
+    if not github.authorized:
+        return jsonify({"error": "auth_required"}), 401
+    username = _current_github_username()
+    if not username:
+        return jsonify({"error": "auth_required"}), 401
+
+    if not storage.mongo.ok:
+        return jsonify({"error": "storage_unavailable"}), 503
+
+    ok = storage.unlink_telegram(username)
+    if ok:
+        # Invalidar sesion local tambien
+        session.pop("telegram_user", None)
+        session.pop("telegram_verified", None)
+        # Empujar notificacion
+        notifications.notify_user(
+            username,
+            title="Telegram desvinculado",
+            desc="La vinculacion con Telegram se ha eliminado. Puedes volver a vincular cuando quieras.",
+            icon="warning",
+        )
+        return jsonify({"ok": True})
+    return jsonify({"error": "no_se_pudo_desvincular"}), 500
+
+
+@app.route("/api/auth/link_status")
+def api_link_status():
+    """Estado completo de vinculacion para mostrar en /settings."""
+    if not github.authorized:
+        return jsonify({"logged_in": False}), 401
+    username = _current_github_username() or ""
+    if not username:
+        return jsonify({"logged_in": False}), 401
+
+    status = storage.get_link_status(username)
+    active_otp = storage.get_active_otp(username)
+    return jsonify({
+        "logged_in": True,
+        "github_username": username,
+        "linked": bool(status.get("is_active") and status.get("telegram_id")),
+        "telegram_id": status.get("telegram_id"),
+        "telegram_username": status.get("telegram_username"),
+        "telegram_name": status.get("telegram_name"),
+        "linked_at": status.get("linked_at"),
+        "active_otp": bool(active_otp),
+        "otp_expires_at": active_otp.get("expires_at") if active_otp else None,
+        "sessions": status.get("sessions", []),
+    })
+
+
+@app.route("/api/auth/code_status")
+def api_code_status():
+    """Dice al frontend si hay un codigo pendiente y si el usuario esta verificado."""
+    if not github.authorized:
+        return jsonify({"logged_in": False}), 401
+    username = _current_github_username() or ""
+    active = storage.get_active_otp(username)
+    return jsonify({
+        "logged_in": True,
+        "github_username": username,
+        "telegram_linked": bool(storage.get_user(username) and storage.get_user(username).get("telegram_id")),
+        "pending_code": bool(active),
+        "pending_code_expires_in": max(0, active["expires_at"] - int(time.time())) if active else 0,
+    })
+
+
+# =====================================================================
+# /settings - configuracion del user (vincular/desvincular Telegram)
+# =====================================================================
+
+@app.route("/settings")
+def settings():
+    if not github.authorized:
+        return redirect(url_for("login"))
+    username = _current_github_username() or ""
+    status = storage.get_link_status(username) if storage.mongo.ok else {}
+    return render_template("settings.html", status=status, username=username)
+
+
+# =====================================================================
+# SSE - Server-Sent Events (notificaciones en tiempo real)
+# =====================================================================
+
+@app.route("/api/events")
+def api_events():
+    if not github.authorized:
+        return jsonify({"error": "unauthorized"}), 401
+    username = _current_github_username()
+    if not username:
+        return jsonify({"error": "unauthorized"}), 401
+
+    @stream_with_context
+    def generate():
+        # Cabeceras SSE-friendly
+        for chunk in notifications.stream_for(username):
+            yield chunk
+
+    return Response(generate(), mimetype="text/event-stream", headers={
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+        "Connection": "keep-alive",
+    })
+
+
+# =====================================================================
+# DESCARGA DE PAQUETES FLUTHIN (requiere sesion verificada con Telegram)
+# =====================================================================
+
+@app.route("/api/download_fluthin/<package_name>/<platform>")
+def api_download_fluthin(package_name, platform):
+    """
+    Endpoint unificado de descarga. Sustituye a /api/global_download y
+    /api/generate_mirror: decide segun la plataforma y requiere verificacion
+    de Telegram.
+    """
+    if not github.authorized:
+        return jsonify({"error": "auth_required", "message": "Inicia sesion con GitHub para descargar."}), 401
+    username = _current_github_username()
+    if not username:
+        return jsonify({"error": "auth_required"}), 401
+
+    if not _telegram_verified():
+        return jsonify({
+            "error": "telegram_verification_required",
+            "message": "Verifica tu sesion con Telegram para poder descargar.",
+        }), 403
+
+    # Buscar el paquete en el catalogo global
+    apps = services.get_global_fluthin_catalog()
+    app_match = next((a for a in apps if a.get("packagename") == package_name), None)
+    if not app_match:
+        return jsonify({"error": "package_not_found"}), 404
+
+    repo = app_match.get("repo")
+    native = ["windows", "linux", "multi"]
+    if platform in native:
+        result = services.resolve_download_for_visitor(
+            repo, request.headers.get("User-Agent"), package_name=package_name
+        )
+        # Si no hay build nativo pero el usuario esta verificado,
+        # caemos al fluthin://
+        return jsonify({
+            "ok": True,
+            "kind": "native" if result.get("direct_url") else "fluthin",
+            "platform": result.get("category"),
+            "release_tag": result.get("release_tag"),
+            "direct_url": result.get("direct_url"),
+            "asset_name": result.get("asset_name"),
+            "fluthin_url": result.get("fluthin_url"),
+        })
+
+    # Plataformas no nativas: generamos un mirror cifrado local
+    import hashlib
+    token = hashlib.sha256(f"{package_name}{platform}{username}{time.time()}".encode()).hexdigest()[:16]
+    mirror_url = f"https://mirror-crypted.foundstore.im/dl/{package_name}/{platform}?t={token}&u={username}"
+    return jsonify({
+        "ok": True,
+        "kind": "mirror",
+        "platform": platform,
+        "mirror_url": mirror_url,
+    })
+
+
+# =====================================================================
+# WEBHOOK DEL BOT DE TELEGRAM (recibe updates de Telegram)
+# =====================================================================
+# Activa esto con:  curl -X POST https://api.telegram.org/bot<TOKEN>/setWebhook \
+#                       -d url=https://<tu-app>.onrender.com/api/telegram_webhook
+# Y desactiva el polling con:  curl -X POST .../deleteWebhook
+# =====================================================================
+
+@app.route("/api/telegram_webhook", methods=["POST"])
+def telegram_webhook():
+    """
+    Recibe updates de Telegram. Si el bot recibe el comando /code de un
+    usuario que ya tiene cuenta vinculada a foundstore, le genera y manda
+    el codigo de verificacion.
+    Tambien procesa /start, /help y mensajes normales.
+    """
+    if not Config.TELEGRAM_BOT_TOKEN:
+        return jsonify({"error": "bot not configured"}), 503
+
+    update = request.get_json(silent=True) or {}
+    message = update.get("message") or update.get("edited_message") or {}
+    text = (message.get("text") or "").strip()
+    telegram_user = message.get("from") or {}
+    telegram_id = telegram_user.get("id")
+
+    if not text or not telegram_id:
+        return jsonify({"ok": True})
+
+    # Buscar a que cuenta de foundstore esta vinculado este telegram_id
+    accounts = services.load_ondev_accounts()
+    linked_username = None
+    for gh_user, data in accounts.items():
+        if data.get("telegram_id") == telegram_id:
+            linked_username = gh_user
+            break
+
+    def reply(msg):
+        try:
+            import requests as _req
+            _req.post(
+                f"https://api.telegram.org/bot{Config.TELEGRAM_BOT_TOKEN}/sendMessage",
+                json={
+                    "chat_id": telegram_id,
+                    "text": msg,
+                    "parse_mode": "Markdown",
+                },
+                timeout=5,
+            )
+        except Exception as e:
+            print(f"[telegram_webhook] reply error: {e}")
+
+    if text.startswith("/start"):
+        reply(
+            "👋 Hola! Soy el bot de foundstore.\n\n"
+            "Comandos:\n"
+            "/code - Genera un codigo de verificacion para descargar paquetes\n"
+            "/help - Ver ayuda"
+        )
+    elif text.startswith("/help"):
+        reply(
+            "🤖 *foundstore bot*\n\n"
+            "Para descargar paquetes Fluthin desde la web, primero vincula tu cuenta "
+            "y luego escribe /code aqui. Te mandare un codigo de 6 digitos que tendras "
+            "que escribir en la web para verificar la sesion.\n\n"
+            "El codigo expira en 5 minutos."
+        )
+    elif text.startswith("/code"):
+        if not linked_username:
+            reply(
+                "❌ No encuentro tu cuenta de GitHub vinculada.\n\n"
+                "Ve a la web, inicia sesion y completa el paso 2 (vincular Telegram). "
+                "Luego vuelve aqui y escribe /code."
+            )
+        else:
+            code = notifications.issue_code(linked_username, telegram_id=telegram_id)
+            reply(
+                f"🔐 Tu codigo de verificacion es:\n\n"
+                f"`{code}`\n\n"
+                f"Cuenta: @{linked_username}\n"
+                f"Expira en 5 minutos.\n\n"
+                f"Escribelo en la web para activar las descargas."
+            )
+            # Empujar notificacion a la web
+            notifications.notify_user(
+                linked_username,
+                title="Codigo enviado desde Telegram",
+                desc=f"Revisa el chat con el bot. Codigo enviado.",
+                icon="telegram",
+            )
+    else:
+        # Mensaje normal: contestar con pista
+        if linked_username:
+            reply("💡 Escribe /code para generar un codigo de verificacion.")
+        else:
+            reply("👋 Hola! Escribe /code para empezar (primero vincula tu cuenta en la web).")
+
+    return jsonify({"ok": True})
+
+
+# =====================================================================
+# HEALTH (movido aqui para tenerlo centralizado con el resto)
+# =====================================================================
+
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok", "mongo": services._mongo_status})
+
+
+@app.route("/health/mongo")
+def health_mongo():
+    return jsonify(services.mongo_ping())
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))

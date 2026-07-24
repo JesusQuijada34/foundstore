@@ -2,58 +2,395 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    {#- Auto viewport: cubre todo el ancho incluyendo safe-area del notch -#}
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover">
+
+    {#- Tema iOS27 - dark/light segun el sistema, color del chrome -#}
+    <meta name="theme-color" content="#0a0c10" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#f6f7fb" media="(prefers-color-scheme: light)">
+    <meta name="color-scheme" content="dark light">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
+
     <title>{% block title %}foundstore{% endblock %}</title>
-    
-    <!-- Fuentes y Iconos -->
+
+    {#- Fuentes -#}
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
-    
-    <!-- Estilos Principales -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons+Round">
+
+    {#- Estilos -#}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/ios27.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    
+
     {% block extra_head %}{% endblock %}
 </head>
-<body class="fluent-theme">
-    <!-- Fondo Líquido Robusto (Degradados en lugar de Blobs para compatibilidad móvil) -->
-    <div class="background-overlay"></div>
+<body>
 
-    <nav class="navbar">
-        <div class="nav-container">
-            <a href="/" class="nav-logo">
-                <img src="{{ url_for('static', filename='logo_foundstore_transparent.png') }}" alt="foundstore" onerror="this.src='https://via.placeholder.com/32'">
-                <span>foundstore</span>
+{#- Layout: sidebar + main con topbar sticky -#}
+<div class="app-shell">
+
+    {# ============= SIDEBAR ============= #}
+    <aside class="app-sidebar">
+        <a href="/" class="brand" style="text-decoration:none; color:inherit;">
+            <div class="brand-mark">F</div>
+            <span>foundstore</span>
+        </a>
+
+        <nav class="nav-group" aria-label="Principal">
+            <a href="/" class="nav-item {% if request.endpoint == 'index' %}active{% endif %}">
+                <span class="material-icons">explore</span>
+                Explorar
             </a>
-            <div class="nav-links">
-                <a href="/">Explorar</a>
-                <a href="/global">Global</a>
-                {% if github.authorized %}
-                    <a href="/me">Perfil</a>
-                    <a href="/logout">Salir</a>
-                {% else %}
-                    <a href="/login" class="btn-login-nav">Entrar</a>
-                {% endif %}
+            <a href="/global" class="nav-item {% if request.endpoint in ('global_packages', 'package_detail_global', 'author_packages') %}active{% endif %}">
+                <span class="material-icons">public</span>
+                Tienda global
+            </a>
+            {% if github is defined and github.authorized %}
+            <a href="/me" class="nav-item {% if request.endpoint == 'my_profile' %}active{% endif %}">
+                <span class="material-icons">person</span>
+                Mi perfil
+            </a>
+            <a href="/me/edit" class="nav-item {% if request.endpoint == 'edit_profile' %}active{% endif %}">
+                <span class="material-icons">edit</span>
+                Editar perfil
+            </a>
+            <a href="/panel" class="nav-item {% if request.endpoint == 'ondev_panel' %}active{% endif %}">
+                <span class="material-icons">dashboard</span>
+                Panel ondev
+            </a>
+            <a href="/settings" class="nav-item {% if request.endpoint == 'settings' %}active{% endif %}">
+                <span class="material-icons">settings</span>
+                Configuración
+            </a>
+            {% endif %}
+        </nav>
+
+        <div class="sidebar-spacer"></div>
+
+        <nav class="nav-group" aria-label="Sistema">
+            <a href="/help" class="nav-item">
+                <span class="material-icons">help</span>
+                Ayuda
+            </a>
+            <a href="https://github.com/JesusQuijada34/foundstore" target="_blank" rel="noopener" class="nav-item">
+                <span class="material-icons">code</span>
+                GitHub
+            </a>
+            {% if github is defined and github.authorized %}
+            <a href="/logout" class="nav-item">
+                <span class="material-icons">logout</span>
+                Cerrar sesión
+            </a>
+            {% else %}
+            <a href="/login" class="nav-item">
+                <span class="material-icons">login</span>
+                Entrar con GitHub
+            </a>
+            {% endif %}
+        </nav>
+
+        {% if github is defined and github.authorized %}
+        <div class="sidebar-profile" id="sidebar-profile" title="Sesión iniciada con GitHub">
+            <img src="https://github.com/{{ github_username if github_username else 'identicon' }}.png?size=72"
+                 alt="avatar"
+                 onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 36 36%22><circle cx=%2218%22 cy=%2218%22 r=%2218%22 fill=%22%236366f1%22/><text x=%2218%22 y=%2223%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2214%22 font-family=%22sans-serif%22>U</text></svg>'">
+            <div class="profile-info">
+                <div class="profile-name">{{ github_username or 'Sesión activa' }}</div>
+                <div class="profile-email">via GitHub OAuth</div>
             </div>
+            <span class="material-icons">expand_more</span>
         </div>
-    </nav>
+        {% endif %}
+    </aside>
 
-    <main class="main-wrapper">
-        {% block content %}{% endblock %}
-    </main>
+    {# ============= MAIN ============= #}
+    <div class="app-main">
+        <header class="app-topbar">
+            <button class="topbar-menu-btn" aria-label="Menú">
+                <span class="material-icons">menu</span>
+            </button>
 
-    <footer class="footer">
-        <div class="footer-container">
-            <p>&copy; 2026 foundstore - Powered by Fluthin</p>
-            <div class="footer-links">
-                <a href="/help">Ayuda</a>
-                <a href="https://github.com/JesusQuijada34/foundstore" target="_blank">GitHub</a>
+            <div class="topbar-breadcrumb">
+                <a href="/">foundstore</a>
+                <span class="sep">/</span>
+                <span class="current">{% block breadcrumb %}{{ self.title() }}{% endblock %}</span>
             </div>
-        </div>
-    </footer>
 
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-    {% block extra_js %}{% endblock %}
+            <div class="topbar-spacer"></div>
+
+            <form class="topbar-search" onsubmit="event.preventDefault();">
+                <span class="material-icons">search</span>
+                <input type="search" placeholder="Buscar paquetes, autores..." id="global-search-topbar">
+            </form>
+
+            <button class="topbar-icon-btn" id="notif-toggle" title="Notificaciones" aria-label="Notificaciones">
+                <span class="material-icons">notifications</span>
+                <span class="dot" id="notif-dot"></span>
+            </button>
+            <button class="topbar-icon-btn" title="Configuración" aria-label="Configuración" onclick="window.location='/help'">
+                <span class="material-icons">settings</span>
+            </button>
+            {% if github is defined and github.authorized %}
+            <a href="/me" class="topbar-avatar-link">
+                <img class="topbar-avatar"
+                     src="https://github.com/{{ github_username if github_username else 'identicon' }}.png?size=80"
+                     alt="Mi perfil">
+            </a>
+            {% endif %}
+        </header>
+
+        <main class="app-content">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</div>
+
+{# ============= PANEL DE NOTIFICACIONES ============= #}
+<aside class="notif-panel" id="notif-panel" aria-live="polite" aria-atomic="false">
+    <div class="notif-panel-header">
+        <span>Notificaciones</span>
+        <button class="material-icons-btn" id="notif-clear">Marcar leídas</button>
+    </div>
+    <div class="notif-list" id="notif-list">
+        <div class="notif-empty">Sin notificaciones todavía.</div>
+    </div>
+</aside>
+
+{# ============= TOAST CONTAINER ============= #}
+<div class="toast-container" id="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+{# ============= HELPERS FRONTEND ============= #}
+<script>
+(function() {
+    'use strict';
+
+    // ============================================================
+    // GLOBAL STORE - estado de la app en window.fs
+    // ============================================================
+    window.fs = {
+        user: {
+            logged_in: {{ 'true' if (github is defined and github.authorized) else 'false' }},
+            github_username: {{ (github_username or '')|tojson }},
+            telegram_linked: {{ 'true' if (telegram_user is defined and telegram_user) else 'false' }},
+            telegram_verified: {{ 'true' if (telegram_verified is defined and telegram_verified) else 'false' }},
+        },
+        notifications: [],
+        sse: null,
+    };
+
+    // ============================================================
+    // TOASTS - bonitas, accesibles, auto-dismiss
+    // ============================================================
+    const ICONS = {
+        success: 'check',
+        info: 'info',
+        warning: 'warning',
+        danger: 'error',
+        telegram: 'send',
+    };
+
+    window.fs.toast = function(opts) {
+        const { type = 'info', title, desc, duration = 4500 } = opts || {};
+        const container = document.getElementById('toast-container');
+        const el = document.createElement('div');
+        el.className = 'toast';
+        el.innerHTML = `
+            <div class="toast-icon ${type}">
+                <span class="material-icons" style="font-size:1.1rem;">${ICONS[type] || 'info'}</span>
+            </div>
+            <div style="flex:1; min-width:0;">
+                <div class="toast-title">${escapeHtml(title || '')}</div>
+                ${desc ? `<div class="toast-desc">${escapeHtml(desc)}</div>` : ''}
+            </div>
+            <button class="toast-close material-icons">close</button>
+        `;
+        const close = () => {
+            el.classList.add('toast-out');
+            setTimeout(() => el.remove(), 220);
+        };
+        el.querySelector('.toast-close').addEventListener('click', close);
+        container.appendChild(el);
+        if (duration > 0) setTimeout(close, duration);
+        return close;
+    };
+
+    // ============================================================
+    // NOTIFICATIONS PANEL
+    // ============================================================
+    function renderNotifications() {
+        const list = document.getElementById('notif-list');
+        const dot = document.getElementById('notif-dot');
+        const items = window.fs.notifications;
+        if (!items.length) {
+            list.innerHTML = '<div class="notif-empty">Sin notificaciones todavía.</div>';
+            dot.style.display = 'none';
+            document.getElementById('notif-toggle').classList.remove('has-unread');
+            return;
+        }
+        const unread = items.some(n => n.unread);
+        dot.style.display = unread ? 'block' : 'none';
+        document.getElementById('notif-toggle').classList.toggle('has-unread', unread);
+
+        list.innerHTML = items.slice(0, 30).map(n => `
+            <div class="notif-item ${n.unread ? 'unread' : ''}" data-id="${n.id}">
+                <div class="notif-icon ${n.type || 'info'}">
+                    <span class="material-icons" style="font-size:1.1rem;">${ICONS[n.type] || n.icon || 'info'}</span>
+                </div>
+                <div class="notif-body">
+                    <div class="notif-title">${escapeHtml(n.title)}</div>
+                    ${n.desc ? `<div class="notif-desc">${escapeHtml(n.desc)}</div>` : ''}
+                    <div class="notif-time">${formatTime(n.ts)}</div>
+                </div>
+                <button class="notif-close material-icons" data-action="dismiss">close</button>
+            </div>
+        `).join('');
+    }
+
+    window.fs.notify = function(opts) {
+        const n = Object.assign({
+            id: 'n_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+            ts: Date.now(),
+            unread: true,
+        }, opts || {});
+        window.fs.notifications.unshift(n);
+        renderNotifications();
+        // Tambien lanza un toast discreto
+        if (n.toast !== false) {
+            window.fs.toast({ type: n.type || 'info', title: n.title, desc: n.desc, duration: 3500 });
+        }
+        return n;
+    };
+
+    function formatTime(ts) {
+        const d = new Date(ts);
+        const diff = (Date.now() - ts) / 1000;
+        if (diff < 60) return 'hace ' + Math.floor(diff) + 's';
+        if (diff < 3600) return 'hace ' + Math.floor(diff/60) + 'm';
+        if (diff < 86400) return 'hace ' + Math.floor(diff/3600) + 'h';
+        return d.toLocaleDateString();
+    }
+
+    function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, c => ({
+            '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+        }[c]));
+    }
+
+    // Listeners panel
+    document.getElementById('notif-toggle').addEventListener('click', (e) => {
+        e.stopPropagation();
+        document.getElementById('notif-panel').classList.toggle('open');
+    });
+    document.addEventListener('click', (e) => {
+        const panel = document.getElementById('notif-panel');
+        if (panel.classList.contains('open') && !panel.contains(e.target) && !e.target.closest('#notif-toggle')) {
+            panel.classList.remove('open');
+        }
+    });
+    document.getElementById('notif-clear').addEventListener('click', () => {
+        window.fs.notifications.forEach(n => n.unread = false);
+        renderNotifications();
+    });
+    document.getElementById('notif-list').addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action="dismiss"]');
+        if (btn) {
+            const id = btn.closest('.notif-item').dataset.id;
+            window.fs.notifications = window.fs.notifications.filter(n => n.id !== id);
+            renderNotifications();
+        }
+    });
+
+    // ============================================================
+    // SSE - server-sent events para actualizaciones en tiempo real
+    // ============================================================
+    function connectSSE() {
+        if (!window.fs.user.logged_in) return;  // solo logueados
+        if (window.fs.sse) return;
+        try {
+            const es = new EventSource('/api/events');
+            window.fs.sse = es;
+
+            es.addEventListener('notification', (ev) => {
+                try {
+                    const data = JSON.parse(ev.data);
+                    window.fs.notify(data);
+                } catch (_) {}
+            });
+            es.addEventListener('toast', (ev) => {
+                try {
+                    const data = JSON.parse(ev.data);
+                    window.fs.toast(data);
+                } catch (_) {}
+            });
+            es.addEventListener('telegram_verified', () => {
+                window.fs.user.telegram_verified = true;
+                window.fs.toast({ type: 'success', title: 'Sesión verificada con Telegram', desc: 'Ya puedes descargar paquetes.' });
+                if (typeof window.onTelegramVerified === 'function') {
+                    window.onTelegramVerified();
+                }
+            });
+            es.addEventListener('ping', () => {});
+            es.onerror = () => {
+                es.close();
+                window.fs.sse = null;
+                // reconectar con backoff
+                setTimeout(connectSSE, 5000);
+            };
+        } catch (_) {
+            setTimeout(connectSSE, 10000);
+        }
+    }
+    connectSSE();
+
+    // ============================================================
+    // Topbar search: redirige a /global con query
+    // ============================================================
+    const topSearch = document.getElementById('global-search-topbar');
+    if (topSearch) {
+        topSearch.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const q = topSearch.value.trim();
+                if (q) window.location = '/global?q=' + encodeURIComponent(q);
+            }
+        });
+    }
+
+    // ============================================================
+    // Mobile menu
+    // ============================================================
+    const menuBtn = document.querySelector('.topbar-menu-btn');
+    if (menuBtn) {
+        menuBtn.addEventListener('click', () => {
+            const sb = document.querySelector('.app-sidebar');
+            sb.style.display = sb.style.display === 'block' ? '' : 'block';
+        });
+    }
+
+    // Render inicial
+    renderNotifications();
+
+    // Bienvenida (solo una vez por sesion)
+    if (!sessionStorage.getItem('fs_welcomed')) {
+        sessionStorage.setItem('fs_welcomed', '1');
+        if (window.fs.user.logged_in) {
+            setTimeout(() => {
+                window.fs.toast({
+                    type: 'info',
+                    title: 'Bienvenido de vuelta',
+                    desc: 'Tienes notificaciones en tiempo real activas.',
+                    duration: 3000,
+                });
+            }, 600);
+        }
+    }
+})();
+</script>
+
+{% block extra_js %}{% endblock %}
 </body>
 </html>
