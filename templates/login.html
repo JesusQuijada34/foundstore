@@ -26,7 +26,7 @@
             </button>
         </div>
 
-        <!-- TAB 1: GitHub OAuth -->
+        <!-- TAB 1: GitHub OAuth & Telegram Login -->
         <div class="tab-content active" id="github-tab">
             <div class="tab-header">
                 <div class="icon-badge github">
@@ -35,7 +35,7 @@
                     </svg>
                 </div>
                 <h2>Bienvenido</h2>
-                <p class="subtitle">Inicia sesión con tu cuenta de GitHub para acceder a foundstore</p>
+                <p class="subtitle">Usa GitHub o tu cuenta de Telegram vinculada</p>
             </div>
 
             <a href="{{ url_for('github.login') }}" class="btn-primary btn-large">
@@ -43,7 +43,25 @@
                 Continuar con GitHub
             </a>
 
-            <div class="divider">o</div>
+            <div class="divider">o usa Telegram ID</div>
+
+            <form id="telegramLoginForm" class="form-group">
+                <div class="form-field">
+                    <div class="input-wrapper">
+                        <span class="material-icons">person</span>
+                        <input type="text" id="loginTelegramId" name="telegramId" placeholder="ID de Telegram" required>
+                    </div>
+                </div>
+                <div class="form-field">
+                    <div class="input-wrapper">
+                        <span class="material-icons">lock</span>
+                        <input type="password" id="loginTelegramPassword" name="password" placeholder="Contraseña" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn-secondary btn-large">
+                    Entrar con Telegram
+                </button>
+            </form>
 
             <p class="footer-text">¿No tienes cuenta? <a href="#" class="link-accent" onclick="switchTab('telegram'); return false;">Regístrate con Telegram</a></p>
         </div>
@@ -599,63 +617,65 @@ card.addEventListener('mouseleave', () => {
     card.style.transform = 'perspective(1000px) rotateX(0) rotateY(0)';
 });
 
-// Form submission
+// Form submission - Register
 document.getElementById('telegramRegisterForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    
+    const btn = e.target.querySelector('button[type="submit"]');
     const telegramId = document.getElementById('telegramId').value.trim();
     const password = document.getElementById('telegramPassword').value;
     const passwordConfirm = document.getElementById('telegramPasswordConfirm').value;
 
     if (password !== passwordConfirm) {
-        window.fs.toast({
-            type: 'warning',
-            title: 'Las contraseñas no coinciden',
-            desc: 'Verifica que ambas contraseñas sean iguales.'
-        });
+        window.fs.toast({ type: 'warning', title: 'Las contraseñas no coinciden' });
         return;
     }
 
-    if (!telegramId || !password) {
-        window.fs.toast({
-            type: 'warning',
-            title: 'Campos requeridos',
-            desc: 'Por favor completa todos los campos.'
-        });
-        return;
-    }
-
+    btn.classList.add('loading');
     try {
         const response = await fetch('/api/auth/register_telegram', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ telegram_id: telegramId, password })
         });
-
         const data = await response.json();
-
         if (response.ok) {
-            window.fs.toast({
-                type: 'success',
-                title: 'Cuenta creada',
-                desc: 'Redirigiendo al siguiente paso...'
-            });
-            setTimeout(() => {
-                window.location.href = '/onboarding/step2';
-            }, 1500);
+            window.fs.toast({ type: 'success', title: 'Cuenta creada', desc: 'Iniciando sesión...' });
+            setTimeout(() => window.location.href = '/', 1500);
         } else {
-            window.fs.toast({
-                type: 'danger',
-                title: 'Error',
-                desc: data.error || 'No se pudo crear la cuenta.'
-            });
+            window.fs.toast({ type: 'danger', title: 'Error', desc: data.message || data.error });
         }
     } catch (err) {
-        window.fs.toast({
-            type: 'danger',
-            title: 'Error de conexión',
-            desc: 'Intenta de nuevo más tarde.'
+        window.fs.toast({ type: 'danger', title: 'Error de conexión' });
+    } finally {
+        btn.classList.remove('loading');
+    }
+});
+
+// Form submission - Login
+document.getElementById('telegramLoginForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type="submit"]');
+    const telegramId = document.getElementById('loginTelegramId').value.trim();
+    const password = document.getElementById('loginTelegramPassword').value;
+
+    btn.classList.add('loading');
+    try {
+        const response = await fetch('/api/auth/login_telegram', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ telegram_id: telegramId, password })
         });
+        const data = await response.json();
+        if (response.ok) {
+            window.fs.toast({ type: 'success', title: 'Sesión iniciada' });
+            setTimeout(() => window.location.href = '/', 1000);
+        } else {
+            window.fs.toast({ type: 'danger', title: 'Error', desc: data.message || data.error });
+        }
+    } catch (err) {
+        window.fs.toast({ type: 'danger', title: 'Error de conexión' });
+    } finally {
+        btn.classList.remove('loading');
     }
 });
 </script>

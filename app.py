@@ -77,26 +77,29 @@ def _mark_telegram_verified():
 @app.context_processor
 def inject_globals():
     """
-    Inyecta variables globales a TODOS los templates, en particular:
-    - github: el blueprint (para chequeos .authorized)
-    - github_username: el login actual (o vacio)
-    - telegram_user: la sesion de Telegram del onboarding paso 2
-    - telegram_verified: True si el usuario ya paso la verificacion con code
+    Inyecta variables globales a TODOS los templates.
     """
+    # Un usuario esta logueado si tiene GitHub authorized O si tiene una sesion local de Telegram
+    is_logged_in = github.authorized or bool(session.get("telegram_user"))
+    github_username = session.get("github_username") or ""
+    
     return dict(
         github=github,
-        github_username=session.get("github_username") or "",
+        is_logged_in=is_logged_in,
+        github_username=github_username,
         telegram_user=session.get("telegram_user") or None,
         telegram_verified=_telegram_verified(),
     )
 
 @app.route("/")
 def index():
-    if not github.authorized:
+    # Permitir acceso si esta logueado por cualquier metodo
+    is_logged_in = github.authorized or bool(session.get("telegram_user"))
+    if not is_logged_in:
         return redirect(url_for("login"))
     
-    # Verificar si completó el paso 2 (Telegram)
-    if not session.get("telegram_user"):
+    # Si entro por GitHub pero no tiene Telegram, forzar vinculacion
+    if github.authorized and not session.get("telegram_user"):
         return redirect(url_for("onboarding_step2"))
         
     # El catálogo principal se lee de ismyself de JesusQuijada34
@@ -228,7 +231,8 @@ def help_page():
 
 @app.route("/login")
 def login():
-    if github.authorized:
+    is_logged_in = github.authorized or bool(session.get("telegram_user"))
+    if is_logged_in:
         return redirect(url_for("index"))
     return render_template("login.html")
 
@@ -243,21 +247,48 @@ def api_register_telegram():
     Crea una cuenta local vinculada a un Telegram ID.
     """
     data = request.get_json() or {}
-    telegram_id = (data.get("telegram_id") or "").strip()
+    telegram_id_str = (data.get("telegram_id") or "").strip()
     password = data.get("password") or ""
 
-    if not telegram_id or not password:
+    if not telegram_id_str or not password:
         return jsonify({"error": "missing_fields", "message": "Telegram ID y contraseña son requeridos."}), 400
+
+    try:
+        telegram_id = int(telegram_id_str)
+    except ValueError:
+        return jsonify({"error": "invalid_id", "message": "El Telegram ID debe ser un numero."}), 400
 
     if len(password) < 8:
         return jsonify({"error": "weak_password", "message": "La contraseña debe tener al menos 8 caracteres."}), 400
 
+    # Si Mongo no esta disponible, guardamos en el fallback JSONL
     if not storage.mongo.ok:
-        return jsonify({"error": "storage_unavailable", "message": "El servicio no está disponible. Intenta más tarde."}), 503
+        import hashlib
+        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        gh_username = f"tg_{telegram_id}"
+        
+        # Simular registro en services.py (JSONL)
+        telegram_data = {
+            "id": telegram_id,
+            "username": f"user_{telegram_id}",
+            "first_name": "Usuario",
+            "last_name": "Telegram"
+        }
+        services.link_telegram_to_github(gh_username, telegram_data)
+        
+        # Añadir password_hash manualmente al archivo (hack para fallback)
+        accounts = services.load_ondev_accounts()
+        if gh_username in accounts:
+            accounts[gh_username]["password_hash"] = password_hash
+            services.save_ondev_account(accounts[gh_username])
+
+        session["telegram_user"] = telegram_data
+        session["github_username"] = gh_username
+        return jsonify({"ok": True, "message": "Cuenta creada en fallback local."}), 201
 
     try:
         # Verificar si el Telegram ID ya está registrado
-        existing_user = storage.get_user_by_telegram_id(int(telegram_id))
+        existing_user = storage.get_user_by_telegram_id(telegram_id)
         if existing_user:
             return jsonify({"error": "telegram_id_exists", "message": "Este Telegram ID ya está registrado."}), 409
 
@@ -267,9 +298,10 @@ def api_register_telegram():
 
         # Crear usuario en MongoDB
         now = int(time.time())
+        gh_username = f"tg_{telegram_id}"
         user_doc = {
-            "github_username": f"tg_{telegram_id}",  # Username temporal basado en Telegram ID
-            "telegram_id": int(telegram_id),
+            "github_username": gh_username,
+            "telegram_id": telegram_id,
             "password_hash": password_hash,
             "auth_method": "telegram",
             "created_at": now,
@@ -281,10 +313,10 @@ def api_register_telegram():
 
         # Crear sesión
         session["telegram_user"] = {
-            "id": int(telegram_id),
-            "username": f"tg_{telegram_id}",
+            "id": telegram_id,
+            "username": gh_username,
         }
-        session["github_username"] = f"tg_{telegram_id}"
+        session["github_username"] = gh_username
 
         return jsonify({"ok": True, "message": "Cuenta creada exitosamente."}), 201
 
@@ -300,31 +332,49 @@ def api_login_telegram():
     Valida credenciales y crea sesión.
     """
     data = request.get_json() or {}
-    telegram_id = (data.get("telegram_id") or "").strip()
+    telegram_id_str = (data.get("telegram_id") or "").strip()
     password = data.get("password") or ""
 
-    if not telegram_id or not password:
-        return jsonify({"error": "missing_fields"}), 400
-
-    if not storage.mongo.ok:
-        return jsonify({"error": "storage_unavailable"}), 503
+    if not telegram_id_str or not password:
+        return jsonify({"error": "missing_fields", "message": "Telegram ID y contraseña son requeridos."}), 400
 
     try:
-        # Buscar usuario por Telegram ID
-        user = storage.get_user_by_telegram_id(int(telegram_id))
-        if not user:
-            return jsonify({"error": "invalid_credentials"}), 401
+        telegram_id = int(telegram_id_str)
+    except ValueError:
+        return jsonify({"error": "invalid_id", "message": "El Telegram ID debe ser un numero."}), 400
 
-        # Verificar contraseña
-        import hashlib
-        password_hash = hashlib.sha256(password.encode()).hexdigest()
-        user_doc = storage.mongo.db.users.find_one({"telegram_id": int(telegram_id)})
+    import hashlib
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+
+    # Fallback local
+    if not storage.mongo.ok:
+        accounts = services.load_ondev_accounts()
+        gh_username = f"tg_{telegram_id}"
+        user_doc = accounts.get(gh_username)
         
         if not user_doc or user_doc.get("password_hash") != password_hash:
-            return jsonify({"error": "invalid_credentials"}), 401
+            return jsonify({"error": "invalid_credentials", "message": "ID o contraseña incorrectos."}), 401
+
+        session["telegram_user"] = {
+            "id": telegram_id,
+            "username": user_doc.get("telegram_username") or gh_username,
+            "first_name": user_doc.get("telegram_name", "Usuario")
+        }
+        session["github_username"] = gh_username
+        return jsonify({"ok": True, "message": "Sesión iniciada (local)."})
+
+    try:
+        # Buscar usuario en MongoDB
+        user_doc = storage.mongo.db.users.find_one({"telegram_id": telegram_id})
+        if not user_doc or user_doc.get("password_hash") != password_hash:
+            return jsonify({"error": "invalid_credentials", "message": "ID o contraseña incorrectos."}), 401
 
         # Crear sesión
-        session["telegram_user"] = {"id": int(telegram_id), "username": user_doc.get("github_username")}
+        session["telegram_user"] = {
+            "id": telegram_id, 
+            "username": user_doc.get("telegram_username") or user_doc.get("github_username"),
+            "first_name": user_doc.get("telegram_name", "Usuario")
+        }
         session["github_username"] = user_doc.get("github_username")
 
         return jsonify({"ok": True, "message": "Sesión iniciada."}), 200
@@ -421,14 +471,7 @@ def health_mongo():
     return jsonify(services.mongo_ping())
 
 
-@app.route("/health")
-def health():
-    """Health check basico del servicio."""
-    from flask import jsonify
-    return jsonify({
-        "status": "ok",
-        "mongo": services._mongo_status,
-    })
+# Health check basico (eliminado el duplicado aqui, se mantiene al final)
 
 @app.route("/me/edit", methods=["GET", "POST"])
 def edit_profile():
@@ -908,9 +951,6 @@ def health_mongo():
 
 
 if __name__ == "__main__":
+    # En Render, PORT lo asigna el entorno. Default 8000 para local.
     port = int(os.environ.get("PORT", 8000))
-    app.run(host="0.0.0.0", port=port, debug=True)
-
-
-if __name__ == "__main__":
-    app.run(debug=False)
+    app.run(host="0.0.0.0", port=port, debug=False)
