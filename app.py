@@ -460,15 +460,7 @@ def package_detail_global(package_name):
     )
 
 
-@app.route("/health/mongo")
-def health_mongo():
-    """
-    Diagnostico de MongoDB. Devuelve JSON con el estado actual
-    y reintenta la conexion si la anterior fallo. Util para debug
-    en Render sin tener que reiniciar el servicio.
-    """
-    from flask import jsonify
-    return jsonify(services.mongo_ping())
+# Health check mongo (eliminado duplicado aqui, se mantiene al final)
 
 
 # Health check basico (eliminado el duplicado aqui, se mantiene al final)
