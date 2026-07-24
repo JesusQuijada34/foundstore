@@ -232,6 +232,108 @@ def login():
         return redirect(url_for("index"))
     return render_template("login.html")
 
+# =====================================================================
+# AUTENTICACION CON TELEGRAM ID + CONTRASEÑA (v1 - Registro)
+# =====================================================================
+
+@app.route("/api/auth/register_telegram", methods=["POST"])
+def api_register_telegram():
+    """
+    Endpoint para registro con Telegram ID + Contraseña.
+    Crea una cuenta local vinculada a un Telegram ID.
+    """
+    data = request.get_json() or {}
+    telegram_id = (data.get("telegram_id") or "").strip()
+    password = data.get("password") or ""
+
+    if not telegram_id or not password:
+        return jsonify({"error": "missing_fields", "message": "Telegram ID y contraseña son requeridos."}), 400
+
+    if len(password) < 8:
+        return jsonify({"error": "weak_password", "message": "La contraseña debe tener al menos 8 caracteres."}), 400
+
+    if not storage.mongo.ok:
+        return jsonify({"error": "storage_unavailable", "message": "El servicio no está disponible. Intenta más tarde."}), 503
+
+    try:
+        # Verificar si el Telegram ID ya está registrado
+        existing_user = storage.get_user_by_telegram_id(int(telegram_id))
+        if existing_user:
+            return jsonify({"error": "telegram_id_exists", "message": "Este Telegram ID ya está registrado."}), 409
+
+        # Hash de la contraseña
+        import hashlib
+        password_hash = hashlib.sha256(password.encode()).hexdigest()
+
+        # Crear usuario en MongoDB
+        now = int(time.time())
+        user_doc = {
+            "github_username": f"tg_{telegram_id}",  # Username temporal basado en Telegram ID
+            "telegram_id": int(telegram_id),
+            "password_hash": password_hash,
+            "auth_method": "telegram",
+            "created_at": now,
+            "updated_at": now,
+            "is_active": True,
+        }
+
+        storage.mongo.db.users.insert_one(user_doc)
+
+        # Crear sesión
+        session["telegram_user"] = {
+            "id": int(telegram_id),
+            "username": f"tg_{telegram_id}",
+        }
+        session["github_username"] = f"tg_{telegram_id}"
+
+        return jsonify({"ok": True, "message": "Cuenta creada exitosamente."}), 201
+
+    except Exception as e:
+        print(f"[api_register_telegram] Error: {e}")
+        return jsonify({"error": "registration_failed", "message": "Error al crear la cuenta."}), 500
+
+
+@app.route("/api/auth/login_telegram", methods=["POST"])
+def api_login_telegram():
+    """
+    Endpoint para login con Telegram ID + Contraseña.
+    Valida credenciales y crea sesión.
+    """
+    data = request.get_json() or {}
+    telegram_id = (data.get("telegram_id") or "").strip()
+    password = data.get("password") or ""
+
+    if not telegram_id or not password:
+        return jsonify({"error": "missing_fields"}), 400
+
+    if not storage.mongo.ok:
+        return jsonify({"error": "storage_unavailable"}), 503
+
+    try:
+        # Buscar usuario por Telegram ID
+        user = storage.get_user_by_telegram_id(int(telegram_id))
+        if not user:
+            return jsonify({"error": "invalid_credentials"}), 401
+
+        # Verificar contraseña
+        import hashlib
+        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        user_doc = storage.mongo.db.users.find_one({"telegram_id": int(telegram_id)})
+        
+        if not user_doc or user_doc.get("password_hash") != password_hash:
+            return jsonify({"error": "invalid_credentials"}), 401
+
+        # Crear sesión
+        session["telegram_user"] = {"id": int(telegram_id), "username": user_doc.get("github_username")}
+        session["github_username"] = user_doc.get("github_username")
+
+        return jsonify({"ok": True, "message": "Sesión iniciada."}), 200
+
+    except Exception as e:
+        print(f"[api_login_telegram] Error: {e}")
+        return jsonify({"error": "login_failed"}), 500
+
+
 @app.route("/logout")
 def logout():
     session.clear()
@@ -808,3 +910,7 @@ def health_mongo():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     app.run(host="0.0.0.0", port=port, debug=True)
+
+
+if __name__ == "__main__":
+    app.run(debug=False)
