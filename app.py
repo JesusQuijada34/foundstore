@@ -98,9 +98,8 @@ def index():
     if not is_logged_in:
         return redirect(url_for("login"))
     
-    # Si entro por GitHub pero no tiene Telegram, forzar vinculacion
-    if github.authorized and not session.get("telegram_user"):
-        return redirect(url_for("onboarding_step2"))
+    # ELIMINADO: Redireccion forzosa a onboarding_step2.
+    # Ahora el usuario puede entrar directamente al index.
         
     # El catálogo principal se lee de ismyself de JesusQuijada34
     catalog = services.get_catalog("JesusQuijada34")
@@ -234,7 +233,8 @@ def login():
     is_logged_in = github.authorized or bool(session.get("telegram_user"))
     if is_logged_in:
         return redirect(url_for("index"))
-    return render_template("login.html")
+    # Usamos la nueva plantilla standalone que NO hereda de base.html
+    return render_template("login_standalone.html")
 
 # =====================================================================
 # AUTENTICACION CON TELEGRAM ID + CONTRASEÑA (v1 - Registro)

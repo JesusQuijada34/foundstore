@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Acceso - foundstore</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <style>
+        :root {
+            --auth-bg: #0a0c12;
+            --auth-glass: rgba(20, 22, 28, 0.75);
+            --auth-border: rgba(255, 255, 255, 0.1);
+            --auth-accent: #6366f1;
+            --auth-accent-glow: rgba(99, 102, 241, 0.4);
+            --auth-text: #f8fafc;
+            --auth-text-dim: #94a3b8;
+            --font-sans: 'Inter', -apple-system, system-ui, sans-serif;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: var(--font-sans);
+            background: var(--auth-bg);
+            color: var(--auth-text);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        /* FONDO ILUSTRADO DINÁMICO */
+        .viewport {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            z-index: 1;
+        }
+
+        .bg-canvas {
+            position: absolute;
+            inset: 0;
+            z-index: -1;
+            background: radial-gradient(circle at 50% 50%, #11141d 0%, #0a0c12 100%);
+        }
+
+        .blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.5;
+            animation: float 20s infinite alternate cubic-bezier(0.45, 0, 0.55, 1);
+        }
+
+        .blob-1 { width: 500px; height: 500px; background: #6366f1; top: -10%; left: -10%; }
+        .blob-2 { width: 400px; height: 400px; background: #22d3ee; bottom: -5%; right: -5%; animation-delay: -5s; }
+        .blob-3 { width: 350px; height: 350px; background: #a855f7; top: 40%; left: 30%; animation-delay: -10s; }
+
+        @keyframes float {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(50px, 50px) scale(1.1); }
+        }
+
+        /* TARJETA DE LOGIN (STANDALONE) */
+        .auth-card {
+            width: 100%;
+            max-width: 420px;
+            background: var(--auth-glass);
+            backdrop-filter: blur(40px) saturate(180%);
+            -webkit-backdrop-filter: blur(40px) saturate(180%);
+            border: 1px solid var(--auth-border);
+            border-radius: 32px;
+            padding: 40px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.5);
+            position: relative;
+            z-index: 10;
+            animation: card-in 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes card-in {
+            from { opacity: 0; transform: translateY(30px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .header { text-align: center; margin-bottom: 32px; }
+        
+        .logo-box {
+            width: 60px; height: 60px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            border-radius: 16px;
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 16px;
+            color: white;
+            box-shadow: 0 10px 20px var(--auth-accent-glow);
+        }
+
+        h1 { font-size: 1.6rem; font-weight: 800; margin-bottom: 8px; letter-spacing: -0.02em; }
+        p.subtitle { color: var(--auth-text-dim); font-size: 0.9rem; }
+
+        /* TABS */
+        .tabs {
+            display: flex;
+            background: rgba(0,0,0,0.3);
+            padding: 5px;
+            border-radius: 14px;
+            margin-bottom: 28px;
+            border: 1px solid var(--auth-border);
+        }
+
+        .tab-btn {
+            flex: 1; border: none; background: transparent;
+            padding: 10px; color: var(--auth-text-dim);
+            font-weight: 600; font-size: 0.85rem;
+            cursor: pointer; border-radius: 10px;
+            transition: 0.3s;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+
+        .tab-btn.active { background: rgba(255,255,255,0.1); color: white; }
+
+        /* FORMS */
+        .panel { display: none; animation: fade 0.4s ease; }
+        .panel.active { display: block; }
+        @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+        .btn-github {
+            display: flex; align-items: center; justify-content: center; gap: 12px;
+            width: 100%; padding: 14px;
+            background: #24292f; color: white;
+            border-radius: 14px; text-decoration: none;
+            font-weight: 700; font-size: 0.95rem;
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: 0.3s;
+            margin-bottom: 24px;
+        }
+
+        .btn-github:hover { background: #333; transform: translateY(-2px); }
+
+        .divider {
+            display: flex; align-items: center; gap: 10px;
+            color: var(--auth-text-dim); font-size: 0.75rem;
+            margin-bottom: 24px;
+        }
+        .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--auth-border); }
+
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; font-size: 0.8rem; font-weight: 700; margin-bottom: 8px; color: var(--auth-text); }
+        
+        .input-box {
+            display: flex; align-items: center; gap: 10px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--auth-border);
+            border-radius: 12px; padding: 0 14px;
+            transition: 0.3s;
+        }
+        .input-box:focus-within { border-color: var(--auth-accent); box-shadow: 0 0 0 4px var(--auth-accent-glow); }
+        .input-box input {
+            flex: 1; background: transparent; border: none; outline: none;
+            padding: 12px 0; color: white; font-size: 0.95rem;
+        }
+        .input-box .material-icons-round { font-size: 1.2rem; color: var(--auth-text-dim); }
+
+        .btn-submit {
+            width: 100%; padding: 14px;
+            background: linear-gradient(135deg, var(--auth-accent), #8b5cf6);
+            border: none; border-radius: 14px;
+            color: white; font-weight: 800; font-size: 1rem;
+            cursor: pointer; transition: 0.3s;
+            box-shadow: 0 10px 20px var(--auth-accent-glow);
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+        }
+        .btn-submit:hover { transform: translateY(-2px); box-shadow: 0 15px 30px var(--auth-accent-glow); }
+        
+        .footer-note {
+            text-align: center; margin-top: 24px;
+            font-size: 0.85rem; color: var(--auth-text-dim);
+        }
+        .footer-note a { color: var(--auth-accent); font-weight: 700; text-decoration: none; }
+
+        /* TOAST SYSTEM (MINIMAL) */
+        #toast {
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+            padding: 12px 24px; border-radius: 12px;
+            background: #1e293b; color: white;
+            font-weight: 600; font-size: 0.9rem;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            z-index: 1000; display: none;
+            animation: toast-in 0.3s ease;
+        }
+        @keyframes toast-in { from { transform: translate(-50%, 20px); opacity: 0; } }
+    </style>
+</head>
+<body>
+
+<div class="viewport">
+    <div class="bg-canvas">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="auth-card" id="card">
+        <div class="header">
+            <div class="logo-box">
+                <span class="material-icons-round" style="font-size: 32px;">security</span>
+            </div>
+            <h1>foundstore</h1>
+            <p class="subtitle">Identidad Segura & Despliegue</p>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('login', this)">
+                <span class="material-icons-round">login</span> Entrar
+            </button>
+            <button class="tab-btn" onclick="switchTab('register', this)">
+                <span class="material-icons-round">person_add</span> Registro
+            </button>
+        </div>
+
+        <!-- PANEL LOGIN -->
+        <div id="panel-login" class="panel active">
+            <a href="/login/github" class="btn-github">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.04-.02-2.05-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.3 3.5 1 .1-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.11-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.3-1.55 3.3-1.23 3.3-1.23.65 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.8 5.62-5.48 5.92.43.37.81 1.1.81 2.22 0 1.6-.01 2.89-.01 3.29 0 .32.22.69.83.58A12 12 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+                </svg>
+                Continuar con GitHub
+            </a>
+
+            <div class="divider">o usa Telegram ID</div>
+
+            <form id="form-login">
+                <div class="form-group">
+                    <label>Telegram ID</label>
+                    <div class="input-box">
+                        <span class="material-icons-round">fingerprint</span>
+                        <input type="text" id="li-id" placeholder="ID numérico" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Contraseña</label>
+                    <div class="input-box">
+                        <span class="material-icons-round">lock</span>
+                        <input type="password" id="li-pass" placeholder="••••••••" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn-submit">Entrar</button>
+            </form>
+        </div>
+
+        <!-- PANEL REGISTRO -->
+        <div id="panel-register" class="panel">
+            <form id="form-register">
+                <div class="form-group">
+                    <label>ID de Telegram</label>
+                    <div class="input-box">
+                        <span class="material-icons-round">alternate_email</span>
+                        <input type="text" id="rg-id" placeholder="Obtenlo en @userinfobot" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Nueva Contraseña</label>
+                    <div class="input-box">
+                        <span class="material-icons-round">lock_open</span>
+                        <input type="password" id="rg-pass" placeholder="Mínimo 8 caracteres" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Confirmar Contraseña</label>
+                    <div class="input-box">
+                        <span class="material-icons-round">verified_user</span>
+                        <input type="password" id="rg-conf" placeholder="Repite contraseña" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn-submit">Crear Cuenta</button>
+            </form>
+        </div>
+
+        <div class="footer-note">
+            ¿Necesitas ayuda? <a href="/help">Ver documentación</a>
+        </div>
+    </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+    function switchTab(id, btn) {
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('panel-' + id).classList.add('active');
+        btn.classList.add('active');
+    }
+
+    function showToast(msg, type='info') {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.style.display = 'block';
+        t.style.background = type === 'error' ? '#ef4444' : '#1e293b';
+        setTimeout(() => { t.style.display = 'none'; }, 3000);
+    }
+
+    // LOGIN
+    document.getElementById('form-login').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const res = await fetch('/api/auth/login_telegram', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                telegram_id: document.getElementById('li-id').value,
+                password: document.getElementById('li-pass').value
+            })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showToast('¡Bienvenido!');
+            window.location.href = '/';
+        } else {
+            showToast(data.message || 'Error al entrar', 'error');
+        }
+    });
+
+    // REGISTER
+    document.getElementById('form-register').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const pass = document.getElementById('rg-pass').value;
+        const conf = document.getElementById('rg-conf').value;
+        if (pass !== conf) return showToast('Contraseñas no coinciden', 'error');
+        
+        const res = await fetch('/api/auth/register_telegram', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                telegram_id: document.getElementById('rg-id').value,
+                password: pass
+            })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showToast('Cuenta creada');
+            window.location.href = '/';
+        } else {
+            showToast(data.message || 'Error al registrar', 'error');
+        }
+    });
+
+    // 3D TILT
+    const card = document.getElementById('card');
+    document.addEventListener('mousemove', (e) => {
+        const x = (window.innerWidth / 2 - e.pageX) / 25;
+        const y = (window.innerHeight / 2 - e.pageY) / 25;
+        card.style.transform = `perspective(1000px) rotateX(${y}deg) rotateY(${-x}deg)`;
+    });
+</script>
+
+</body>
+</html>
