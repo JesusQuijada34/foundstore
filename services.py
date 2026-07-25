@@ -53,7 +53,11 @@ def _try_connect_mongo():
             )
             # Forzar un ping: si el cluster no responde, falla aqui
             client.admin.command('ping')
-            db = client.get_default_database()
+            # Usar el nombre de BD de la URI; si no tiene uno, usar "foundstore"
+            try:
+                db = client.get_default_database()
+            except Exception:
+                db = client.get_database("foundstore")
             _mongo_status = {"ok": True, "error": None, "retries": attempt}
             print(f"[mongo] Conectado OK a MongoDB (intento {attempt + 1})")
             return client
@@ -132,6 +136,9 @@ def link_telegram_to_github(github_username, telegram_data):
     accounts[github_username]["profile_override"]["links"] = links
     
     # Guardar en MongoDB si está disponible
+    # Si la conexión estaba caída, intentar reconectar antes de escribir
+    if db is None and Config.MONGO_URI:
+        _try_connect_mongo()
     if db is not None:
         try:
             db.users.update_one(
@@ -141,6 +148,17 @@ def link_telegram_to_github(github_username, telegram_data):
             )
         except Exception as e:
             print(f"Error guardando en MongoDB: {e}")
+            # Si la operación falló, la conexión puede estar caída; reintentar una vez
+            _try_connect_mongo()
+            if db is not None:
+                try:
+                    db.users.update_one(
+                        {"github_username": github_username},
+                        {"$set": accounts[github_username]},
+                        upsert=True
+                    )
+                except Exception as e2:
+                    print(f"Error guardando en MongoDB (reintento): {e2}")
             
     # Fallback local
     # Persistencia atómica para evitar corrupción de archivos

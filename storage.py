@@ -30,14 +30,21 @@ from config import Config
 # =====================================================================
 try:
     from pymongo import MongoClient, ASCENDING, DESCENDING
+    from pymongo.collection import ReturnDocument
     from pymongo.server_api import ServerApi
     from pymongo.errors import (
         ServerSelectionTimeoutError, ConfigurationError,
         OperationFailure, ConnectionFailure, AutoReconnect, DuplicateKeyError,
     )
+    from bson import ObjectId
     _MONGO_OK = True
 except Exception:
     _MONGO_OK = False
+    # Fallback ObjectId si bson no está disponible
+    class ObjectId:  # type: ignore
+        def __init__(self, s): self.s = s
+        def __eq__(self, o): return isinstance(o, ObjectId) and self.s == o.s
+        def __hash__(self): return hash(self.s)
 
 
 class _Mongo:
@@ -63,7 +70,11 @@ class _Mongo:
                 socketTimeoutMS=4000,
             )
             self.client.admin.command('ping')
-            self.db = self.client.get_default_database()
+            # Usar el nombre de BD de la URI; si no tiene uno, usar "foundstore"
+            try:
+                self.db = self.client.get_default_database()
+            except Exception:
+                self.db = self.client.get_database("foundstore")
             self.ok = True
             self.last_error = None
             self._ensure_indexes()
@@ -209,7 +220,7 @@ def upsert_user_from_github(github_username: str, profile: dict = None) -> Optio
             {"github_username": github_username},
             {"$set": doc, "$setOnInsert": {"created_at": _now_ts(), "telegram_id": None}},
             upsert=True,
-            return_document=True,  # ReturnDocument.AFTER
+            return_document=ReturnDocument.AFTER,
         )
         user_docs_cache.delete(f"user:{github_username}")
         return result
@@ -568,16 +579,6 @@ def mark_notifications_read(user: str, ids: List[str] = None) -> int:
         return result.modified_count
     except Exception:
         return 0
-
-
-# Para ObjectId cuando se busca por _id
-try:
-    from bson import ObjectId
-except Exception:
-    class ObjectId:
-        def __init__(self, s): self.s = s
-        def __eq__(self, o): return isinstance(o, ObjectId) and self.s == o.s
-        def __hash__(self): return hash(self.s)
 
 
 # =====================================================================
