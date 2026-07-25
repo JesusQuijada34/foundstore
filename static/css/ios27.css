@@ -137,10 +137,6 @@ code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-ele
     padding-left: var(--safe-left);
     padding-right: var(--safe-right);
 }
-@media (max-width: 900px) {
-    .app-shell { grid-template-columns: 1fr; }
-    .app-sidebar { display: none; }
-}
 
 /* === Sidebar === */
 .app-sidebar {
@@ -156,6 +152,36 @@ code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-ele
     flex-direction: column;
     gap: 8px;
     z-index: 10;
+}
+/* Nota: este media query DEBE declararse después de las reglas base de
+   .app-shell/.app-sidebar; si va antes, la cascada permite que la regla
+   base (misma especificidad, declarada después) gane siempre y la
+   sidebar nunca se oculta en móvil — este era el bug de "80% de espacio
+   vacío": la sidebar (100vh, ancho completo en 1 columna) quedaba visible
+   y empujaba el contenido real fuera de la pantalla. */
+@media (max-width: 900px) {
+    .app-shell { grid-template-columns: 1fr; }
+    .app-sidebar { display: none; }
+}
+/* Drawer: cuando el JS del botón hamburguesa abre .app-sidebar.open,
+   se muestra como overlay flotante en vez de empujar el layout. */
+@media (max-width: 900px) {
+    .app-sidebar.open {
+        display: flex;
+        position: fixed;
+        inset: 0 20% 0 0;
+        width: auto;
+        z-index: 50;
+        box-shadow: var(--shadow-lg);
+    }
+    .sidebar-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 40;
+    }
+    .sidebar-backdrop.open { display: block; }
 }
 .brand {
     display: flex; align-items: center; gap: 10px;

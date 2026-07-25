@@ -36,7 +36,8 @@
 <div class="app-shell">
 
     {# ============= SIDEBAR ============= #}
-    <aside class="app-sidebar">
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+    <aside class="app-sidebar" id="app-sidebar">
         <a href="/" class="brand" style="text-decoration:none; color:inherit;">
             <div class="brand-mark">F</div>
             <span>foundstore</span>
@@ -365,12 +366,27 @@
     // Mobile menu
     // ============================================================
     const menuBtn = document.querySelector('.topbar-menu-btn');
+    const sidebarEl = document.getElementById('app-sidebar');
+    const backdropEl = document.getElementById('sidebar-backdrop');
+    function closeSidebar() {
+        sidebarEl.classList.remove('open');
+        backdropEl.classList.remove('open');
+    }
+    function toggleSidebar() {
+        sidebarEl.classList.toggle('open');
+        backdropEl.classList.toggle('open');
+    }
     if (menuBtn) {
-        menuBtn.addEventListener('click', () => {
-            const sb = document.querySelector('.app-sidebar');
-            sb.style.display = sb.style.display === 'block' ? '' : 'block';
+        menuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleSidebar();
         });
     }
+    if (backdropEl) {
+        backdropEl.addEventListener('click', closeSidebar);
+    }
+    // Cierra el drawer al navegar a un link de la sidebar (móvil)
+    sidebarEl.querySelectorAll('a').forEach(a => a.addEventListener('click', closeSidebar));
 
     // Render inicial
     renderNotifications();
