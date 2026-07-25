@@ -20,8 +20,12 @@
     {#- Fuentes -#}
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    {#- Preload Material Icons con font-display=block para forzar swap
+        y dar fallback visible mientras la fuente llega. -#}
+    <link rel="preload" as="style"
+          href="https://fonts.googleapis.com/icon?family=Material+Icons+Round&display=block">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round&display=block" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
 
     {#- Estilos -#}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/ios27.css') }}">
