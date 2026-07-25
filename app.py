@@ -100,10 +100,14 @@ def index():
     
     # ELIMINADO: Redireccion forzosa a onboarding_step2.
     # Ahora el usuario puede entrar directamente al index.
-        
-    # El catálogo principal se lee de ismyself de JesusQuijada34
-    catalog = services.get_catalog("JesusQuijada34")
-    return render_template("index.html", packages=catalog.get("packages", []))
+
+    # "Paquetes destacados" debe usar el MISMO catálogo global que /global
+    # (services.get_global_fluthin_catalog), en vez del catalog.json legacy
+    # de ismyself/JesusQuijada34, que normalmente está vacío o desactualizado
+    # y provocaba que la Home mostrara "Aún no hay paquetes publicados"
+    # mientras "Tienda Global" sí listaba paquetes (Fuar.hub, Leviathan UI, etc.).
+    featured = services.get_global_fluthin_catalog()[:6]
+    return render_template("index.html", packages=featured)
 
 @app.route("/onboarding/step2")
 def onboarding_step2():
