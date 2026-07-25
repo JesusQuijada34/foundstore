@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}Centro de Ayuda - foundstore{% endblock %}
+
+{% block content %}
+<div class="help-container">
+    <header class="help-header">
+        <h1>Centro de Ayuda</h1>
+        <p>Aprende a personalizar tu presencia en el ecosistema iflapp.</p>
+    </header>
+
+    <div class="help-grid">
+        <aside class="help-sidebar liquid-glass">
+            <nav>
+                <ul>
+                    <li><a href="#perfil">Edición de Perfil</a></li>
+                    <li> cruel <a href="#visuales">Activos Visuales</a></li>
+                    <li><a href="#redes">Redes Sociales</a></li>
+                    <li><a href="#ondev">Cuentas OnDev</a></li>
+                    <li><a href="#ismyself">Repo ismyself</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="help-main">
+            <section id="perfil" class="help-section liquid-glass">
+                <h2><span class="material-icons">person</span> Edición de Perfil</h2>
+                <p>Personalizar tu perfil es el primer paso para destacar en foundstore. Sigue estos pasos:</p>
+                <ol>
+                    <li>Inicia sesión con tu cuenta de <strong>GitHub</strong>.</li>
+                    <li>Ve a la sección <strong>"Mi Perfil"</strong> en la barra de navegación.</li>
+                    <li>Haz clic en el botón <strong>"Editar Perfil"</strong>.</li>
+                    <li>Actualiza tu nombre público y escribe una biografía que describa tus proyectos.</li>
+                </ol>
+                <div class="tip-box">
+                    <p><strong>Tip:</strong> Una biografía clara y concisa ayuda a que otros creadores se interesen en tu trabajo.</p>
+                </div>
+            </section>
+
+            <section id="visuales" class="help-section liquid-glass">
+                <h2><span class="material-icons">image</span> Activos Visuales</h2>
+                <p>Tu avatar y banner son la cara de tu perfil. En foundstore utilizamos URLs externas para mantener la flexibilidad:</p>
+                <ul>
+                    <li><strong>Avatar (Logo):</strong> Se recomienda una imagen cuadrada (1:1) de al menos 400x400px.</li>
+                    <li><strong>Banner:</strong> Se recomienda una imagen panorámica (16:9 o similar) que represente tu marca personal.</li>
+                </ul>
+                <p>Puedes usar servicios como Imgur, PostImages o las propias imágenes de tus repositorios de GitHub.</p>
+            </section>
+
+            <section id="redes" class="help-section liquid-glass">
+                <h2><span class="material-icons">share</span> Gestión de Redes Sociales</h2>
+                <p>Conecta tus perfiles externos para que la comunidad pueda seguirte en otras plataformas:</p>
+                <ol>
+                    <li>En el editor de perfil, busca la sección <strong>"Redes Sociales"</strong>.</li>
+                    <li>Haz clic en <strong>"+ Añadir Enlace"</strong>.</li>
+                    <li>Ingresa el nombre de la red (ej. Twitter, LinkedIn) y la URL completa.</li>
+                    <li>Puedes añadir tantos enlaces como necesites.</li>
+                </ol>
+            </section>
+
+            <section id="ondev" class="help-section liquid-glass">
+                <h2><span class="material-icons">verified</span> Cuentas OnDev</h2>
+                <p>Las cuentas <strong>OnDev</strong> son perfiles profesionales verificados. Tener una cuenta OnDev te permite:</p>
+                <ul>
+                    <li>Obtener la insignia de "Creador Verificado".</li>
+                    <li>Acceder al Panel Profesional para gestionar paquetes iflapp.</li>
+                    <li>Tener mayor visibilidad en el catálogo global.</li>
+                </ul>
+            </section>
+
+            <section id="ismyself" class="help-section liquid-glass">
+                <h2><span class="material-icons">storage</span> El Repositorio ismyself</h2>
+                <p>Para que tus cambios sean permanentes y universales, foundstore lee tu repositorio llamado <code>ismyself</code> en GitHub.</p>
+                <p>Si eres un usuario avanzado, puedes editar directamente el archivo <code>profile.json</code> y <code>catalog.json</code> en ese repositorio para actualizar tu información sin entrar a foundstore.</p>
+            </section>
+        </main>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+.help-container {
+    max-width: 1100px;
+    margin: 0 auto;
+}
+
+.help-header {
+    text-align: center;
+    margin-bottom: 50px;
+}
+
+.help-header h1 {
+    font-size: 3rem;
+    margin-bottom: 10px;
+}
+
+.help-grid {
+    display: grid;
+    grid-template-columns: 250px 1fr;
+    gap: 40px;
+}
+
+.help-sidebar {
+    height: fit-content;
+    padding: 20px;
+    position: sticky;
+    top: 100px;
+}
+
+.help-sidebar ul {
+    list-style: none;
+    padding: 0;
+}
+
+.help-sidebar li {
+    margin-bottom: 15px;
+}
+
+.help-sidebar a {
+    text-decoration: none;
+    color: #555;
+    font-weight: 600;
+    transition: color 0.2s;
+    display: block;
+    padding: 8px 12px;
+    border-radius: 8px;
+}
+
+.help-sidebar a:hover {
+    color: var(--accent-color);
+    background: rgba(0,120,212,0.05);
+}
+
+.help-main {
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+}
+
+.help-section {
+    padding: 40px;
+    scroll-margin-top: 100px;
+}
+
+.help-section h2 {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    color: #1a1a1a;
+}
+
+.help-section h2 .material-icons {
+    color: var(--accent-color);
+}
+
+.help-section p, .help-section li {
+    line-height: 1.7;
+    color: #444;
+    margin-bottom: 15px;
+}
+
+.tip-box {
+    background: rgba(0,120,212,0.05);
+    border-left: 4px solid var(--accent-color);
+    padding: 15px 20px;
+    border-radius: 0 12px 12px 0;
+    margin-top: 20px;
+}
+
+.tip-box p {
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+@media (max-width: 768px) {
+    .help-grid {
+        grid-template-columns: 1fr;
+    }
+    .help-sidebar {
+        display: none;
+    }
+}
+</style>
+{% endblock %}

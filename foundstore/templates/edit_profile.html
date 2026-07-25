@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Perfil - foundstore{% endblock %}
+
+{% block content %}
+<div class="edit-profile-wrapper">
+    <div class="edit-card liquid-glass">
+        <div class="edit-header">
+            <h1>Personaliza tu Perfil</h1>
+            <p>Actualiza tu información para que otros creadores te conozcan mejor.</p>
+        </div>
+
+        <form action="{{ url_for('edit_profile') }}" method="POST" class="edit-form">
+            <div class="form-section">
+                <h3>Información Básica</h3>
+                <div class="form-group">
+                    <label for="name">Nombre Público</label>
+                    <input type="text" id="name" name="name" value="{{ profile.name or '' }}" placeholder="Tu nombre artístico o real">
+                </div>
+                <div class="form-group">
+                    <label for="description">Biografía</label>
+                    <textarea id="description" name="description" rows="4" placeholder="Cuéntanos un poco sobre ti y tus proyectos...">{{ profile.description or '' }}</textarea>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>Activos Visuales (URLs)</h3>
+                <div class="form-group">
+                    <label for="logo">URL del Avatar (Logo)</label>
+                    <input type="url" id="logo" name="logo" value="{{ profile.logo or '' }}" placeholder="https://ejemplo.com/mi-foto.png">
+                </div>
+                <div class="form-group">
+                    <label for="banner">URL del Banner</label>
+                    <input type="url" id="banner" name="banner" value="{{ profile.banner or '' }}" placeholder="https://ejemplo.com/mi-banner.png">
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>Redes Sociales</h3>
+                <div id="social-links-container">
+                    {% if profile.links %}
+                        {% for link in profile.links %}
+                        <div class="social-input-group">
+                            <input type="text" name="link_name[]" value="{{ link.name }}" placeholder="Nombre (ej. Twitter)">
+                            <input type="url" name="link_url[]" value="{{ link.url }}" placeholder="URL (https://...)">
+                            <button type="button" class="btn-remove-link" onclick="this.parentElement.remove()">×</button>
+                        </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+                <button type="button" id="add-link-btn" class="btn-secondary-small">+ Añadir Enlace</button>
+            </div>
+
+            <div class="form-actions">
+                <a href="/me" class="btn-cancel">Cancelar</a>
+                <button type="submit" class="btn-save">Guardar Cambios</button>
+            </div>
+        </form>
+        
+        <div class="edit-note">
+            <p><span class="material-icons" style="font-size: 1rem; vertical-align: middle;">info</span> 
+            Nota: Los cambios se guardarán en tu perfil local de foundstore. Para que sean permanentes en GitHub, asegúrate de actualizar tu repositorio <code>ismyself</code>.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+.edit-profile-wrapper {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.edit-card {
+    padding: 40px;
+    border-radius: 24px;
+}
+
+.edit-header {
+    margin-bottom: 40px;
+    text-align: center;
+}
+
+.edit-header h1 {
+    font-size: 2.2rem;
+    margin-bottom: 10px;
+}
+
+.form-section {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+
+.form-section h3 {
+    font-size: 1.2rem;
+    margin-bottom: 20px;
+    color: var(--accent-color);
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.form-group input, .form-group textarea {
+    width: 100%;
+    padding: 12px 16px;
+    border-radius: 10px;
+    border: 1px solid rgba(0,0,0,0.1);
+    background: rgba(255,255,255,0.5);
+    font-family: inherit;
+    font-size: 1rem;
+    transition: all 0.2s;
+}
+
+.form-group input:focus, .form-group textarea:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    background: white;
+    box-shadow: 0 0 0 4px rgba(0,120,212,0.1);
+}
+
+.social-input-group {
+    display: grid;
+    grid-template-columns: 1fr 2fr auto;
+    gap: 10px;
+    margin-bottom: 10px;
+    align-items: center;
+}
+
+.social-input-group input {
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(0,0,0,0.1);
+}
+
+.btn-remove-link {
+    background: #ff4d4d;
+    color: white;
+    border: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-secondary-small {
+    background: transparent;
+    border: 1px solid var(--accent-color);
+    color: var(--accent-color);
+    padding: 6px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.85rem;
+    margin-top: 10px;
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 15px;
+    margin-top: 40px;
+}
+
+.btn-save {
+    background: var(--accent-color);
+    color: white;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: transform 0.2s;
+}
+
+.btn-cancel {
+    background: #e1e1e1;
+    color: #333;
+    text-decoration: none;
+    padding: 12px 30px;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.btn-save:hover {
+    transform: scale(1.05);
+}
+
+.edit-note {
+    margin-top: 30px;
+    padding: 15px;
+    background: rgba(0,120,212,0.05);
+    border-radius: 12px;
+    font-size: 0.85rem;
+    color: #555;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('add-link-btn').addEventListener('click', () => {
+    const container = document.getElementById('social-links-container');
+    const div = document.createElement('div');
+    div.className = 'social-input-group';
+    div.innerHTML = `
+        <input type="text" name="link_name[]" placeholder="Nombre (ej. Twitter)">
+        <input type="url" name="link_url[]" placeholder="URL (https://...)">
+        <button type="button" class="btn-remove-link" onclick="this.parentElement.remove()">×</button>
+    `;
+    container.appendChild(div);
+});
+</script>
+{% endblock %}

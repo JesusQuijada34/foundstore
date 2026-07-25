@@ -1,0 +1,225 @@
+/* Reset y Variables Base */
+:root {
+    --bg-dark: #0b0d11;
+    --glass-surface: rgba(23, 25, 30, 0.7);
+    --accent: #4e54c8;
+    --accent-light: #8f94fb;
+    --text-primary: #ffffff;
+    --text-secondary: #94a3b8;
+    --border: 1px solid rgba(255, 255, 255, 0.08);
+
+    /* Alias usados en varias plantillas (index, package_detail, onboarding,
+       profiles, help, panels) que antes no estaban definidos y hacían que
+       fondos, textos atenuados y acentos no se aplicaran (quedaban en
+       transparent/inherit). Se mapean a las variables base de arriba para
+       no duplicar la paleta. */
+    --bg-color: var(--bg-dark);
+    --accent-color: var(--accent);
+    --accent-secondary: var(--accent-light);
+    --text-dim: var(--text-secondary);
+    --text-muted: var(--text-secondary);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background-color: var(--bg-dark);
+    color: var(--text-primary);
+    font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+}
+
+/* Fondo Líquido Robusto (Uso de degradados fijos para evitar cuadros de blobs) */
+.background-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    background: 
+        radial-gradient(circle at 10% 10%, rgba(78, 84, 200, 0.2) 0%, transparent 40%),
+        radial-gradient(circle at 90% 90%, rgba(143, 148, 251, 0.2) 0%, transparent 40%),
+        radial-gradient(circle at 50% 50%, rgba(192, 132, 252, 0.1) 0%, transparent 60%);
+    filter: blur(60px);
+}
+
+/* Navbar Limpio */
+.navbar {
+    background: rgba(11, 13, 17, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: var(--border);
+    padding: 16px 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.nav-container {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 20px;
+}
+
+.nav-logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+    color: white;
+    font-weight: 800;
+    font-size: 1.4rem;
+}
+
+.nav-logo img {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+}
+
+.nav-links {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.nav-links a {
+    text-decoration: none;
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: color 0.3s;
+}
+
+.nav-links a:hover {
+    color: var(--accent-light);
+}
+
+.btn-login-nav {
+    background: var(--accent);
+    color: white !important;
+    padding: 8px 20px;
+    border-radius: 10px;
+}
+
+/* Wrapper Principal Centrado */
+.main-wrapper {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+}
+
+/* Tarjeta Acrílica Onboarding (Estructura Fija) */
+.acrilic-card {
+    background: var(--glass-surface);
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
+    border: var(--border);
+    border-radius: 32px;
+    padding: 48px 32px;
+    width: 100%;
+    max-width: 440px;
+    text-align: center;
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5);
+    animation: slideUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.onboarding-logo {
+    width: 90px;
+    height: 90px;
+    border-radius: 24px;
+    margin-bottom: 32px;
+    box-shadow: 0 10px 30px rgba(78, 84, 200, 0.3);
+}
+
+.title-main {
+    font-size: 1.8rem;
+    font-weight: 800;
+    margin-bottom: 12px;
+    letter-spacing: -0.5px;
+}
+
+.desc-main {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    margin-bottom: 40px;
+}
+
+/* Botones Fluent */
+.btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent-light));
+    color: white;
+    text-decoration: none;
+    padding: 16px;
+    border-radius: 16px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    transition: transform 0.3s, box-shadow 0.3s;
+    width: 100%;
+    border: none;
+}
+
+.btn-primary:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 25px rgba(78, 84, 200, 0.4);
+}
+
+/* Footer */
+.footer {
+    padding: 40px 0;
+    border-top: var(--border);
+    margin-top: auto;
+}
+
+.footer-container {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 20px;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.footer-links {
+    display: flex;
+    gap: 20px;
+}
+
+.footer-links a {
+    color: var(--text-secondary);
+    text-decoration: none;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .acrilic-card {
+        padding: 40px 24px;
+    }
+    .title-main {
+        font-size: 1.5rem;
+    }
+}

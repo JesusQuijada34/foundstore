@@ -1,0 +1,619 @@
+{% extends "base.html" %}
+
+{% block title %}Identidad - foundstore{% endblock %}
+{% block breadcrumb %}Acceso Seguro{% endblock %}
+
+{% block content %}
+<div class="auth-viewport">
+    <!-- Capa de fondo con degradados dinámicos -->
+    <div class="auth-background">
+        <div class="mesh-gradient"></div>
+        <div class="floating-blobs">
+            <div class="blob blob-indigo"></div>
+            <div class="blob blob-cyan"></div>
+            <div class="blob blob-violet"></div>
+        </div>
+    </div>
+
+    <!-- Contenedor principal de la tarjeta -->
+    <div class="auth-card-wrapper">
+        <div class="auth-card" id="authCard">
+            <!-- Selector de pestañas -->
+            <div class="auth-tabs">
+                <button class="tab-trigger active" onclick="showTab('login')">
+                    <span class="material-icons-round">login</span>
+                    Entrar
+                </button>
+                <button class="tab-trigger" onclick="showTab('register')">
+                    <span class="material-icons-round">person_add</span>
+                    Registro
+                </button>
+            </div>
+
+            <!-- SECCIÓN: INICIO DE SESIÓN -->
+            <div id="tab-login" class="tab-panel active">
+                <div class="panel-header">
+                    <div class="brand-icon-wrapper">
+                        <svg class="brand-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        </svg>
+                    </div>
+                    <h2>Bienvenido de nuevo</h2>
+                    <p>Accede a tu cuenta profesional de foundstore</p>
+                </div>
+
+                <!-- Acceso con GitHub -->
+                <div class="oauth-section">
+                    <a href="{{ url_for('github.login') }}" class="btn-oauth github">
+                        <svg class="icon-svg" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.04-.02-2.05-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.3 3.5 1 .1-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.11-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.3-1.55 3.3-1.23 3.3-1.23.65 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.8 5.62-5.48 5.92.43.37.81 1.1.81 2.22 0 1.6-.01 2.89-.01 3.29 0 .32.22.69.83.58A12 12 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+                        </svg>
+                        Continuar con GitHub
+                    </a>
+                </div>
+
+                <div class="separator">
+                    <span>o usa tu ID de Telegram</span>
+                </div>
+
+                <!-- Formulario Login Telegram -->
+                <form id="loginForm" class="auth-form">
+                    <div class="input-group">
+                        <label for="loginId">Telegram ID</label>
+                        <div class="input-field">
+                            <span class="material-icons-round">fingerprint</span>
+                            <input type="text" id="loginId" placeholder="Ej: 12345678" required>
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label for="loginPass">Contraseña</label>
+                        <div class="input-field">
+                            <span class="material-icons-round">lock</span>
+                            <input type="password" id="loginPass" placeholder="••••••••" required>
+                            <button type="button" class="visibility-toggle" onclick="togglePass('loginPass')">
+                                <span class="material-icons-round">visibility</span>
+                            </button>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-submit">
+                        <span>Iniciar Sesión</span>
+                        <span class="material-icons-round">arrow_forward</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- SECCIÓN: REGISTRO -->
+            <div id="tab-register" class="tab-panel">
+                <div class="panel-header">
+                    <div class="brand-icon-wrapper reg">
+                        <svg class="brand-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="8.5" cy="7" r="4"></circle>
+                            <line x1="20" y1="8" x2="20" y2="14"></line>
+                            <line x1="23" y1="11" x2="17" y2="11"></line>
+                        </svg>
+                    </div>
+                    <h2>Crea tu cuenta</h2>
+                    <p>Únete a la comunidad de desarrolladores</p>
+                </div>
+
+                <form id="registerForm" class="auth-form">
+                    <div class="input-group">
+                        <label for="regId">ID de Telegram</label>
+                        <div class="input-field">
+                            <span class="material-icons-round">alternate_email</span>
+                            <input type="text" id="regId" placeholder="ID de Telegram" required>
+                        </div>
+                        <p class="field-hint">Obtén tu ID escribiendo /id en @userinfobot</p>
+                    </div>
+                    <div class="input-group">
+                        <label for="regPass">Contraseña</label>
+                        <div class="input-field">
+                            <span class="material-icons-round">lock_open</span>
+                            <input type="password" id="regPass" placeholder="Mínimo 8 caracteres" required>
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label for="regPassConfirm">Confirmar Contraseña</label>
+                        <div class="input-field">
+                            <span class="material-icons-round">verified_user</span>
+                            <input type="password" id="regPassConfirm" placeholder="Repite tu contraseña" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-submit">
+                        <span>Registrarme</span>
+                        <span class="material-icons-round">how_to_reg</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Footer de la tarjeta -->
+            <div class="auth-card-footer">
+                <div class="step-badge-container">
+                    <span class="badge">Paso 1 de 2</span>
+                    <p>Luego vincularemos tu bot de Telegram</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* ============================================================
+   AUTH SYSTEM - MODERN GLASSMORPHISM (CLEAN VERSION)
+   ============================================================ */
+
+:root {
+    --auth-bg: #0a0c12;
+    --auth-glass: rgba(20, 22, 28, 0.72);
+    --auth-border: rgba(255, 255, 255, 0.08);
+    --auth-accent: #6366f1;
+    --auth-accent-glow: rgba(99, 102, 241, 0.35);
+    --auth-text: #f8fafc;
+    --auth-text-dim: #94a3b8;
+}
+
+.auth-viewport {
+    position: relative;
+    min-height: 100vh;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: var(--auth-bg);
+    overflow: hidden;
+}
+
+/* Background Effects */
+.auth-background {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+}
+
+.mesh-gradient {
+    position: absolute;
+    inset: 0;
+    background: 
+        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.15) 0px, transparent 50%);
+    filter: blur(40px);
+}
+
+.blob {
+    position: absolute;
+    width: 400px;
+    height: 400px;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.4;
+    animation: blob-float 20s infinite alternate;
+}
+
+.blob-indigo { background: #6366f1; top: -100px; left: -100px; }
+.blob-cyan { background: #22d3ee; bottom: -100px; right: -100px; animation-delay: -5s; }
+.blob-violet { background: #a855f7; top: 50%; left: 50%; transform: translate(-50%, -50%); animation-delay: -10s; }
+
+@keyframes blob-float {
+    0% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(30px, -50px) scale(1.1); }
+    66% { transform: translate(-20px, 20px) scale(0.9); }
+    100% { transform: translate(0, 0) scale(1); }
+}
+
+/* Auth Card */
+.auth-card-wrapper {
+    position: relative;
+    z-index: 10;
+    width: 100%;
+    max-width: 440px;
+    perspective: 1000px;
+}
+
+.auth-card {
+    background: var(--auth-glass);
+    backdrop-filter: blur(32px) saturate(180%);
+    -webkit-backdrop-filter: blur(32px) saturate(180%);
+    border: 1px solid var(--auth-border);
+    border-radius: 32px;
+    padding: 40px;
+    box-shadow: 
+        0 25px 50px -12px rgba(0, 0, 0, 0.5),
+        inset 0 1px 1px rgba(255, 255, 255, 0.05);
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Tabs */
+.auth-tabs {
+    display: flex;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 6px;
+    border-radius: 16px;
+    margin-bottom: 32px;
+    border: 1px solid var(--auth-border);
+}
+
+.tab-trigger {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px;
+    border: none;
+    background: transparent;
+    color: var(--auth-text-dim);
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+
+.tab-trigger.active {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--auth-text);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Panel Content */
+.tab-panel {
+    display: none;
+    animation: panel-fade 0.4s ease forwards;
+}
+
+.tab-panel.active { display: block; }
+
+@keyframes panel-fade {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.panel-header {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.brand-icon-wrapper {
+    width: 64px;
+    height: 64px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 16px;
+    color: white;
+    box-shadow: 0 10px 20px var(--auth-accent-glow);
+}
+
+.brand-icon-wrapper.reg {
+    background: linear-gradient(135deg, #0ea5e9, #6366f1);
+}
+
+.brand-svg { width: 32px; height: 32px; }
+
+.panel-header h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--auth-text);
+}
+
+.panel-header p {
+    font-size: 0.9rem;
+    color: var(--auth-text-dim);
+}
+
+/* OAuth Section */
+.oauth-section { margin-bottom: 24px; }
+
+.btn-oauth {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    width: 100%;
+    padding: 12px;
+    border-radius: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+.btn-oauth.github {
+    background: #24292f;
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btn-oauth.github:hover {
+    background: #30363d;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.icon-svg { width: 20px; height: 20px; }
+
+/* Separator */
+.separator {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: 24px 0;
+    color: var(--auth-text-dim);
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.separator::before, .separator::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid var(--auth-border);
+}
+
+.separator span { padding: 0 12px; }
+
+/* Form Elements */
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.input-group label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--auth-text);
+    padding-left: 4px;
+}
+
+.input-field {
+    position: relative;
+    display: flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--auth-border);
+    border-radius: 14px;
+    padding: 0 14px;
+    transition: all 0.3s ease;
+}
+
+.input-field:focus-within {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: var(--auth-accent);
+    box-shadow: 0 0 0 4px var(--auth-accent-glow);
+}
+
+.input-field .material-icons-round {
+    font-size: 1.2rem;
+    color: var(--auth-text-dim);
+}
+
+.input-field input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    padding: 12px 10px;
+    color: var(--auth-text);
+    font-size: 0.95rem;
+    outline: none;
+}
+
+.input-field input::placeholder { color: var(--auth-text-mute); }
+
+.visibility-toggle {
+    background: transparent;
+    border: none;
+    color: var(--auth-text-dim);
+    cursor: pointer;
+    display: flex;
+    padding: 4px;
+}
+
+.field-hint {
+    font-size: 0.75rem;
+    color: var(--auth-text-dim);
+    padding-left: 4px;
+}
+
+/* Submit Button */
+.btn-submit {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, var(--auth-accent), #8b5cf6);
+    border: none;
+    border-radius: 14px;
+    color: white;
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 10px 25px -5px var(--auth-accent-glow);
+}
+
+.btn-submit:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 15px 30px -5px var(--auth-accent-glow);
+}
+
+.btn-submit.loading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+/* Footer */
+.auth-card-footer {
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid var(--auth-border);
+}
+
+.step-badge-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.badge {
+    padding: 4px 12px;
+    background: rgba(99, 102, 241, 0.15);
+    color: #818cf8;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.step-badge-container p {
+    font-size: 0.8rem;
+    color: var(--auth-text-dim);
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .auth-card { padding: 32px 24px; }
+    .panel-header h2 { font-size: 1.3rem; }
+}
+</style>
+
+<script>
+/**
+ * SISTEMA DE NAVEGACIÓN DE PESTAÑAS
+ */
+function showTab(tabId) {
+    // Ocultar todos los paneles
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-trigger').forEach(t => t.classList.remove('active'));
+    
+    // Mostrar el seleccionado
+    document.getElementById('tab-' + tabId).classList.add('active');
+    event.currentTarget.classList.add('active');
+}
+
+/**
+ * VISIBILIDAD DE CONTRASEÑA
+ */
+function togglePass(id) {
+    const input = document.getElementById(id);
+    const icon = event.currentTarget.querySelector('.material-icons-round');
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.textContent = 'visibility_off';
+    } else {
+        input.type = 'password';
+        icon.textContent = 'visibility';
+    }
+}
+
+/**
+ * EFECTO TILT 3D
+ */
+const card = document.getElementById('authCard');
+document.addEventListener('mousemove', (e) => {
+    if (window.innerWidth < 768) return;
+    
+    const rect = card.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    
+    const rotateX = (y - centerY) / 25;
+    const rotateY = (centerX - x) / 25;
+    
+    card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+});
+
+document.addEventListener('mouseleave', () => {
+    card.style.transform = 'perspective(1000px) rotateX(0) rotateY(0)';
+});
+
+/**
+ * LÓGICA DE ENVÍO DE FORMULARIOS
+ */
+
+// REGISTRO
+document.getElementById('registerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('.btn-submit');
+    const telegramId = document.getElementById('regId').value.trim();
+    const password = document.getElementById('regPass').value;
+    const confirm = document.getElementById('regPassConfirm').value;
+
+    if (password !== confirm) {
+        window.fs.toast({ type: 'warning', title: 'Error de validación', desc: 'Las contraseñas no coinciden.' });
+        return;
+    }
+
+    if (password.length < 8) {
+        window.fs.toast({ type: 'warning', title: 'Contraseña débil', desc: 'Debe tener al menos 8 caracteres.' });
+        return;
+    }
+
+    btn.classList.add('loading');
+    try {
+        const res = await fetch('/api/auth/register_telegram', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ telegram_id: telegramId, password })
+        });
+        const data = await res.json();
+        
+        if (res.ok) {
+            window.fs.toast({ type: 'success', title: '¡Cuenta creada!', desc: 'Redirigiendo...' });
+            setTimeout(() => window.location.href = '/', 1500);
+        } else {
+            window.fs.toast({ type: 'danger', title: 'Registro fallido', desc: data.message || data.error });
+        }
+    } catch (err) {
+        window.fs.toast({ type: 'danger', title: 'Error de red', desc: 'No se pudo conectar con el servidor.' });
+    } finally {
+        btn.classList.remove('loading');
+    }
+});
+
+// LOGIN
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('.btn-submit');
+    const telegramId = document.getElementById('loginId').value.trim();
+    const password = document.getElementById('loginPass').value;
+
+    btn.classList.add('loading');
+    try {
+        const res = await fetch('/api/auth/login_telegram', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ telegram_id: telegramId, password })
+        });
+        const data = await res.json();
+        
+        if (res.ok) {
+            window.fs.toast({ type: 'success', title: 'Bienvenido', desc: 'Iniciando sesión...' });
+            setTimeout(() => window.location.href = '/', 1000);
+        } else {
+            window.fs.toast({ type: 'danger', title: 'Acceso denegado', desc: data.message || data.error });
+        }
+    } catch (err) {
+        window.fs.toast({ type: 'danger', title: 'Error de red', desc: 'No se pudo conectar con el servidor.' });
+    } finally {
+        btn.classList.remove('loading');
+    }
+});
+</script>
+{% endblock %}

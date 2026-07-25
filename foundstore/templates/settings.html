@@ -1,0 +1,360 @@
+{% extends "base.html" %}
+
+{% block title %}Configuración - foundstore{% endblock %}
+{% block breadcrumb %}Configuración{% endblock %}
+
+{% block content %}
+<div class="fade-in settings-viewport">
+
+    <header class="settings-header">
+        <h1>Configuración</h1>
+        <p>Gestiona tu cuenta, vincula Telegram y revisa el estado de tus sesiones.</p>
+    </header>
+
+    {#- Tarjeta de cuenta de GitHub -#}
+    <section class="glass settings-section">
+        <h2><span class="material-icons">person</span> Cuenta de GitHub</h2>
+        <div class="account-row">
+            <img class="account-avatar"
+                 src="https://github.com/{{ username }}.png?size=96"
+                 alt="{{ username }}"
+                 onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 96 96%22><circle cx=%2248%22 cy=%2248%22 r=%2248%22 fill=%22%236366f1%22/><text x=%2248%22 y=%2262%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2240%22 font-family=%22sans-serif%22>{{ username[0] | upper }}</text></svg>'">
+            <div class="account-info">
+                <div class="account-name">{{ username }}</div>
+                <div class="account-meta">Sesión activa via GitHub OAuth</div>
+            </div>
+            <a href="/logout" class="btn-ghost">
+                <span class="material-icons">logout</span> Cerrar sesión
+            </a>
+        </div>
+    </section>
+
+    {#- Tarjeta de vinculacion con Telegram -#}
+    <section class="glass settings-section">
+        <h2><span class="material-icons">send</span> Vinculación con Telegram</h2>
+
+        <div id="telegram-state">
+            <div class="telegram-status" id="telegram-status">
+                <span class="material-icons spinner-icon">hourglass_empty</span>
+                <span>Cargando estado...</span>
+            </div>
+        </div>
+
+        {#- Acciones: Vincular / Desvincular -#}
+        <div class="telegram-actions" id="telegram-actions" style="display:none;">
+            <button class="btn-primary" id="btn-generate-code">
+                <span class="material-icons">vpn_key</span> Generar código de vinculación
+            </button>
+            <button class="btn-danger" id="btn-unlink" style="display:none;">
+                <span class="material-icons">link_off</span> Desvincular Telegram
+            </button>
+        </div>
+
+        {#- Panel de codigo generado -#}
+        <div class="otp-panel" id="otp-panel" style="display:none;">
+            <div class="otp-header">
+                <span class="material-icons" style="color: var(--accent-3);">send</span>
+                <h3>Ve a Telegram y envía este código</h3>
+            </div>
+            <div class="otp-code" id="otp-code">------</div>
+            <div class="otp-instructions">
+                <ol>
+                    <li>Abre Telegram y busca <strong>@{{ telegram_bot_username if telegram_bot_username else 'el bot' }}</strong></li>
+                    <li>Inicia el chat con <code>/start</code> si es la primera vez</li>
+                    <li>Envía el código de arriba</li>
+                    <li>La web se actualizará automáticamente al completarse</li>
+                </ol>
+            </div>
+            <div class="otp-timer">
+                Expira en <strong id="otp-countdown">--:--</strong>
+            </div>
+            <div class="otp-status" id="otp-status"></div>
+        </div>
+    </section>
+
+    {#- Tarjeta de sesiones / auditoria -#}
+    <section class="glass settings-section" id="sessions-section" style="display:none;">
+        <h2><span class="material-icons">history</span> Historial de vinculaciones</h2>
+        <div class="table-wrap">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Acción</th>
+                        <th>Fecha</th>
+                        <th>Telegram</th>
+                    </tr>
+                </thead>
+                <tbody id="sessions-tbody">
+                    <tr><td colspan="3" class="empty-row">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    {#- Info de storage -#}
+    <section class="glass settings-section">
+        <h2><span class="material-icons">storage</span> Estado del sistema</h2>
+        <div class="system-grid">
+            <div class="system-cell">
+                <div class="system-label">MongoDB</div>
+                <div class="system-value" id="mongo-status">Comprobando...</div>
+            </div>
+            <div class="system-cell">
+                <div class="system-label">Cache L1</div>
+                <div class="system-value">Activo (in-process)</div>
+            </div>
+            <div class="system-cell">
+                <div class="system-label">Sesión Telegram</div>
+                <div class="system-value" id="session-tg">--</div>
+            </div>
+        </div>
+        <p class="system-note">
+            <a href="/health">Ver health check completo</a> ·
+            <a href="/health/mongo">Estado de MongoDB</a>
+        </p>
+    </section>
+</div>
+
+<style>
+.settings-viewport { max-width: 880px; margin: 0 auto; padding-bottom: 60px; }
+.settings-header { padding: 30px 0 20px 0; }
+.settings-header h1 { font-size: 2rem; margin: 0 0 8px 0; }
+.settings-header p { color: var(--text-dim); margin: 0; }
+.settings-section { padding: 24px 26px; margin-bottom: 18px; }
+.settings-section h2 { display: flex; align-items: center; gap: 10px; font-size: 1.15rem; margin: 0 0 18px 0; }
+.settings-section h2 .material-icons { color: var(--accent-3); font-size: 1.3rem; }
+
+.account-row { display: flex; align-items: center; gap: 16px; }
+.account-avatar { width: 64px; height: 64px; border-radius: 50%; border: 3px solid var(--border-default); object-fit: cover; }
+.account-info { flex: 1; }
+.account-name { font-size: 1.1rem; font-weight: 700; }
+.account-meta { font-size: 0.82rem; color: var(--text-dim); margin-top: 2px; }
+
+.telegram-status { display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: var(--bg-elev-2); border: 1px solid var(--border-subtle); border-radius: var(--r-md); font-size: 0.95rem; }
+.telegram-status.linked { border-color: rgba(34,197,94,0.35); background: rgba(34,197,94,0.08); }
+.telegram-status.linked .status-icon { color: var(--success); }
+.telegram-status.unlinked { border-color: rgba(245,158,11,0.3); background: rgba(245,158,11,0.05); }
+.telegram-status .status-icon { font-size: 1.4rem; }
+.status-text { flex: 1; }
+.status-text strong { display: block; }
+.status-text small { color: var(--text-dim); font-size: 0.78rem; }
+
+.spinner-icon { animation: spin 1.2s linear infinite; color: var(--text-dim); }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.telegram-actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+
+.otp-panel { margin-top: 18px; background: var(--bg-elev-2); border: 1px solid var(--accent); border-radius: var(--r-md); padding: 24px; animation: otp-in 0.25s ease-out; }
+@keyframes otp-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+.otp-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.otp-header h3 { margin: 0; font-size: 1.05rem; }
+.otp-code { font-family: var(--font-mono); font-size: 2.4rem; font-weight: 800; letter-spacing: 0.4em; text-align: center; padding: 18px; background: var(--bg-elev-1); border: 1px dashed var(--accent); border-radius: var(--r-md); color: var(--accent-3); user-select: all; }
+.otp-instructions { margin-top: 16px; }
+.otp-instructions ol { padding-left: 20px; color: var(--text-secondary); line-height: 1.7; font-size: 0.9rem; margin: 0; }
+.otp-instructions code { background: var(--bg-elev-1); padding: 1px 8px; border-radius: 6px; font-size: 0.95em; }
+.otp-timer { margin-top: 14px; text-align: center; color: var(--text-dim); font-size: 0.88rem; }
+.otp-timer strong { color: var(--accent-3); font-family: var(--font-mono); }
+.otp-status { margin-top: 12px; text-align: center; min-height: 22px; font-size: 0.9rem; }
+.otp-status.success { color: var(--success); }
+.otp-status.error { color: var(--danger); }
+.otp-status.checking { color: var(--text-dim); }
+
+.system-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.system-cell { background: var(--bg-elev-2); border: 1px solid var(--border-subtle); border-radius: var(--r-sm); padding: 14px 16px; }
+.system-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); font-weight: 700; }
+.system-value { margin-top: 4px; font-weight: 600; }
+.system-value.ok { color: var(--success); }
+.system-value.warn { color: var(--warning); }
+.system-value.err { color: var(--danger); }
+.system-note { margin: 16px 0 0 0; font-size: 0.82rem; color: var(--text-dim); }
+.system-note a { color: var(--accent-3); }
+
+.table-wrap { overflow-x: auto; }
+.table { width: 100%; }
+.empty-row { text-align: center; color: var(--text-dim); padding: 30px !important; }
+
+@media (max-width: 600px) {
+    .account-row { flex-wrap: wrap; }
+    .otp-code { font-size: 1.8rem; letter-spacing: 0.3em; }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const $ = (id) => document.getElementById(id);
+
+    async function fetchStatus() {
+        const r = await fetch('/api/auth/link_status');
+        if (!r.ok) return null;
+        return await r.json();
+    }
+
+    async function fetchMongoHealth() {
+        const r = await fetch('/health/mongo');
+        return await r.json();
+    }
+
+    function fmtTime(ts) {
+        if (!ts) return '—';
+        const d = new Date(ts * 1000);
+        return d.toLocaleString();
+    }
+
+    function renderTelegramState(status) {
+        const state = $('telegram-state');
+        const actions = $('telegram-actions');
+        const btnUnlink = $('btn-unlink');
+        const sections = $('sessions-section');
+
+        if (status.linked) {
+            state.innerHTML = `
+                <div class="telegram-status linked">
+                    <span class="material-icons status-icon">verified</span>
+                    <div class="status-text">
+                        <strong>Telegram vinculado: @${status.telegram_username || status.telegram_id}</strong>
+                        <small>${status.telegram_name || ''} · desde ${fmtTime(status.linked_at)}</small>
+                    </div>
+                </div>
+            `;
+            actions.style.display = 'flex';
+            btnUnlink.style.display = '';
+            sections.style.display = '';
+            $('session-tg').textContent = '@' + (status.telegram_username || status.telegram_id);
+            renderSessions(status.sessions || []);
+        } else {
+            state.innerHTML = `
+                <div class="telegram-status unlinked">
+                    <span class="material-icons status-icon">link_off</span>
+                    <div class="status-text">
+                        <strong>Telegram no vinculado</strong>
+                        <small>Vincula tu cuenta para habilitar descargas y alertas en tiempo real.</small>
+                    </div>
+                </div>
+            `;
+            actions.style.display = 'flex';
+            btnUnlink.style.display = 'none';
+            sections.style.display = 'none';
+            $('session-tg').textContent = 'No vinculado';
+        }
+    }
+
+    function renderSessions(sessions) {
+        const tbody = $('sessions-tbody');
+        if (!sessions.length) {
+            tbody.innerHTML = '<tr><td colspan="3" class="empty-row">Sin historial.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = sessions.map(s => `
+            <tr>
+                <td><span class="badge ${s.action === 'linked' ? 'badge-success' : 'badge-warning'}">${s.action}</span></td>
+                <td>${fmtTime(s.created_at)}</td>
+                <td>${s.telegram_username ? '@' + s.telegram_username : '#' + s.telegram_id}</td>
+            </tr>
+        `).join('');
+    }
+
+    let otpCountdown = null;
+    function startCountdown(expiresAt) {
+        if (otpCountdown) clearInterval(otpCountdown);
+        const update = () => {
+            const left = expiresAt - Math.floor(Date.now() / 1000);
+            if (left <= 0) {
+                $('otp-countdown').textContent = 'expirado';
+                $('otp-status').className = 'otp-status error';
+                $('otp-status').textContent = 'El código expiró. Genera uno nuevo.';
+                clearInterval(otpCountdown);
+                return;
+            }
+            const m = Math.floor(left / 60);
+            const s = left % 60;
+            $('otp-countdown').textContent = `${m}:${String(s).padStart(2, '0')}`;
+        };
+        update();
+        otpCountdown = setInterval(update, 1000);
+    }
+
+    $('btn-generate-code').addEventListener('click', async () => {
+        const btn = $('btn-generate-code');
+        btn.disabled = true;
+        $('otp-status').className = 'otp-status checking';
+        $('otp-status').textContent = 'Generando código...';
+        try {
+            const r = await fetch('/api/auth/request_code', { method: 'POST' });
+            const d = await r.json();
+            if (r.status === 503) {
+                $('otp-status').className = 'otp-status error';
+                $('otp-status').textContent = d.message || 'MongoDB no disponible. Revisa /health/mongo.';
+                return;
+            }
+            if (d.already_linked) {
+                window.fs.toast({ type: 'info', title: 'Ya tienes Telegram vinculado' });
+                await refresh();
+                return;
+            }
+            if (d.ok) {
+                $('otp-panel').style.display = 'block';
+                $('otp-code').textContent = d.code;
+                startCountdown(d.expires_at);
+                $('otp-status').className = 'otp-status success';
+                $('otp-status').textContent = '✓ Código generado. Esperando que lo escribas en el bot...';
+                // Polling cada 3s para detectar vinculacion
+                if (window._otpPoll) clearInterval(window._otpPoll);
+                window._otpPoll = setInterval(async () => {
+                    const s = await fetchStatus();
+                    if (s && s.linked) {
+                        clearInterval(window._otpPoll);
+                        window._otpPoll = null;
+                        window.fs.toast({ type: 'success', title: '¡Telegram vinculado!', desc: 'Ya puedes recibir alertas y descargar paquetes.' });
+                        await refresh();
+                    }
+                }, 3000);
+            } else {
+                $('otp-status').className = 'otp-status error';
+                $('otp-status').textContent = d.error || 'Error generando código.';
+            }
+        } catch (_) {
+            $('otp-status').className = 'otp-status error';
+            $('otp-status').textContent = 'Error de red.';
+        } finally {
+            btn.disabled = false;
+        }
+    });
+
+    $('btn-unlink').addEventListener('click', async () => {
+        if (!confirm('¿Desvincular tu cuenta de Telegram? Tendrás que volver a vincularla para usar el bot.')) return;
+        try {
+            const r = await fetch('/api/auth/unlink', { method: 'POST' });
+            const d = await r.json();
+            if (d.ok) {
+                window.fs.toast({ type: 'info', title: 'Telegram desvinculado' });
+                await refresh();
+            } else {
+                window.fs.toast({ type: 'danger', title: 'Error al desvincular', desc: d.error });
+            }
+        } catch (_) {
+            window.fs.toast({ type: 'danger', title: 'Error de red' });
+        }
+    });
+
+    async function refresh() {
+        const status = await fetchStatus();
+        if (status) renderTelegramState(status);
+        const health = await fetchMongoHealth();
+        const m = $('mongo-status');
+        if (health.ok) {
+            m.textContent = 'Conectado ✓';
+            m.className = 'system-value ok';
+        } else if (health.enabled === false) {
+            m.textContent = 'No configurado (fallback JSONL)';
+            m.className = 'system-value warn';
+        } else {
+            m.textContent = 'Sin conexión: ' + (health.error || 'desconocido').slice(0, 50);
+            m.className = 'system-value err';
+        }
+    }
+
+    refresh();
+    setInterval(refresh, 10000);  // refresca el estado cada 10s
+});
+</script>
+{% endblock %}
