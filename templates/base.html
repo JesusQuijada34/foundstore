@@ -34,6 +34,7 @@
 
 {#- Layout: sidebar + main con topbar sticky -#}
 <div class="app-shell">
+    <div class="sidebar-backdrop"></div>
 
     {# ============= SIDEBAR ============= #}
     <aside class="app-sidebar">
@@ -362,13 +363,27 @@
     }
 
     // ============================================================
-    // Mobile menu
+    // Mobile menu & Sidebar Backdrop
     // ============================================================
     const menuBtn = document.querySelector('.topbar-menu-btn');
-    if (menuBtn) {
-        menuBtn.addEventListener('click', () => {
-            const sb = document.querySelector('.app-sidebar');
-            sb.style.display = sb.style.display === 'block' ? '' : 'block';
+    const sidebar = document.querySelector('.app-sidebar');
+    const backdrop = document.querySelector('.sidebar-backdrop');
+
+    if (menuBtn && sidebar && backdrop) {
+        const toggleMenu = () => {
+            sidebar.classList.toggle('mobile-open');
+            backdrop.classList.toggle('active');
+            document.body.style.overflow = sidebar.classList.contains('mobile-open') ? 'hidden' : '';
+        };
+
+        menuBtn.addEventListener('click', toggleMenu);
+        backdrop.addEventListener('click', toggleMenu);
+
+        // Cerrar al navegar en móvil
+        sidebar.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', () => {
+                if (window.innerWidth <= 900) toggleMenu();
+            });
         });
     }
 

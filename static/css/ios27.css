@@ -139,8 +139,41 @@ code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-ele
     padding-right: var(--safe-right);
 }
 @media (max-width: 900px) {
-    .app-shell { grid-template-columns: 1fr; }
-    .app-sidebar { display: none; }
+    .app-shell { grid-template-columns: 1fr; overflow-x: hidden; }
+    .app-sidebar {
+        position: fixed;
+        left: -100%;
+        top: 0;
+        bottom: 0;
+        width: 280px;
+        z-index: 1000;
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        display: flex;
+        background: var(--bg-elev-1);
+        backdrop-filter: blur(32px) saturate(180%);
+        -webkit-backdrop-filter: blur(32px) saturate(180%);
+        border-right: 1px solid var(--border-default);
+    }
+    .app-sidebar.mobile-open {
+        left: 0;
+        transform: translateX(0);
+        display: flex;
+    }
+    /* Backdrop overlay */
+    .sidebar-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(4px);
+        z-index: 999;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.3s;
+    }
+    .sidebar-backdrop.active {
+        opacity: 1;
+        visibility: visible;
+    }
 }
 
 /* === Sidebar === */
@@ -233,7 +266,7 @@ code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-ele
 .app-topbar {
     position: sticky; top: 0; z-index: 9;
     height: calc(var(--topbar-h) + var(--safe-top));
-    padding: var(--safe-top) 28px 0 28px;
+    padding: var(--safe-top) 16px 0 16px;
     background: var(--bg-glass);
     backdrop-filter: blur(20px) saturate(160%);
     -webkit-backdrop-filter: blur(20px) saturate(160%);
@@ -258,6 +291,25 @@ code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-ele
     display: flex; align-items: center; gap: 8px;
     background: var(--bg-elev-2);
     border: 1px solid var(--border-default);
+    max-width: 400px;
+    width: 100%;
+}
+@media (max-width: 600px) {
+    .topbar-search {
+        display: none;
+    }
+    .topbar-search.mobile-search-active {
+        display: flex;
+        position: absolute;
+        left: 10px;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 10;
+        max-width: none;
+    }
+}
+.topbar-search {
     border-radius: var(--r-md);
     padding: 8px 14px;
     min-width: 280px;
