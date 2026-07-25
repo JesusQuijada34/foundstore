@@ -3,361 +3,781 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Acceso - foundstore</title>
+    <title>Acceso — foundstore</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
     <style>
-        :root {
-            --auth-bg: #0a0c12;
-            --auth-glass: rgba(20, 22, 28, 0.75);
-            --auth-border: rgba(255, 255, 255, 0.1);
-            --auth-accent: #6366f1;
-            --auth-accent-glow: rgba(99, 102, 241, 0.4);
-            --auth-text: #f8fafc;
-            --auth-text-dim: #94a3b8;
-            --font-sans: 'Inter', -apple-system, system-ui, sans-serif;
-        }
+    /* ============================================================
+       VARIABLES
+    ============================================================ */
+    :root {
+        --accent:       #b9a7ff;
+        --accent-btn:   #7c3aed;
+        --accent-btn2:  #9f5cff;
+        --glass:        rgba(18, 22, 28, 0.62);
+        --glass-border: rgba(255,255,255,.18);
+        --field-bg:     rgba(255,255,255,.08);
+        --field-border: rgba(255,255,255,.2);
+        --text:         #ffffff;
+        --text-dim:     rgba(255,255,255,.55);
+        --font:         'Inter', -apple-system, system-ui, sans-serif;
+        /* background filter — same hint as shown in image */
+        --grades:       hue-rotate(104deg) saturate(.95) brightness(.9);
+    }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-        body {
-            font-family: var(--font-sans);
-            background: var(--auth-bg);
-            color: var(--auth-text);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-        }
+    body {
+        font-family: var(--font);
+        min-height: 100vh;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #0b2e0e;
+        color: var(--text);
+    }
 
-        /* FONDO ILUSTRADO DINÁMICO */
-        .viewport {
-            position: fixed;
-            inset: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            z-index: 1;
-        }
+    /* ============================================================
+       FOREST BACKGROUND
+    ============================================================ */
+    .scene {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        overflow: hidden;
+        filter: var(--grades);
+    }
 
-        .bg-canvas {
-            position: absolute;
-            inset: 0;
-            z-index: -1;
-            background: radial-gradient(circle at 50% 50%, #11141d 0%, #0a0c12 100%);
-        }
+    .scene-sky {
+        position: absolute;
+        inset: 0;
+        background:
+            radial-gradient(ellipse 90% 70% at 65% 35%, #4dc65a 0%, transparent 55%),
+            radial-gradient(ellipse 60% 50% at 20% 50%, #1d6b24 0%, transparent 60%),
+            radial-gradient(ellipse 80% 60% at 80% 80%, #124a17 0%, transparent 55%),
+            linear-gradient(175deg, #2a8f35 0%, #1a6622 30%, #0f4015 60%, #07200a 100%);
+    }
 
-        .blob {
-            position: absolute;
-            border-radius: 50%;
-            filter: blur(80px);
-            opacity: 0.5;
-            animation: float 20s infinite alternate cubic-bezier(0.45, 0, 0.55, 1);
-        }
+    /* Central glow (light source) */
+    .scene-glow {
+        position: absolute;
+        width: 420px;
+        height: 420px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(160,230,100,.45) 0%, transparent 70%);
+        top: 25%; left: 55%;
+        transform: translate(-50%,-50%);
+        filter: blur(50px);
+    }
 
-        .blob-1 { width: 500px; height: 500px; background: #6366f1; top: -10%; left: -10%; }
-        .blob-2 { width: 400px; height: 400px; background: #22d3ee; bottom: -5%; right: -5%; animation-delay: -5s; }
-        .blob-3 { width: 350px; height: 350px; background: #a855f7; top: 40%; left: 30%; animation-delay: -10s; }
+    /* SVG trees / foliage */
+    .scene-svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+    }
 
-        @keyframes float {
-            0% { transform: translate(0, 0) scale(1); }
-            100% { transform: translate(50px, 50px) scale(1.1); }
-        }
+    /* Floating leaves (JS-spawned) */
+    .leaf {
+        position: absolute;
+        top: -40px;
+        border-radius: 50% 5% 50% 5%;
+        animation: leaf-fall linear forwards;
+        pointer-events: none;
+    }
 
-        /* TARJETA DE LOGIN (STANDALONE) */
-        .auth-card {
-            width: 100%;
-            max-width: 420px;
-            background: var(--auth-glass);
-            backdrop-filter: blur(40px) saturate(180%);
-            -webkit-backdrop-filter: blur(40px) saturate(180%);
-            border: 1px solid var(--auth-border);
-            border-radius: 32px;
-            padding: 40px;
-            box-shadow: 0 30px 60px rgba(0,0,0,0.5);
-            position: relative;
-            z-index: 10;
-            animation: card-in 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-        }
+    @keyframes leaf-fall {
+        0%   { transform: translateY(0)      rotate(0deg)   translateX(0);    opacity: 0; }
+        5%   { opacity: .85; }
+        50%  { transform: translateY(45vh)   rotate(200deg) translateX(30px); }
+        95%  { opacity: .6; }
+        100% { transform: translateY(105vh)  rotate(420deg) translateX(-20px); opacity: 0; }
+    }
 
-        @keyframes card-in {
-            from { opacity: 0; transform: translateY(30px) scale(0.95); }
-            to { opacity: 1; transform: translateY(0) scale(1); }
-        }
+    /* ============================================================
+       CARD WRAPPER
+    ============================================================ */
+    .viewport {
+        position: relative;
+        z-index: 10;
+        width: 100%;
+        max-width: 420px;
+        padding: 20px;
+    }
 
-        .header { text-align: center; margin-bottom: 32px; }
-        
-        .logo-box {
-            width: 60px; height: 60px;
-            background: linear-gradient(135deg, #6366f1, #8b5cf6);
-            border-radius: 16px;
-            display: flex; align-items: center; justify-content: center;
-            margin: 0 auto 16px;
-            color: white;
-            box-shadow: 0 10px 20px var(--auth-accent-glow);
-        }
+    .card {
+        background: var(--glass);
+        backdrop-filter: blur(24px) saturate(1.35);
+        -webkit-backdrop-filter: blur(24px) saturate(1.35);
+        border: 1px solid var(--glass-border);
+        border-radius: 26px;
+        padding: 40px 34px 34px;
+        box-shadow:
+            0 32px 80px rgba(0,0,0,.55),
+            inset 0 1px 0 rgba(255,255,255,.1);
+        animation: card-in .7s cubic-bezier(.16,1,.3,1) both;
+        will-change: transform;
+    }
 
-        h1 { font-size: 1.6rem; font-weight: 800; margin-bottom: 8px; letter-spacing: -0.02em; }
-        p.subtitle { color: var(--auth-text-dim); font-size: 0.9rem; }
+    @keyframes card-in {
+        from { opacity: 0; transform: translateY(28px) scale(.96); }
+        to   { opacity: 1; transform: translateY(0)    scale(1);   }
+    }
 
-        /* TABS */
-        .tabs {
-            display: flex;
-            background: rgba(0,0,0,0.3);
-            padding: 5px;
-            border-radius: 14px;
-            margin-bottom: 28px;
-            border: 1px solid var(--auth-border);
-        }
+    /* ============================================================
+       HEADER
+    ============================================================ */
+    .header {
+        margin-bottom: 30px;
+    }
 
-        .tab-btn {
-            flex: 1; border: none; background: transparent;
-            padding: 10px; color: var(--auth-text-dim);
-            font-weight: 600; font-size: 0.85rem;
-            cursor: pointer; border-radius: 10px;
-            transition: 0.3s;
-            display: flex; align-items: center; justify-content: center; gap: 8px;
-        }
+    .header h1 {
+        font-size: 2.1rem;
+        font-weight: 800;
+        letter-spacing: -.035em;
+        line-height: 1.1;
+        margin-bottom: 7px;
+    }
 
-        .tab-btn.active { background: rgba(255,255,255,0.1); color: white; }
+    .header p {
+        font-size: .875rem;
+        color: var(--text-dim);
+        font-weight: 400;
+    }
 
-        /* FORMS */
-        .panel { display: none; animation: fade 0.4s ease; }
-        .panel.active { display: block; }
-        @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+    /* ============================================================
+       PANELS (login / register)
+    ============================================================ */
+    .panel { display: none; }
+    .panel.active {
+        display: block;
+        animation: fade-up .32s cubic-bezier(.2,0,0,1) both;
+    }
 
-        .btn-github {
-            display: flex; align-items: center; justify-content: center; gap: 12px;
-            width: 100%; padding: 14px;
-            background: #24292f; color: white;
-            border-radius: 14px; text-decoration: none;
-            font-weight: 700; font-size: 0.95rem;
-            border: 1px solid rgba(255,255,255,0.1);
-            transition: 0.3s;
-            margin-bottom: 24px;
-        }
+    @keyframes fade-up {
+        from { opacity: 0; transform: translateY(9px); }
+        to   { opacity: 1; transform: translateY(0);   }
+    }
 
-        .btn-github:hover { background: #333; transform: translateY(-2px); }
+    /* ============================================================
+       FLOATING-LABEL FIELDS
+    ============================================================ */
+    .field {
+        position: relative;
+        margin-bottom: 14px;
+    }
 
-        .divider {
-            display: flex; align-items: center; gap: 10px;
-            color: var(--auth-text-dim); font-size: 0.75rem;
-            margin-bottom: 24px;
-        }
-        .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--auth-border); }
+    .field label {
+        position: absolute;
+        top: 9px;
+        left: 16px;
+        font-size: .7rem;
+        font-weight: 700;
+        color: var(--accent);
+        letter-spacing: .04em;
+        pointer-events: none;
+        user-select: none;
+        text-transform: capitalize;
+    }
 
-        .form-group { margin-bottom: 20px; }
-        .form-group label { display: block; font-size: 0.8rem; font-weight: 700; margin-bottom: 8px; color: var(--auth-text); }
-        
-        .input-box {
-            display: flex; align-items: center; gap: 10px;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid var(--auth-border);
-            border-radius: 12px; padding: 0 14px;
-            transition: 0.3s;
-        }
-        .input-box:focus-within { border-color: var(--auth-accent); box-shadow: 0 0 0 4px var(--auth-accent-glow); }
-        .input-box input {
-            flex: 1; background: transparent; border: none; outline: none;
-            padding: 12px 0; color: white; font-size: 0.95rem;
-        }
-        .input-box .material-icons-round { font-size: 1.2rem; color: var(--auth-text-dim); }
+    .field input {
+        width: 100%;
+        background: var(--field-bg);
+        border: 1px solid var(--field-border);
+        border-radius: 14px;
+        padding: 26px 44px 10px 16px;
+        color: var(--text);
+        font-size: 1rem;
+        font-family: var(--font);
+        outline: none;
+        transition: border-color .22s, box-shadow .22s;
+        appearance: none;
+        -webkit-appearance: none;
+    }
 
-        .btn-submit {
-            width: 100%; padding: 14px;
-            background: linear-gradient(135deg, var(--auth-accent), #8b5cf6);
-            border: none; border-radius: 14px;
-            color: white; font-weight: 800; font-size: 1rem;
-            cursor: pointer; transition: 0.3s;
-            box-shadow: 0 10px 20px var(--auth-accent-glow);
-            display: flex; align-items: center; justify-content: center; gap: 10px;
-        }
-        .btn-submit:hover { transform: translateY(-2px); box-shadow: 0 15px 30px var(--auth-accent-glow); }
-        
-        .footer-note {
-            text-align: center; margin-top: 24px;
-            font-size: 0.85rem; color: var(--auth-text-dim);
-        }
-        .footer-note a { color: var(--auth-accent); font-weight: 700; text-decoration: none; }
+    .field input::placeholder { color: transparent; }
 
-        /* TOAST SYSTEM (MINIMAL) */
-        #toast {
-            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
-            padding: 12px 24px; border-radius: 12px;
-            background: #1e293b; color: white;
-            font-weight: 600; font-size: 0.9rem;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-            z-index: 1000; display: none;
-            animation: toast-in 0.3s ease;
-        }
-        @keyframes toast-in { from { transform: translate(-50%, 20px); opacity: 0; } }
+    .field input:focus {
+        border-color: rgba(185,167,255,.6);
+        box-shadow: 0 0 0 3px rgba(185,167,255,.18);
+    }
+
+    /* Eye button */
+    .eye-btn {
+        position: absolute;
+        right: 13px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--text-dim);
+        display: flex;
+        align-items: center;
+        padding: 4px;
+        transition: color .2s;
+        line-height: 0;
+    }
+    .eye-btn:hover { color: var(--text); }
+    .eye-btn svg { display: block; }
+
+    /* ============================================================
+       REMEMBER ROW
+    ============================================================ */
+    .remember-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin: 18px 0 22px;
+    }
+
+    .remember-row .check-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: .875rem;
+        color: var(--text-dim);
+        cursor: pointer;
+    }
+
+    .remember-row input[type=checkbox] {
+        width: 16px;
+        height: 16px;
+        border-radius: 5px;
+        accent-color: var(--accent-btn);
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+
+    .forgot-link {
+        font-size: .875rem;
+        color: var(--text-dim);
+        text-decoration: none;
+        transition: color .2s;
+    }
+    .forgot-link:hover { color: var(--text); }
+
+    /* ============================================================
+       PRIMARY BUTTON
+    ============================================================ */
+    .btn-main {
+        width: 100%;
+        padding: 15px;
+        border: none;
+        border-radius: 14px;
+        background: linear-gradient(110deg, var(--accent-btn) 0%, var(--accent-btn2) 55%, #c084fc 100%);
+        color: #fff;
+        font-size: 1rem;
+        font-weight: 700;
+        font-family: var(--font);
+        cursor: pointer;
+        box-shadow: 0 8px 28px rgba(124,58,237,.5);
+        transition: opacity .2s, transform .18s, box-shadow .2s;
+        letter-spacing: .01em;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .btn-main::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(rgba(255,255,255,.12), transparent);
+        border-radius: inherit;
+        pointer-events: none;
+    }
+
+    .btn-main:hover  { opacity: .93; transform: translateY(-1px); box-shadow: 0 12px 36px rgba(124,58,237,.6); }
+    .btn-main:active { transform: translateY(0); }
+    .btn-main.is-loading { opacity: .55; pointer-events: none; }
+
+    /* ============================================================
+       DIVIDER
+    ============================================================ */
+    .divider {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 22px 0;
+        color: var(--text-dim);
+        font-size: .78rem;
+        white-space: nowrap;
+    }
+    .divider::before,
+    .divider::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: rgba(255,255,255,.12);
+    }
+
+    /* ============================================================
+       SOCIAL / OAUTH BUTTONS
+    ============================================================ */
+    .social-row {
+        display: flex;
+        gap: 10px;
+    }
+
+    .btn-social {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 12px;
+        background: rgba(255,255,255,.07);
+        border: 1px solid rgba(255,255,255,.15);
+        border-radius: 14px;
+        color: var(--text);
+        font-size: .9rem;
+        font-weight: 600;
+        font-family: var(--font);
+        text-decoration: none;
+        cursor: pointer;
+        transition: background .2s, transform .18s;
+        line-height: 1;
+    }
+    .btn-social:hover { background: rgba(255,255,255,.12); transform: translateY(-1px); }
+    .btn-social svg   { flex-shrink: 0; display: block; }
+
+    /* ============================================================
+       FOOTER NOTE
+    ============================================================ */
+    .card-foot {
+        text-align: center;
+        margin-top: 22px;
+        font-size: .875rem;
+        color: var(--text-dim);
+    }
+
+    .card-foot a,
+    .card-foot button.link-btn {
+        color: var(--text-dim);
+        text-decoration: none;
+        font-weight: 600;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-family: var(--font);
+        font-size: inherit;
+        padding: 0;
+        transition: color .2s;
+    }
+    .card-foot a:hover,
+    .card-foot button.link-btn:hover { color: var(--text); }
+
+    /* ============================================================
+       REGISTER-PANEL HEADER
+    ============================================================ */
+    .reg-header {
+        margin-bottom: 22px;
+    }
+    .reg-header h2 {
+        font-size: 1.5rem;
+        font-weight: 800;
+        letter-spacing: -.025em;
+        margin-bottom: 5px;
+    }
+    .reg-header p {
+        font-size: .875rem;
+        color: var(--text-dim);
+    }
+
+    /* ============================================================
+       TOAST
+    ============================================================ */
+    #toast {
+        position: fixed;
+        bottom: 32px;
+        left: 50%;
+        transform: translateX(-50%) translateY(10px);
+        padding: 11px 22px;
+        border-radius: 12px;
+        background: rgba(15,18,24,.96);
+        backdrop-filter: blur(14px);
+        border: 1px solid rgba(255,255,255,.1);
+        color: #fff;
+        font-weight: 600;
+        font-size: .875rem;
+        font-family: var(--font);
+        box-shadow: 0 8px 28px rgba(0,0,0,.45);
+        z-index: 999;
+        display: none;
+        white-space: nowrap;
+    }
+
+    /* ============================================================
+       RESPONSIVE
+    ============================================================ */
+    @media (max-width: 460px) {
+        .card { padding: 32px 22px 28px; }
+        .header h1 { font-size: 1.75rem; }
+    }
     </style>
 </head>
 <body>
 
-<div class="viewport">
-    <div class="bg-canvas">
-        <div class="blob blob-1"></div>
-        <div class="blob blob-2"></div>
-        <div class="blob blob-3"></div>
-    </div>
+<!-- ══════════════════════════════════════
+     FOREST BACKGROUND SCENE
+══════════════════════════════════════ -->
+<div class="scene">
+    <div class="scene-sky"></div>
+    <div class="scene-glow"></div>
 
-    <div class="auth-card" id="card">
-        <div class="header">
-            <div class="logo-box">
-                <span class="material-icons-round" style="font-size: 32px;">security</span>
-            </div>
-            <h1>foundstore</h1>
-            <p class="subtitle">Identidad Segura & Despliegue</p>
-        </div>
+    <!-- Illustrated forest SVG -->
+    <svg class="scene-svg" viewBox="0 0 600 900" preserveAspectRatio="xMidYMid slice"
+         xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
 
-        <div class="tabs">
-            <button class="tab-btn active" onclick="switchTab('login', this)">
-                <span class="material-icons-round">login</span> Entrar
-            </button>
-            <button class="tab-btn" onclick="switchTab('register', this)">
-                <span class="material-icons-round">person_add</span> Registro
-            </button>
-        </div>
+        <!-- ── Ground fog ── -->
+        <ellipse cx="300" cy="910" rx="340" ry="90"  fill="#0a3a0e" opacity=".9"/>
+        <ellipse cx="100" cy="930" rx="180" ry="70"  fill="#0d4812" opacity=".8"/>
+        <ellipse cx="520" cy="920" rx="160" ry="65"  fill="#0b3e10" opacity=".8"/>
 
-        <!-- PANEL LOGIN -->
-        <div id="panel-login" class="panel active">
-            <a href="/login/github" class="btn-github">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.04-.02-2.05-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.3 3.5 1 .1-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.11-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.3-1.55 3.3-1.23 3.3-1.23.65 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.8 5.62-5.48 5.92.43.37.81 1.1.81 2.22 0 1.6-.01 2.89-.01 3.29 0 .32.22.69.83.58A12 12 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
-                </svg>
-                Continuar con GitHub
-            </a>
+        <!-- ── Left large tree trunk ── -->
+        <path d="M -40 900 Q -10 700 0 500 Q 10 350 -15 200 Q 10 160 30 200 Q 60 350 55 500 Q 70 700 95 900 Z"
+              fill="#0c3510"/>
+        <!-- Left canopy layers -->
+        <ellipse cx="18"  cy="260" rx="155" ry="165" fill="#1a6e22" opacity=".95"/>
+        <ellipse cx="-10" cy="180" rx="130" ry="130" fill="#1f8028"/>
+        <ellipse cx="50"  cy="145" rx="115" ry="120" fill="#249430"/>
+        <ellipse cx="10"  cy="100" rx="100" ry="100" fill="#1c7826"/>
+        <!-- Left canopy highlight -->
+        <ellipse cx="30"  cy="130" rx="60"  ry="55"  fill="#2eab38" opacity=".5"/>
 
-            <div class="divider">o usa Telegram ID</div>
+        <!-- ── Right hanging tree ── -->
+        <path d="M 600 0 Q 570 100 565 250 Q 560 400 580 600 Q 590 750 600 900 Z"
+              fill="#0b3510" opacity=".9"/>
+        <!-- Right canopy -->
+        <ellipse cx="572" cy="60"  rx="120" ry="110" fill="#1c7826" opacity=".95"/>
+        <ellipse cx="595" cy="20"  rx="100" ry="90"  fill="#208c2c"/>
+        <!-- Hanging leaves right -->
+        <ellipse cx="560" cy="120" rx="80"  ry="100" fill="#1a7224" opacity=".85"/>
+        <ellipse cx="590" cy="180" rx="60"  ry="80"  fill="#1f8230" opacity=".75"/>
+        <ellipse cx="570" cy="240" rx="50"  ry="60"  fill="#1a6e22" opacity=".7"/>
 
-            <form id="form-login">
-                <div class="form-group">
-                    <label>Telegram ID</label>
-                    <div class="input-box">
-                        <span class="material-icons-round">fingerprint</span>
-                        <input type="text" id="li-id" placeholder="ID numérico" required>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Contraseña</label>
-                    <div class="input-box">
-                        <span class="material-icons-round">lock</span>
-                        <input type="password" id="li-pass" placeholder="••••••••" required>
-                    </div>
-                </div>
-                <button type="submit" class="btn-submit">Entrar</button>
-            </form>
-        </div>
+        <!-- ── Mid-ground foliage ── -->
+        <ellipse cx="300" cy="820" rx="280" ry="80" fill="#0d4812" opacity=".9"/>
+        <ellipse cx="150" cy="860" rx="180" ry="60" fill="#0f5215" opacity=".85"/>
+        <ellipse cx="460" cy="840" rx="160" ry="55" fill="#0b4010" opacity=".85"/>
 
-        <!-- PANEL REGISTRO -->
-        <div id="panel-register" class="panel">
-            <form id="form-register">
-                <div class="form-group">
-                    <label>ID de Telegram</label>
-                    <div class="input-box">
-                        <span class="material-icons-round">alternate_email</span>
-                        <input type="text" id="rg-id" placeholder="Obtenlo en @userinfobot" required>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Nueva Contraseña</label>
-                    <div class="input-box">
-                        <span class="material-icons-round">lock_open</span>
-                        <input type="password" id="rg-pass" placeholder="Mínimo 8 caracteres" required>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Confirmar Contraseña</label>
-                    <div class="input-box">
-                        <span class="material-icons-round">verified_user</span>
-                        <input type="password" id="rg-conf" placeholder="Repite contraseña" required>
-                    </div>
-                </div>
-                <button type="submit" class="btn-submit">Crear Cuenta</button>
-            </form>
-        </div>
+        <!-- ── Distant trees silhouettes ── -->
+        <ellipse cx="200" cy="600" rx="100" ry="130" fill="#0e4812" opacity=".6"/>
+        <ellipse cx="420" cy="580" rx="90"  ry="120" fill="#0d4010" opacity=".55"/>
+        <ellipse cx="310" cy="650" rx="75"  ry="100" fill="#0c3c10" opacity=".5"/>
 
-        <div class="footer-note">
-            ¿Necesitas ayuda? <a href="/help">Ver documentación</a>
-        </div>
-    </div>
+        <!-- ── Individual stylized leaves (static) ── -->
+        <!-- top-left area -->
+        <ellipse cx="140" cy="30"  rx="18" ry="11" fill="#38c045" opacity=".9"
+                 transform="rotate(-35 140 30)"/>
+        <ellipse cx="90"  cy="70"  rx="15" ry="9"  fill="#2eab38" opacity=".85"
+                 transform="rotate(20 90 70)"/>
+        <ellipse cx="200" cy="15"  rx="13" ry="8"  fill="#44d155" opacity=".8"
+                 transform="rotate(-50 200 15)"/>
+        <!-- top-right area -->
+        <ellipse cx="510" cy="25"  rx="16" ry="10" fill="#38c045" opacity=".9"
+                 transform="rotate(40 510 25)"/>
+        <ellipse cx="555" cy="55"  rx="20" ry="12" fill="#2eab38" opacity=".85"
+                 transform="rotate(-25 555 55)"/>
+        <ellipse cx="480" cy="60"  rx="14" ry="8"  fill="#44d155" opacity=".75"
+                 transform="rotate(60 480 60)"/>
+        <!-- mid scattered -->
+        <ellipse cx="75"  cy="380" rx="12" ry="7"  fill="#33b53e" opacity=".7"
+                 transform="rotate(15 75 380)"/>
+        <ellipse cx="530" cy="350" rx="14" ry="8"  fill="#3aba46" opacity=".7"
+                 transform="rotate(-20 530 350)"/>
+    </svg>
 </div>
 
-<div id="toast"></div>
+
+<!-- ══════════════════════════════════════
+     AUTH CARD
+══════════════════════════════════════ -->
+<div class="viewport">
+    <div class="card" id="card">
+
+        <!-- ── LOGIN PANEL ── -->
+        <div id="panel-login" class="panel active">
+
+            <div class="header">
+                <h1>Bienvenido de nuevo</h1>
+                <p>Inicia sesión para continuar en foundstore</p>
+            </div>
+
+            <!-- Telegram ID + password fields -->
+            <div class="field">
+                <label for="li-id">Telegram ID</label>
+                <input type="text" id="li-id" placeholder="ID numérico" required
+                       inputmode="numeric" autocomplete="username">
+            </div>
+
+            <div class="field">
+                <label for="li-pass">Contraseña</label>
+                <input type="password" id="li-pass" placeholder="••••••••" required
+                       autocomplete="current-password">
+                <button type="button" class="eye-btn" id="eye-li" aria-label="Mostrar contraseña"
+                        onclick="toggleVis('li-pass','eye-li')">
+                    <!-- eye open -->
+                    <svg id="eye-li-icon" width="19" height="19" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="remember-row">
+                <label class="check-label">
+                    <input type="checkbox" id="remember-me"> Recuérdame
+                </label>
+                <a href="/help" class="forgot-link">¿Olvidaste tu contraseña?</a>
+            </div>
+
+            <button type="button" class="btn-main" id="btn-login">Entrar</button>
+
+            <div class="divider">o continúa con</div>
+
+            <div class="social-row">
+                <!-- GitHub OAuth -->
+                <a href="/login/github" class="btn-social">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58
+                                 0-.29-.01-1.04-.02-2.05-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76
+                                 -1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.3 3.5 1
+                                 .1-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22
+                                 -.13-.3-.54-1.52.11-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0
+                                 c2.3-1.55 3.3-1.23 3.3-1.23.65 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22
+                                 0 4.61-2.8 5.62-5.48 5.92.43.37.81 1.1.81 2.22 0 1.6-.01 2.89-.01 3.29
+                                 0 .32.22.69.83.58A12 12 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+                    </svg>
+                    GitHub
+                </a>
+
+                <!-- Telegram (link to onboarding) -->
+                <a href="/onboarding/step2" class="btn-social">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562
+                                 8.248-1.97 9.269c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053
+                                 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.952z"/>
+                    </svg>
+                    Telegram
+                </a>
+            </div>
+
+            <div class="card-foot">
+                ¿Nuevo en foundstore?
+                <button class="link-btn" onclick="switchPanel('register')">Crear cuenta</button>
+            </div>
+        </div><!-- /panel-login -->
+
+
+        <!-- ── REGISTER PANEL ── -->
+        <div id="panel-register" class="panel">
+
+            <div class="reg-header">
+                <h2>Crear cuenta</h2>
+                <p>Únete a la comunidad de desarrolladores</p>
+            </div>
+
+            <div class="field">
+                <label for="rg-id">ID de Telegram</label>
+                <input type="text" id="rg-id" placeholder="Ej: 12345678" required
+                       inputmode="numeric" autocomplete="username">
+            </div>
+
+            <div class="field">
+                <label for="rg-pass">Contraseña</label>
+                <input type="password" id="rg-pass" placeholder="Mínimo 8 caracteres" required
+                       autocomplete="new-password">
+                <button type="button" class="eye-btn" id="eye-rg" aria-label="Mostrar contraseña"
+                        onclick="toggleVis('rg-pass','eye-rg')">
+                    <svg id="eye-rg-icon" width="19" height="19" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="field" style="margin-bottom:22px;">
+                <label for="rg-conf">Confirmar Contraseña</label>
+                <input type="password" id="rg-conf" placeholder="Repite tu contraseña" required
+                       autocomplete="new-password">
+            </div>
+
+            <button type="button" class="btn-main" id="btn-register">Crear Cuenta</button>
+
+            <div class="card-foot">
+                ¿Ya tienes cuenta?
+                <button class="link-btn" onclick="switchPanel('login')">Iniciar sesión</button>
+            </div>
+        </div><!-- /panel-register -->
+
+    </div><!-- /card -->
+</div><!-- /viewport -->
+
+<div id="toast" role="status" aria-live="polite"></div>
 
 <script>
-    function switchTab(id, btn) {
-        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        document.getElementById('panel-' + id).classList.add('active');
-        btn.classList.add('active');
-    }
+/* ──────────────────────────────────────
+   PANEL SWITCH
+────────────────────────────────────── */
+function switchPanel(id) {
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('panel-' + id).classList.add('active');
+}
 
-    function showToast(msg, type='info') {
-        const t = document.getElementById('toast');
-        t.textContent = msg;
-        t.style.display = 'block';
-        t.style.background = type === 'error' ? '#ef4444' : '#1e293b';
-        setTimeout(() => { t.style.display = 'none'; }, 3000);
-    }
+/* ──────────────────────────────────────
+   EYE / PASSWORD TOGGLE
+────────────────────────────────────── */
+function toggleVis(inputId, btnId) {
+    const input = document.getElementById(inputId);
+    const icon  = document.getElementById(btnId + '-icon');
+    const show  = input.type === 'password';
+    input.type  = show ? 'text' : 'password';
+    /* swap icon: open eye ↔ closed eye */
+    icon.innerHTML = show
+        ? `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+           <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+           <line x1="1" y1="1" x2="23" y2="23"/>`
+        : `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+           <circle cx="12" cy="12" r="3"/>`;
+}
 
-    // LOGIN
-    document.getElementById('form-login').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const res = await fetch('/api/auth/login_telegram', {
+/* ──────────────────────────────────────
+   TOAST
+────────────────────────────────────── */
+let _toastTimer;
+function showToast(msg, type) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.display = 'block';
+    t.style.borderColor = type === 'error'
+        ? 'rgba(239,68,68,.4)' : 'rgba(255,255,255,.1)';
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => { t.style.display = 'none'; }, 3200);
+}
+
+/* ──────────────────────────────────────
+   LOGIN
+────────────────────────────────────── */
+document.getElementById('btn-login').addEventListener('click', async () => {
+    const btn  = document.getElementById('btn-login');
+    const id   = document.getElementById('li-id').value.trim();
+    const pass = document.getElementById('li-pass').value;
+    if (!id || !pass) return showToast('Completa todos los campos', 'error');
+
+    btn.classList.add('is-loading');
+    btn.textContent = 'Entrando…';
+    try {
+        const res  = await fetch('/api/auth/login_telegram', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                telegram_id: document.getElementById('li-id').value,
-                password: document.getElementById('li-pass').value
-            })
+            body: JSON.stringify({ telegram_id: id, password: pass })
         });
         const data = await res.json();
         if (res.ok) {
             showToast('¡Bienvenido!');
             window.location.href = '/';
         } else {
-            showToast(data.message || 'Error al entrar', 'error');
+            showToast(data.message || 'ID o contraseña incorrectos', 'error');
         }
-    });
+    } catch {
+        showToast('Error de red. Intenta de nuevo.', 'error');
+    } finally {
+        btn.classList.remove('is-loading');
+        btn.textContent = 'Entrar';
+    }
+});
 
-    // REGISTER
-    document.getElementById('form-register').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const pass = document.getElementById('rg-pass').value;
-        const conf = document.getElementById('rg-conf').value;
-        if (pass !== conf) return showToast('Contraseñas no coinciden', 'error');
-        
-        const res = await fetch('/api/auth/register_telegram', {
+/* ──────────────────────────────────────
+   REGISTER
+────────────────────────────────────── */
+document.getElementById('btn-register').addEventListener('click', async () => {
+    const btn  = document.getElementById('btn-register');
+    const id   = document.getElementById('rg-id').value.trim();
+    const pass = document.getElementById('rg-pass').value;
+    const conf = document.getElementById('rg-conf').value;
+
+    if (!id || !pass || !conf) return showToast('Completa todos los campos', 'error');
+    if (pass !== conf)         return showToast('Las contraseñas no coinciden', 'error');
+    if (pass.length < 8)       return showToast('La contraseña debe tener al menos 8 caracteres', 'error');
+
+    btn.classList.add('is-loading');
+    btn.textContent = 'Creando cuenta…';
+    try {
+        const res  = await fetch('/api/auth/register_telegram', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                telegram_id: document.getElementById('rg-id').value,
-                password: pass
-            })
+            body: JSON.stringify({ telegram_id: id, password: pass })
         });
         const data = await res.json();
         if (res.ok) {
-            showToast('Cuenta creada');
+            showToast('Cuenta creada. ¡Bienvenido!');
             window.location.href = '/';
         } else {
-            showToast(data.message || 'Error al registrar', 'error');
+            showToast(data.message || 'No se pudo crear la cuenta', 'error');
         }
-    });
+    } catch {
+        showToast('Error de red. Intenta de nuevo.', 'error');
+    } finally {
+        btn.classList.remove('is-loading');
+        btn.textContent = 'Crear Cuenta';
+    }
+});
 
-    // 3D TILT
-    const card = document.getElementById('card');
-    document.addEventListener('mousemove', (e) => {
-        const x = (window.innerWidth / 2 - e.pageX) / 25;
-        const y = (window.innerHeight / 2 - e.pageY) / 25;
-        card.style.transform = `perspective(1000px) rotateX(${y}deg) rotateY(${-x}deg)`;
-    });
+/* ──────────────────────────────────────
+   3-D CARD TILT  (matches image JS hint)
+────────────────────────────────────── */
+const card = document.getElementById('card');
+addEventListener('pointermove', e => {
+    const nx = e.clientX / innerWidth  - .5;
+    const ny = e.clientY / innerHeight - .5;
+    card.style.setProperty('--ry',  nx * 9 + 'deg');
+    card.style.setProperty('--rx', -ny * 9 + 'deg');
+    card.style.transform =
+        'perspective(900px) rotateX(var(--rx,0)) rotateY(var(--ry,0))';
+});
+addEventListener('pointerleave', () => {
+    card.style.transform = 'perspective(900px) rotateX(0) rotateY(0)';
+});
+
+/* ──────────────────────────────────────
+   FLOATING LEAF SPAWNER
+────────────────────────────────────── */
+(function spawnLeaves() {
+    const scene  = document.querySelector('.scene');
+    const colors = ['#2d9e38','#38c045','#4dcc5a','#1f8030','#29a83a','#55d465','#1a6b22'];
+
+    function makeLeaf() {
+        const el   = document.createElement('div');
+        el.className = 'leaf';
+        const w    = 14 + Math.random() * 20;
+        const h    = w * (.45 + Math.random() * .35);
+        const dur  = 9  + Math.random() * 11;
+        const del  = Math.random() * 5;
+        const col  = colors[Math.floor(Math.random() * colors.length)];
+        el.style.cssText = `
+            left:${Math.random() * 100}%;
+            width:${w}px;
+            height:${h}px;
+            background:${col};
+            border-radius: ${40 + Math.random() * 20}% ${10 + Math.random() * 10}% ${40 + Math.random() * 20}% ${10 + Math.random() * 10}%;
+            animation-duration:${dur}s;
+            animation-delay:${del}s;
+            transform:rotate(${Math.random() * 360}deg);
+            opacity:${.55 + Math.random() * .4};
+        `;
+        scene.appendChild(el);
+        el.addEventListener('animationend', () => el.remove(), { once: true });
+    }
+
+    for (let i = 0; i < 10; i++) makeLeaf();        // initial batch
+    setInterval(makeLeaf, 1100);                    // continuous spawn
+})();
 </script>
-
 </body>
 </html>
