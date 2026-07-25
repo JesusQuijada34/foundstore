@@ -109,7 +109,7 @@
                 <div class="profile-name">{{ github_username or 'Sesión activa' }}</div>
                 <div class="profile-email">{% if github.authorized %}via GitHub OAuth{% else %}via Telegram Local{% endif %}</div>
             </div>
-            <span class="material-icons">expand_more</span>
+            <span class="material-icons" aria-hidden="true">expand_more</span>
         </div>
         {% endif %}
     </aside>
@@ -129,13 +129,20 @@
 
             <div class="topbar-spacer"></div>
 
-            <form class="topbar-search" onsubmit="event.preventDefault();">
-                <span class="material-icons">search</span>
-                <input type="search" placeholder="Buscar paquetes, autores..." id="global-search-topbar">
+            <form class="topbar-search" onsubmit="event.preventDefault();" role="search">
+                <span class="material-icons" aria-hidden="true">search</span>
+                <input type="search" placeholder="Buscar paquetes, autores..." id="global-search-topbar" aria-label="Buscar paquetes y autores">
+                <button type="button" class="topbar-search-close" aria-label="Cerrar búsqueda" hidden>
+                    <span class="material-icons" aria-hidden="true">close</span>
+                </button>
             </form>
 
+            <button class="topbar-search-toggle" id="topbar-search-toggle" aria-label="Abrir búsqueda" aria-expanded="false">
+                <span class="material-icons" aria-hidden="true">search</span>
+            </button>
+
             <button class="topbar-icon-btn" id="notif-toggle" title="Notificaciones" aria-label="Notificaciones">
-                <span class="material-icons">notifications</span>
+                <span class="material-icons" aria-hidden="true">notifications</span>
                 <span class="dot" id="notif-dot"></span>
             </button>
             <button class="topbar-icon-btn" title="Configuración" aria-label="Configuración" onclick="window.location='/help'">
@@ -364,6 +371,44 @@
                 if (q) window.location = '/global?q=' + encodeURIComponent(q);
             }
         });
+    }
+
+    // ============================================================
+    // Mobile search toggle - replegar/expandir barra de búsqueda
+    // ============================================================
+    const searchToggle = document.getElementById('topbar-search-toggle');
+    const searchForm = document.querySelector('.topbar-search');
+    const searchInput = document.getElementById('global-search-topbar');
+    const searchClose = searchForm ? searchForm.querySelector('.topbar-search-close') : null;
+
+    if (searchToggle && searchForm) {
+        const openSearch = () => {
+            searchForm.classList.add('mobile-search-active');
+            searchToggle.setAttribute('aria-expanded', 'true');
+            if (searchClose) searchClose.hidden = false;
+            setTimeout(() => searchInput && searchInput.focus(), 50);
+        };
+        const closeSearch = () => {
+            searchForm.classList.remove('mobile-search-active');
+            searchToggle.setAttribute('aria-expanded', 'false');
+            if (searchClose) searchClose.hidden = true;
+        };
+        searchToggle.addEventListener('click', () => {
+            if (searchForm.classList.contains('mobile-search-active')) {
+                closeSearch();
+            } else {
+                openSearch();
+            }
+        });
+        if (searchClose) {
+            searchClose.addEventListener('click', closeSearch);
+        }
+        // Esc para cerrar
+        if (searchInput) {
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') closeSearch();
+            });
+        }
     }
 
     // ============================================================

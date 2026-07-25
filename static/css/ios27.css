@@ -137,27 +137,32 @@ code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-ele
     min-height: 100vh;
     padding-left: var(--safe-left);
     padding-right: var(--safe-right);
+    overflow-x: hidden;
+    max-width: 100vw; /* no rompe el viewport en móvil */
 }
 @media (max-width: 900px) {
-    .app-shell { grid-template-columns: 1fr; overflow-x: hidden; }
+    .app-shell {
+        grid-template-columns: minmax(0, 1fr);
+        overflow-x: hidden;
+    }
     .app-sidebar {
         position: fixed;
-        left: -100%;
+        left: 0;
         top: 0;
         bottom: 0;
-        width: 280px;
+        width: min(280px, 85vw);
+        max-width: 85vw;
         z-index: 1000;
+        transform: translateX(-105%);
         transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        display: flex;
         background: var(--bg-elev-1);
         backdrop-filter: blur(32px) saturate(180%);
         -webkit-backdrop-filter: blur(32px) saturate(180%);
         border-right: 1px solid var(--border-default);
+        display: flex !important;
     }
     .app-sidebar.mobile-open {
-        left: 0;
         transform: translateX(0);
-        display: flex;
     }
     /* Backdrop overlay */
     .sidebar-backdrop {
@@ -165,14 +170,17 @@ code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-ele
         inset: 0;
         background: rgba(0, 0, 0, 0.5);
         backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
         z-index: 999;
         opacity: 0;
         visibility: hidden;
-        transition: opacity 0.3s;
+        transition: opacity 0.3s, visibility 0.3s;
+        pointer-events: none;
     }
     .sidebar-backdrop.active {
         opacity: 1;
         visibility: visible;
+        pointer-events: auto;
     }
 }
 
@@ -190,6 +198,8 @@ code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-ele
     flex-direction: column;
     gap: 8px;
     z-index: 10;
+    min-width: 0;       /* permite que el contenido interno se encoja con ellipsis */
+    overflow: hidden;   /* evita scroll horizontal por nombres largos */
 }
 .brand {
     display: flex; align-items: center; gap: 10px;
@@ -249,41 +259,73 @@ code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-ele
     border: 1px solid var(--border-subtle);
     cursor: pointer;
     transition: background 0.15s;
+    min-width: 0;
 }
 .sidebar-profile:hover { background: var(--bg-glass-hover); }
 .sidebar-profile img {
     width: 36px; height: 36px; border-radius: 50%;
     border: 2px solid var(--border-default);
     object-fit: cover;
+    flex-shrink: 0;
 }
-.sidebar-profile .profile-info { line-height: 1.2; min-width: 0; }
-.sidebar-profile .profile-name { font-weight: 600; font-size: 0.88rem; color: var(--text-primary); }
-.sidebar-profile .profile-email { font-size: 0.72rem; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sidebar-profile .material-icons { margin-left: auto; color: var(--text-dim); font-size: 1.1rem; }
+.sidebar-profile .profile-info {
+    line-height: 1.2;
+    min-width: 0;     /* permite que el flex item se encoja y aplique ellipsis */
+    flex: 1;          /* ocupa el espacio disponible y empuja el icono al borde */
+    overflow: hidden; /* recorta el contenido que no quepa */
+}
+.sidebar-profile .profile-name {
+    font-weight: 600; font-size: 0.88rem; color: var(--text-primary);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sidebar-profile .profile-email {
+    font-size: 0.72rem; color: var(--text-dim);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sidebar-profile .material-icons {
+    margin-left: auto; color: var(--text-dim); font-size: 1.1rem;
+    flex-shrink: 0; /* el expand_more NUNCA se aplasta */
+}
 
 /* === Topbar === */
 .app-main { display: flex; flex-direction: column; min-width: 0; }
 .app-topbar {
     position: sticky; top: 0; z-index: 9;
     height: calc(var(--topbar-h) + var(--safe-top));
-    padding: var(--safe-top) 16px 0 16px;
+    padding: var(--safe-top) 12px 0 12px;
     background: var(--bg-glass);
     backdrop-filter: blur(20px) saturate(160%);
     -webkit-backdrop-filter: blur(20px) saturate(160%);
     border-bottom: 1px solid var(--border-subtle);
-    display: flex; align-items: center; gap: 16px;
+    display: flex; align-items: center; gap: 12px;
+    min-width: 0;
+    max-width: 100%;
+}
+@media (min-width: 601px) {
+    .app-topbar { padding: var(--safe-top) 16px 0 16px; gap: 16px; }
 }
 .topbar-menu-btn {
     display: none;
     background: transparent; border: 0; color: var(--text-primary);
     cursor: pointer; padding: 8px; border-radius: 8px;
+    min-width: 44px; min-height: 44px;   /* tap target iOS/Android >= 44px */
+    align-items: center; justify-content: center;
 }
 @media (max-width: 900px) { .topbar-menu-btn { display: inline-flex; } }
-.topbar-breadcrumb { display: flex; align-items: center; gap: 6px; color: var(--text-dim); font-size: 0.92rem; }
-.topbar-breadcrumb a { color: var(--text-dim); }
+.topbar-breadcrumb {
+    display: flex; align-items: center; gap: 6px;
+    color: var(--text-dim); font-size: 0.92rem;
+    min-width: 0; max-width: 100%;
+    overflow: hidden;
+}
+.topbar-breadcrumb a { color: var(--text-dim); flex-shrink: 0; }
 .topbar-breadcrumb a:hover { color: var(--text-primary); }
-.topbar-breadcrumb .sep { opacity: 0.5; }
-.topbar-breadcrumb .current { color: var(--text-primary); font-weight: 600; }
+.topbar-breadcrumb .sep { opacity: 0.5; flex-shrink: 0; }
+.topbar-breadcrumb .current {
+    color: var(--text-primary); font-weight: 600;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    min-width: 0;
+}
 
 .topbar-spacer { flex: 1; }
 
@@ -324,7 +366,7 @@ code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-ele
 .topbar-search .material-icons { color: var(--text-dim); font-size: 1.1rem; }
 
 .topbar-icon-btn {
-    width: 40px; height: 40px;
+    width: 44px; height: 44px;            /* tap target >= 44px */
     border-radius: var(--r-md);
     background: transparent;
     border: 1px solid transparent;
@@ -332,6 +374,7 @@ code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-ele
     display: inline-flex; align-items: center; justify-content: center;
     cursor: pointer; position: relative;
     transition: background 0.15s, color 0.15s, border-color 0.15s;
+    flex-shrink: 0;
 }
 .topbar-icon-btn:hover { background: var(--bg-glass-hover); color: var(--text-primary); border-color: var(--border-default); }
 .topbar-icon-btn .material-icons { font-size: 1.25rem; }
@@ -351,8 +394,33 @@ code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-ele
     cursor: pointer;
     object-fit: cover;
     margin-left: 4px;
+    flex-shrink: 0;
 }
-.topbar-avatar-link { display: inline-flex; }
+.topbar-avatar-link { display: inline-flex; flex-shrink: 0; }
+
+/* === Topbar search mobile toggle === */
+.topbar-search-toggle {
+    display: none;
+    width: 44px; height: 44px;
+    background: transparent; border: 0; color: var(--text-secondary);
+    cursor: pointer; border-radius: var(--r-md);
+    align-items: center; justify-content: center;
+    flex-shrink: 0;
+}
+.topbar-search-toggle:hover { background: var(--bg-glass-hover); color: var(--text-primary); }
+@media (max-width: 600px) {
+    .topbar-search-toggle { display: inline-flex; }
+}
+
+.topbar-search-close {
+    background: transparent; border: 0; cursor: pointer;
+    color: var(--text-mute);
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 4px; border-radius: 6px;
+    flex-shrink: 0;
+}
+.topbar-search-close:hover { color: var(--text-primary); }
+.topbar-search-close .material-icons { font-size: 1.1rem; }
 
 /* === Main content === */
 .app-content {
@@ -602,6 +670,34 @@ input:focus, textarea:focus, select:focus {
     text-align: center;
     font-size: 1.5rem; font-weight: 700;
     font-family: var(--font-mono);
+}
+
+/* === Material Icons: tipografía + fallback de emergencia ===
+   Si Google Fonts no carga (CSP, offline, throttling móvil), los <span class="material-icons">
+   muestran el nombre ("help", "code", etc.) como texto. Para mitigarlo:
+   - Forzamos una fuente del sistema como fallback (no se ve "help", se ve un cuadradito)
+   - Damos min-width a los iconos para reservar espacio
+*/
+.material-icons {
+    font-family: 'Material Icons Round', 'Material Icons', system-ui, sans-serif;
+    font-weight: normal;
+    font-style: normal;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-block;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    -webkit-font-feature-settings: 'liga';
+    -webkit-font-smoothing: antialiased;
+    /* Fallback visual si la fuente no carga: el texto se recorta */
+    max-width: 1.5em;
+    overflow: hidden;
+    text-overflow: clip;
+    text-indent: -0.25em;
+    font-size: 1.25rem;
+    vertical-align: middle;
 }
 
 /* === Animaciones iOS27 === */
