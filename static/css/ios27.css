@@ -152,7 +152,8 @@ code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-ele
         bottom: 0;
         width: min(280px, 85vw);
         max-width: 85vw;
-        z-index: 1000;
+        /* z-index alto para que el drawer cubra el topbar sticky */
+        z-index: 1100;
         transform: translateX(-105%);
         transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         background: var(--bg-elev-1);
@@ -171,7 +172,8 @@ code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-ele
         background: rgba(0, 0, 0, 0.5);
         backdrop-filter: blur(4px);
         -webkit-backdrop-filter: blur(4px);
-        z-index: 999;
+        /* 1050: por encima del topbar (9) y del content, pero por debajo del drawer (1100) */
+        z-index: 1050;
         opacity: 0;
         visibility: hidden;
         transition: opacity 0.3s, visibility 0.3s;
@@ -182,6 +184,8 @@ code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-ele
         visibility: visible;
         pointer-events: auto;
     }
+    /* En móvil el topbar debe quedar por debajo del drawer/backdrop */
+    .app-topbar { z-index: 5; }
 }
 
 /* === Sidebar === */
