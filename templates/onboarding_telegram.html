@@ -80,13 +80,4 @@
 .error-text { color: var(--danger); margin-bottom: 16px; }
 </style>
 
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-    const card = document.getElementById('onboarding-card');
-    if (card) {
-        card.classList.add('water-ripple');
-        setTimeout(() => card.classList.remove('water-ripple'), 800);
-    }
-});
-</script>
 {% endblock %}

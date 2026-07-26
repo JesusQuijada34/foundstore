@@ -333,9 +333,20 @@ code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-ele
     display: flex; align-items: center; gap: 8px;
     background: var(--bg-elev-2);
     border: 1px solid var(--border-default);
+    border-radius: var(--r-md);
+    padding: 8px 14px;
     max-width: 400px;
     width: 100%;
+    min-width: 0;          /* nunca fuerza desbordamiento horizontal */
+    transition: border-color 0.2s;
 }
+.topbar-search:focus-within { border-color: var(--accent); }
+.topbar-search input {
+    background: transparent; border: 0; outline: 0;
+    color: var(--text-primary); font-size: 0.92rem; flex: 1; min-width: 0;
+}
+.topbar-search input::placeholder { color: var(--text-mute); }
+.topbar-search .material-icons { color: var(--text-dim); font-size: 1.1rem; flex-shrink: 0; }
 @media (max-width: 600px) {
     .topbar-search {
         display: none;
@@ -349,21 +360,9 @@ code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-ele
         transform: translateY(-50%);
         z-index: 10;
         max-width: none;
+        width: calc(100% - 20px);
     }
 }
-.topbar-search {
-    border-radius: var(--r-md);
-    padding: 8px 14px;
-    min-width: 280px;
-    transition: border-color 0.2s;
-}
-.topbar-search:focus-within { border-color: var(--accent); }
-.topbar-search input {
-    background: transparent; border: 0; outline: 0;
-    color: var(--text-primary); font-size: 0.92rem; flex: 1; min-width: 0;
-}
-.topbar-search input::placeholder { color: var(--text-mute); }
-.topbar-search .material-icons { color: var(--text-dim); font-size: 1.1rem; }
 
 .topbar-icon-btn {
     width: 44px; height: 44px;            /* tap target >= 44px */
@@ -397,6 +396,13 @@ code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-ele
     flex-shrink: 0;
 }
 .topbar-avatar-link { display: inline-flex; flex-shrink: 0; }
+
+/* En móvil: ocultar avatar y botón de settings del topbar
+   (ambos accesibles desde el sidebar lateral) */
+@media (max-width: 600px) {
+    .topbar-avatar-link        { display: none; }
+    .topbar-icon-btn.topbar-settings-hide { display: none; }
+}
 
 /* === Topbar search mobile toggle === */
 .topbar-search-toggle {
@@ -688,6 +694,10 @@ input:focus, textarea:focus, select:focus {
     font-size: 1.25rem;
     vertical-align: middle;
 }
+
+/* === Animaciones globales === */
+@keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.fade-in { animation: fade-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); }
 
 /* === Animaciones iOS27 === */
 @keyframes blob-float {
