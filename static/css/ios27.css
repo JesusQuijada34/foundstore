@@ -447,9 +447,9 @@ code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-ele
 .glass-card,
 .acrilic-card {
     background: var(--bg-glass);
-    backdrop-filter: blur(24px) saturate(180%);
-    -webkit-backdrop-filter: blur(24px) saturate(180%);
-    border: 1px solid var(--border-default);
+    backdrop-filter: blur(40px) saturate(200%);
+    -webkit-backdrop-filter: blur(40px) saturate(200%);
+    border: 1px solid var(--border-strong);
     border-radius: var(--r-lg);
     box-shadow: var(--shadow-md);
 }
