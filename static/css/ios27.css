@@ -139,6 +139,26 @@ code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-ele
     padding-right: var(--safe-right);
     overflow-x: hidden;
     max-width: 100vw; /* no rompe el viewport en móvil */
+    position: relative; /* necesario para que .sidebar-backdrop absolute se ancle aquí */
+}
+/* El backdrop cuelga del shell pero NO consume track del grid.
+   En desktop queda invisible (opacity 0). En móvil, .active lo muestra. */
+.sidebar-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 1050;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s, visibility 0.3s;
+    pointer-events: none;
+}
+.sidebar-backdrop.active {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
 }
 @media (max-width: 900px) {
     .app-shell {
@@ -146,46 +166,38 @@ code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-ele
         overflow-x: hidden;
     }
     .app-sidebar {
-        position: fixed;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        width: min(280px, 85vw);
-        max-width: 85vw;
+        position: fixed !important;
+        left: 0 !important;
+        top: 0 !important;
+        bottom: 0 !important;
+        width: min(280px, 85vw) !important;
+        max-width: 85vw !important;
         /* z-index alto para que el drawer cubra el topbar sticky */
-        z-index: 1100;
-        transform: translateX(-105%);
+        z-index: 1100 !important;
+        /* Fondo sólido opaco en móvil para legibilidad (sin backdrop-filter) */
+        background: var(--bg-base) !important;
+        box-shadow: 4px 0 32px rgba(0,0,0,0.6);
+        transform: translateX(-105%) !important;
         transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        background: var(--bg-elev-1);
-        backdrop-filter: blur(32px) saturate(180%);
-        -webkit-backdrop-filter: blur(32px) saturate(180%);
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
         border-right: 1px solid var(--border-default);
         display: flex !important;
     }
     .app-sidebar.mobile-open {
-        transform: translateX(0);
-    }
-    /* Backdrop overlay */
-    .sidebar-backdrop {
-        position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.5);
-        backdrop-filter: blur(4px);
-        -webkit-backdrop-filter: blur(4px);
-        /* 1050: por encima del topbar (9) y del content, pero por debajo del drawer (1100) */
-        z-index: 1050;
-        opacity: 0;
-        visibility: hidden;
-        transition: opacity 0.3s, visibility 0.3s;
-        pointer-events: none;
-    }
-    .sidebar-backdrop.active {
-        opacity: 1;
-        visibility: visible;
-        pointer-events: auto;
+        transform: translateX(0) !important;
     }
     /* En móvil el topbar debe quedar por debajo del drawer/backdrop */
     .app-topbar { z-index: 5; }
+    /* Cuando el drawer está abierto en móvil, ocultamos el contenido del topbar
+       para que no se vea "fantasma" detrás del backdrop. */
+    body.drawer-open .app-topbar { visibility: hidden; }
+    /* Forzamos opacidad del backdrop con un poco más de oscuridad
+       para que el sidebar se lea mejor encima. */
+    .sidebar-backdrop.active { background: rgba(0, 0, 0, 0.62); }
+    /* Refuerzo de contraste en nav-items cuando el drawer está abierto */
+    .app-sidebar.mobile-open .nav-item { color: var(--text-primary); }
+    .app-sidebar.mobile-open .nav-item .material-icons { color: var(--text-secondary); }
 }
 
 /* === Sidebar === */
@@ -205,6 +217,7 @@ code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-ele
     min-width: 0;       /* permite que el contenido interno se encoja con ellipsis */
     overflow: hidden;   /* evita scroll horizontal por nombres largos */
 }
+.brand {
 .brand {
     display: flex; align-items: center; gap: 10px;
     padding: 8px 10px 18px 10px;

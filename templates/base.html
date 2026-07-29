@@ -420,9 +420,10 @@
 
     if (menuBtn && sidebar && backdrop) {
         const toggleMenu = () => {
-            sidebar.classList.toggle('mobile-open');
-            backdrop.classList.toggle('active');
-            document.body.style.overflow = sidebar.classList.contains('mobile-open') ? 'hidden' : '';
+            const isOpen = sidebar.classList.toggle('mobile-open');
+            backdrop.classList.toggle('active', isOpen);
+            document.body.classList.toggle('drawer-open', isOpen);
+            document.body.style.overflow = isOpen ? 'hidden' : '';
         };
 
         menuBtn.addEventListener('click', toggleMenu);
@@ -433,6 +434,13 @@
             item.addEventListener('click', () => {
                 if (window.innerWidth <= 900) toggleMenu();
             });
+        });
+
+        // Cerrar con tecla Esc (móvil o desktop)
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && sidebar.classList.contains('mobile-open')) {
+                toggleMenu();
+            }
         });
     }
 
