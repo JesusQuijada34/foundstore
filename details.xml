@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <app>
-  <publisher>Jesusquijada34</publisher>
+  <publisher>influent</publisher>
   <app>foundstore</app>
   <name>FoundStore</name>
-  <version>v1.0-26.08-21.56-AlphaCube</version>
-  <correlationid>412e083aae2a38d03280e4512da73d2dee8cecf77912d9c72958b7166ff9fb49</correlationid>
+  <version>v1.0-26.08-21.56</version>
+  <correlationid>80de683b18d5b1885471564c89b2fe2d49bce95e663cf1c718bd37ff8e3773e3</correlationid>
   <rate>Todas las edades</rate>
   <author>JesusQuijada34</author>
   <platform>AlphaCube</platform>
