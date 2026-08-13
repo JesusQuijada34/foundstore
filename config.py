@@ -4,7 +4,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
-    SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key')
+    SECRET_KEY = os.environ.get('SECRET_KEY')
+    if not SECRET_KEY and os.environ.get('FLASK_ENV', '').lower() == 'production':
+        raise RuntimeError('SECRET_KEY debe configurarse en producción')
+    SECRET_KEY = SECRET_KEY or 'dev-only-change-me'
     GITHUB_OAUTH_CLIENT_ID = os.environ.get('GITHUB_OAUTH_CLIENT_ID')
     GITHUB_OAUTH_CLIENT_SECRET = os.environ.get('GITHUB_OAUTH_CLIENT_SECRET')
     

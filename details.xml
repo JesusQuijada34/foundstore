@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<app>
+  <publisher>JesusQuijada34</publisher>
+  <app>foundstore</app>
+  <name>FoundStore</name>
+  <version>v1.0-26.08-23.43-AlphaCube</version>
+  <correlationid>foundstore-alpha-20260813</correlationid>
+  <rate>Todas las edades</rate>
+  <author>JesusQuijada34</author>
+  <platform>AlphaCube</platform>
+  <description>Catálogo web Flask de paquetes Fluthin con autenticación GitHub y Telegram verificada</description>
+  <year>2026</year>
+</app>

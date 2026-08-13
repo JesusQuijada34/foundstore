@@ -1,6 +1,11 @@
 from flask import Flask, render_template, redirect, url_for, session, request, jsonify, Response, stream_with_context, abort
 from flask_dance.contrib.github import make_github_blueprint, github
 from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.security import generate_password_hash, check_password_hash
+import hmac
+import hashlib
+import json
+from urllib.parse import parse_qsl
 import os
 import time
 from config import Config
@@ -36,6 +41,47 @@ if redirect_uri:
 # Forzar HTTPS en Flask-Dance para entornos de producción como Render
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1' # Solo para pruebas locales si fuera necesario, pero en Render usaremos ProxyFix
 os.environ['PREFERRED_URL_SCHEME'] = 'https'
+
+
+def _hash_password(password: str) -> str:
+    return generate_password_hash(password, method="scrypt")
+
+
+def _verify_password(stored: str, password: str) -> bool:
+    if not stored:
+        return False
+    if stored.startswith(("scrypt:", "pbkdf2:", "argon2:")):
+        try:
+            return check_password_hash(stored, password)
+        except ValueError:
+            return False
+    legacy = hashlib.sha256(password.encode("utf-8")).hexdigest()
+    return hmac.compare_digest(stored, legacy)
+
+
+def _verify_telegram_init_data(values: dict) -> dict | None:
+    """Validate Telegram Web App initData before trusting the user identity."""
+    token = Config.TELEGRAM_BOT_TOKEN
+    received_hash = values.get("hash")
+    if not token or not received_hash:
+        return None
+    try:
+        auth_date = int(values.get("auth_date", "0"))
+    except (TypeError, ValueError):
+        return None
+    if auth_date <= 0 or abs(time.time() - auth_date) > 86400:
+        return None
+    pairs = [(k, v) for k, v in values.items() if k not in {"hash", "signature"}]
+    data_check_string = "\\n".join(f"{k}={v}" for k, v in sorted(pairs))
+    secret = hmac.new(b"WebAppData", token.encode("utf-8"), hashlib.sha256).digest()
+    expected = hmac.new(secret, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, received_hash):
+        return None
+    try:
+        user = json.loads(values.get("user", ""))
+    except (TypeError, ValueError):
+        return None
+    return user if isinstance(user, dict) and user.get("id") else None
 
 
 def _current_github_username():
@@ -127,11 +173,16 @@ def onboarding_step2():
 @app.route("/api/telegram_callback")
 def telegram_callback():
     auth_data = request.args.to_dict()
-    if auth_data.get("id"):
-        session["telegram_user"] = auth_data
+    telegram_user = _verify_telegram_init_data(auth_data)
+    if telegram_user and github.authorized:
+        session["telegram_user"] = telegram_user
         resp = github.get("/user")
-        github_username = resp.json()["login"]
-        services.link_telegram_to_github(github_username, auth_data)
+        if not resp.ok:
+            return redirect(url_for("logout"))
+        github_username = resp.json().get("login")
+        if not github_username:
+            return redirect(url_for("logout"))
+        services.link_telegram_to_github(github_username, telegram_user)
         return redirect(url_for("my_profile"))
     return redirect(url_for("onboarding_step2"))
 
@@ -264,7 +315,7 @@ def api_register_telegram():
     # Si Mongo no esta disponible, guardamos en el fallback JSONL
     if not storage.mongo.ok:
         import hashlib
-        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        password_hash = _hash_password(password)
         gh_username = f"tg_{telegram_id}"
         
         # Simular registro en services.py (JSONL)
@@ -294,7 +345,7 @@ def api_register_telegram():
 
         # Hash de la contraseña
         import hashlib
-        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        password_hash = _hash_password(password)
 
         # Crear usuario en MongoDB
         now = int(time.time())
@@ -344,7 +395,7 @@ def api_login_telegram():
         return jsonify({"error": "invalid_id", "message": "El Telegram ID debe ser un numero."}), 400
 
     import hashlib
-    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    password_hash = _hash_password(password)
 
     # Fallback local
     if not storage.mongo.ok:
@@ -352,8 +403,12 @@ def api_login_telegram():
         gh_username = f"tg_{telegram_id}"
         user_doc = accounts.get(gh_username)
         
-        if not user_doc or user_doc.get("password_hash") != password_hash:
+        stored_hash = user_doc.get("password_hash", "") if user_doc else ""
+        if not user_doc or not _verify_password(stored_hash, password):
             return jsonify({"error": "invalid_credentials", "message": "ID o contraseña incorrectos."}), 401
+        if not stored_hash.startswith(("scrypt:", "pbkdf2:", "argon2:")):
+            user_doc["password_hash"] = _hash_password(password)
+            services.save_ondev_account(user_doc)
 
         session["telegram_user"] = {
             "id": telegram_id,
@@ -366,8 +421,11 @@ def api_login_telegram():
     try:
         # Buscar usuario en MongoDB
         user_doc = storage.mongo.db.users.find_one({"telegram_id": telegram_id})
-        if not user_doc or user_doc.get("password_hash") != password_hash:
+        stored_hash = user_doc.get("password_hash", "") if user_doc else ""
+        if not user_doc or not _verify_password(stored_hash, password):
             return jsonify({"error": "invalid_credentials", "message": "ID o contraseña incorrectos."}), 401
+        if not stored_hash.startswith(("scrypt:", "pbkdf2:", "argon2:")):
+            storage.mongo.db.users.update_one({"_id": user_doc["_id"]}, {"$set": {"password_hash": _hash_password(password)}})
 
         # Crear sesión
         session["telegram_user"] = {
