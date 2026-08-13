@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+# Autorun script for foundstore
+/usr/bin/python3 ./foundstore.py

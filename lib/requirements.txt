@@ -1,0 +1,2 @@
+# Dependencias del proyecto foundstore
+# Generado por PackageMaker

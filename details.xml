@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <app>
-  <publisher>JesusQuijada34</publisher>
+  <publisher>Jesusquijada34</publisher>
   <app>foundstore</app>
   <name>FoundStore</name>
-  <version>v1.0-26.08-23.43-AlphaCube</version>
-  <correlationid>foundstore-alpha-20260813</correlationid>
+  <version>v1.0-26.08-20.20-AlphaCube</version>
+  <correlationid>432c534e747e40f298d38b7a4e34cf0add5edf4d68434f756516fddba9ab5d5f</correlationid>
   <rate>Todas las edades</rate>
   <author>JesusQuijada34</author>
   <platform>AlphaCube</platform>
-  <description>Catálogo web Flask de paquetes Fluthin con autenticación GitHub y Telegram verificada</description>
+  <description>Estructura reparada por MoonFix</description>
   <year>2026</year>
 </app>
