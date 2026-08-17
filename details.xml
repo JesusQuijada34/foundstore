@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <app>
-  <publisher>influent</publisher>
+  <publisher>Influent</publisher>
   <app>foundstore</app>
-  <name>FoundStore</name>
-  <version>v1.0-26.08-21.56</version>
+  <name>Foundstore Fluthin Store</name>
+  <version>v1.1-26.08-22.31</version>
   <correlationid>80de683b18d5b1885471564c89b2fe2d49bce95e663cf1c718bd37ff8e3773e3</correlationid>
   <rate>Todas las edades</rate>
   <author>JesusQuijada34</author>
   <platform>AlphaCube</platform>
-  <description>Estructura reparada por MoonFix</description>
+  <description>Tienda Fluthin para Danenone con catálogo GitHub, actualizaciones y gestor flut.</description>
   <year>2026</year>
 </app>

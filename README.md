@@ -1,13 +1,13 @@
 # FoundStore
 
-**Identidad del paquete:** `influent.foundstore.v1.0-26.08-21.56`
+**Identidad del paquete:** `Influent.foundstore.v1.1-26.08-22.31`
 **Autor:** `JesusQuijada34`
 **Plataforma:** `AlphaCube`
-**Descripción:** Estructura reparada por MoonFix
+**Descripción:** Tienda Fluthin para Danenone con catálogo GitHub, actualizaciones y gestor flut.
 
 ## Estructura PackageMaker 3.2.7
 
-Este repositorio fue normalizado mediante **MoonFix**, usando la estructura de PackageMaker 3.2.7. El paquete público debe conservar `details.xml`, `version.res`, `autorun`, `autorun.bat`, `.storedetail`, `updater.py`, `config/settings.json`, los marcadores `.container` y los archivos de documentación correspondientes. El publisher oficial es `influent` y la versión pública no contiene sufijo de plataforma.
+Este repositorio fue normalizado mediante **MoonFix**, usando la estructura de PackageMaker 3.2.7. El paquete público debe conservar `details.xml`, `version.res`, `autorun`, `autorun.bat`, `.storedetail`, `updater.py`, `config/settings.json`, los marcadores `.container` y los archivos de documentación correspondientes. El publisher oficial es `Influent` en los metadatos; el formateador de Packagemaker puede normalizar nombres de artefacto según su implementación vigente.
 
 ## Instalación y ejecución
 
@@ -15,11 +15,11 @@ Instala las dependencias declaradas en `lib/requirements.txt` cuando exista y ej
 
 ## Validación
 
-La fuente debe pasar compilación sintáctica, pruebas funcionales disponibles, comprobación de identidad XML, protección contra traversal en ZIP y llamadas seguras a subprocess. Los artefactos `.iflapp` deben ser generados por PackageMaker; los paquetes Debian deben usar el nombre canónico `influent.foundstore.v1.0-26.08-21.56_ARCH.deb`.
+La fuente debe pasar compilación sintáctica, pruebas funcionales disponibles, comprobación de identidad XML, protección contra traversal en ZIP y llamadas seguras a subprocess. Los artefactos `.iflapp` deben ser generados por PackageMaker; los paquetes Debian deben usar el nombre canónico `Influent.foundstore.v1.1-26.08-22.31_ARCH.deb`.
 
 ## Release
 
-El tag y el título del release deben ser exactamente `v1.0-26.08-21.56`. Los assets deben usar el nombre canónico del paquete y una extensión objetiva. No se permite publicar un release AlphaCube que contenga únicamente el build Linux.
+El tag y el título del release de esta iteración deben ser exactamente `v1.1-26.08-22.31`. Los assets deben usar el nombre canónico del paquete y una extensión objetiva. No se permite publicar un release AlphaCube que contenga únicamente el build Linux.
 
 ## Referencia original
 
@@ -97,3 +97,24 @@ Este archivo almacenará información de las cuentas "ondev" en formato JSONL (J
 ```
 
 Esta estructura permitirá a la aplicación leer y escribir fácilmente los datos de las cuentas "ondev".
+
+
+## Cliente Fluthin para Danenone
+
+Esta rama incluye una aplicación de escritorio `foundstore.py` basada en PyQt6 y Leviathan UI, además del gestor de línea de comandos `flut.py`. La aplicación examina `JesusQuijada34/catalog`, lee `details.xml` de cada repositorio, consulta los releases de GitHub y permite instalar paquetes `.iflapp` compatibles con la plataforma actual.
+
+El gestor utiliza referencias con el formato `author/package`:
+
+```bash
+python flut.py catalog --refresh
+python flut.py search settings
+python flut.py install JesusQuijada34/leviathan-ui
+python flut.py upgrade
+python flut.py downgrade JesusQuijada34/leviathan-ui v1.0-26.08-21.56
+python flut.py uninstall JesusQuijada34/leviathan-ui
+python flut.py check-updates
+```
+
+Los paquetes instalados se registran bajo el estado de Danenone y generan una entrada FreeDesktop en `~/.local/share/applications`. El gestor valida `details.xml`, comprueba que el artefacto sea un ZIP válido, bloquea path traversal durante la extracción y registra notificaciones de instalación y actualización en el estado local.
+
+La compilación multiplataforma se declara en `.github/workflows/build-fluthin.yml`. El workflow valida el contrato, instala Leviathan UI y solicita a Packagemaker la generación de los objetivos `Danenone` y `Knosthalij`. La publicación de un release requiere validar previamente cada asset `.iflapp` y usar la versión exacta de `details.xml`.

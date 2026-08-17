@@ -1,0 +1,102 @@
+name: Build Foundstore Fluthin
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate Fluthin contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Foundstore
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install desktop dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements-desktop.txt
+      - name: Validate metadata and source
+        run: |
+          python -m compileall -q foundstore.py flut.py fluthin_manager.py
+          python flut.py --help
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          root = ET.parse('details.xml').getroot()
+          assert root.findtext('publisher') == 'Influent'
+          assert root.findtext('app') == 'foundstore'
+          assert root.findtext('platform') == 'AlphaCube'
+          assert root.findtext('version').startswith('v1.1-')
+          print('FLUTHIN_METADATA_STATUS=0')
+          PY
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: Danenone
+          - runner: windows-latest
+            target: Knosthalij
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout Foundstore
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install desktop dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements-desktop.txt
+      - name: Checkout Packagemaker
+        uses: actions/checkout@v4
+        with:
+          repository: JesusQuijada34/packagemaker
+          path: _packagemaker
+          ref: main
+      - name: Build with Packagemaker on Linux
+        if: runner.os == 'Linux'
+        env:
+          FLUT_PLATFORM: Danenone
+        run: python _packagemaker/packagemaker.py --headless --buildthis .
+      - name: Build with Packagemaker on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          FLUT_PLATFORM: Knosthalij
+        run: python _packagemaker/packagemaker.py --headless --buildthis .
+      - name: Stage Linux artifacts
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p dist
+          find "$HOME/Documents/Packagemaker Projects/Compiled" -type f -name '*.iflapp' -exec cp {} dist/ \; 2>/dev/null || true
+          find . -type f -name '*.iflapp' -exec cp {} dist/ \; 2>/dev/null || true
+          test -n "$(find dist -type f -name '*.iflapp' -print -quit)"
+      - name: Stage Windows artifacts
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          $sources = @("$env:USERPROFILE\Documents\Packagemaker Projects\Compiled", "$PWD")
+          foreach ($source in $sources) {
+            if (Test-Path $source) {
+              Get-ChildItem -Path $source -Filter *.iflapp -Recurse -File -ErrorAction SilentlyContinue | Copy-Item -Destination dist -Force
+            }
+          }
+          if (-not (Get-ChildItem dist -Filter *.iflapp -File -ErrorAction SilentlyContinue)) { throw 'No se generó ningún .iflapp' }
+      - name: Upload Fluthin artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: foundstore-fluthin-${{ matrix.target }}
+          path: dist/*.iflapp
+          if-no-files-found: error
