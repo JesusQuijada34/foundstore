@@ -297,7 +297,14 @@ def install(reference: str, version: str | None = None, local_file: str | None =
         _register_desktop(destination, metadata, executable)
         autostart_files = _register_autostart(destination)
         if metadata["app"].casefold() == "foundstore":
-            flut_binary = next((item for item in destination.iterdir() if item.name.casefold() == "flut" and item.is_file()), None)
+            auxiliary_binaries = [destination / "flut", destination / "bin" / "flut", destination / "fluthin_manager", destination / "bin" / "fluthin_manager"]
+            for auxiliary in auxiliary_binaries:
+                if auxiliary.is_file():
+                    try:
+                        auxiliary.chmod(auxiliary.stat().st_mode | 0o111)
+                    except OSError:
+                        pass
+            flut_binary = next((item for item in auxiliary_binaries if item.is_file()), None)
             if flut_binary:
                 local_bin = Path(os.environ.get("XDG_BIN_HOME", Path.home() / ".local/bin"))
                 local_bin.mkdir(parents=True, exist_ok=True)
