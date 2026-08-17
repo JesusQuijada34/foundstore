@@ -221,6 +221,16 @@ def _desktop_path(metadata: dict[str, str]) -> Path:
     return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "applications" / f"influent-{metadata['app']}.desktop"
 
 
+def _find_executable(install_dir: Path, preferred_name: str | None = None) -> Path | None:
+    if preferred_name:
+        preferred = [install_dir / preferred_name, install_dir / "bin" / preferred_name]
+        exact = next((item for item in preferred if item.is_file() and os.access(item, os.X_OK)), None)
+        if exact:
+            return exact
+    search_dirs = [install_dir, install_dir / "bin"]
+    return next((item for folder in search_dirs if folder.is_dir() for item in folder.iterdir() if item.is_file() and os.access(item, os.X_OK) and item.name not in {"autorun", "flut", "fluthin_manager"}), None)
+
+
 def _register_desktop(install_dir: Path, metadata: dict[str, str], executable: Path | None) -> None:
     desktop = _desktop_path(metadata)
     desktop.parent.mkdir(parents=True, exist_ok=True)
@@ -271,7 +281,7 @@ def install(reference: str, version: str | None = None, local_file: str | None =
         finally:
             if staging.exists():
                 shutil.rmtree(staging, ignore_errors=True)
-        executable = next((item for item in destination.iterdir() if item.is_file() and os.access(item, os.X_OK) and item.name not in {"autorun"}), None)
+        executable = _find_executable(destination, metadata["app"])
         manifest = {"reference": f"{author}/{package}", "release": release_tag, "asset": asset_name, "sha256": sha256, "installed_at": int(time.time())}
         (destination / "install.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
         _register_desktop(destination, metadata, executable)

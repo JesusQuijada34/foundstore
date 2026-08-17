@@ -36,7 +36,11 @@ def launch(reference: str) -> int:
     if not candidates:
         raise RuntimeError(f"No está instalado: {reference}")
     directory = Path(candidates[0]["path"])
-    binary = next((item for item in directory.iterdir() if item.is_file() and os.access(item, os.X_OK) and item.name not in {"autorun"}), None)
+    preferred = [directory / package, directory / "bin" / package]
+    binary = next((item for item in preferred if item.is_file() and os.access(item, os.X_OK)), None)
+    if binary is None:
+        search_dirs = [directory, directory / "bin"]
+        binary = next((item for folder in search_dirs if folder.is_dir() for item in folder.iterdir() if item.is_file() and os.access(item, os.X_OK) and item.name not in {"autorun", "flut", "fluthin_manager"}), None)
     if binary is None:
         raise RuntimeError("El paquete no contiene un ejecutable registrado")
     subprocess.Popen([str(binary)], cwd=str(directory), start_new_session=True)
