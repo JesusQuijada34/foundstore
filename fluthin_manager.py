@@ -224,11 +224,21 @@ def _desktop_path(metadata: dict[str, str]) -> Path:
 def _find_executable(install_dir: Path, preferred_name: str | None = None) -> Path | None:
     if preferred_name:
         preferred = [install_dir / preferred_name, install_dir / "bin" / preferred_name]
-        exact = next((item for item in preferred if item.is_file() and os.access(item, os.X_OK)), None)
+        exact = next((item for item in preferred if item.is_file()), None)
         if exact:
+            try:
+                exact.chmod(exact.stat().st_mode | 0o111)
+            except OSError:
+                pass
             return exact
     search_dirs = [install_dir, install_dir / "bin"]
-    return next((item for folder in search_dirs if folder.is_dir() for item in folder.iterdir() if item.is_file() and os.access(item, os.X_OK) and item.name not in {"autorun", "flut", "fluthin_manager"}), None)
+    fallback = next((item for folder in search_dirs if folder.is_dir() for item in folder.iterdir() if item.is_file() and item.name not in {"autorun", "flut", "fluthin_manager"}), None)
+    if fallback:
+        try:
+            fallback.chmod(fallback.stat().st_mode | 0o111)
+        except OSError:
+            pass
+    return fallback
 
 
 def _register_desktop(install_dir: Path, metadata: dict[str, str], executable: Path | None) -> None:
