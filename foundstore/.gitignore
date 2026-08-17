@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv
+env/
+venv/
+ENV/
+data/ondev_accounts.list
+data/catalog.json
+static/img/
+!static/img/.gitkeep
