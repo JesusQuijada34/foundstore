@@ -31,8 +31,9 @@ class CloudDevicesError(RuntimeError):
 
 
 class CloudDevicesClient:
-    def __init__(self, state_path: Path | None = None):
+    def __init__(self, state_path: Path | None = None, allow_insecure_local: bool = False):
         self.state_path = state_path or DEFAULT_STATE_PATH
+        self.allow_insecure_local = allow_insecure_local
 
     def _load(self) -> dict[str, Any]:
         if not self.state_path.exists():
@@ -78,7 +79,8 @@ class CloudDevicesClient:
             raise CloudDevicesError("No se pudo conectar con Cloud Danenone Devices") from error
 
     def pair(self, server: str, code: str, display_name: str) -> dict[str, Any]:
-        if not server.startswith("https://"):
+        is_local_test_server = self.allow_insecure_local and (server.startswith("http://127.0.0.1:") or server.startswith("http://localhost:"))
+        if not server.startswith("https://") and not is_local_test_server:
             raise CloudDevicesError("El servidor debe usar HTTPS")
         if not PAIRING_CODE.fullmatch(code):
             raise CloudDevicesError("El código de pairing debe tener entre 6 y 12 caracteres alfanuméricos")
