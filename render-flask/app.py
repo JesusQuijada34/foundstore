@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -40,6 +41,16 @@ def iso_now() -> str:
 
 def token_hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def device_command_key(master_key: str, device_id: str) -> str:
+    return hmac.new(master_key.encode("utf-8"), device_id.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def command_signature(command_key: str, command: dict[str, Any]) -> str:
+    signed = {key: command.get(key) for key in ("id", "deviceId", "type", "payload", "expiresAt")}
+    canonical = json.dumps(signed, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hmac.new(command_key.encode("utf-8"), canonical, hashlib.sha256).hexdigest()
 
 
 def parse_iso(value: str) -> datetime:
@@ -400,6 +411,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         MONGODB_URI=os.environ.get("MONGODB_URI"),
         MONGO_DATABASE=os.environ.get("MONGO_DATABASE", "foundstore"),
         OWNER_API_TOKEN=os.environ.get("OWNER_API_TOKEN", ""),
+        COMMAND_SIGNING_KEY=os.environ.get("COMMAND_SIGNING_KEY", "development-command-signing-key"),
         MONGO_FALLBACK_REASON=None,
     )
     if test_config:
@@ -449,7 +461,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         device = app.extensions["device_store"].claim_device(code, display_name or "DaneDesk")
         if not device:
             return jsonify({"error": "El código es inválido, venció o ya fue utilizado"}), 401
-        return jsonify(device), 201
+        return jsonify({**device, "commandKey": device_command_key(app.config["COMMAND_SIGNING_KEY"], device["id"])}), 201
 
     @app.get("/api/v1/devices/<device_id>/commands/next")
     def next_command(device_id: str) -> Response:
@@ -462,7 +474,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         while True:
             commands = app.extensions["device_store"].pending_commands(device_id)
             if commands or time.monotonic() >= deadline:
-                return jsonify({"commands": commands, "retryAfterSeconds": 2 if commands else 15})
+                key = device_command_key(app.config["COMMAND_SIGNING_KEY"], device_id)
+                signed_commands = [{**command, "deviceId": device_id, "signature": command_signature(key, {**command, "deviceId": device_id})} for command in commands]
+                return jsonify({"commands": signed_commands, "retryAfterSeconds": 2 if commands else 15})
             time.sleep(1)
 
     @app.post("/api/v1/devices/<device_id>/commands")
@@ -514,7 +528,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         payload = request.get_json(silent=True) or {}
         topic = str(payload.get("topic", ""))
         data = payload.get("data", {})
-        allowed_topics = {"agent.connected", "install.awaiting_approval", "install.approved", "install.rejected", "install.completed", "install.failed", "device.locked"}
+        allowed_topics = {"agent.connected", "command.rejected_signature", "install.awaiting_approval", "install.approved", "install.rejected", "install.completed", "install.failed", "device.locked"}
         if topic not in allowed_topics or not isinstance(data, dict):
             return jsonify({"error": "Evento no permitido"}), 400
         return jsonify(app.extensions["device_store"].record_event(device_id, topic, data)), 202

@@ -23,6 +23,8 @@ services:
         sync: false
       - key: OWNER_API_TOKEN
         generateValue: true
+      - key: COMMAND_SIGNING_KEY
+        generateValue: true
   - type: cron
     runtime: python
     name: foundstore-maintenance

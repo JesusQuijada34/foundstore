@@ -8,6 +8,8 @@ aprueba explícitamente.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
 import re
@@ -58,9 +60,19 @@ class CloudDevicesClient:
 
     def _connected(self) -> dict[str, Any]:
         state = self._load()
-        if not all(state.get(key) for key in ("server", "deviceId", "agentToken")):
+        if not all(state.get(key) for key in ("server", "deviceId", "agentToken", "commandKey")):
             raise CloudDevicesError("Este DaneDesk aún no está conectado a Cloud Danenone Devices")
         return state
+
+    def _valid_command_signature(self, command: dict[str, Any], command_key: str, device_id: str) -> bool:
+        if any(key not in command for key in ("id", "deviceId", "type", "payload", "expiresAt", "signature")):
+            return False
+        if command["deviceId"] != device_id or not isinstance(command["payload"], dict):
+            return False
+        signed = {key: command.get(key) for key in ("id", "deviceId", "type", "payload", "expiresAt")}
+        canonical = json.dumps(signed, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        expected = hmac.new(command_key.encode("utf-8"), canonical, hashlib.sha256).hexdigest()
+        return hmac.compare_digest(expected, str(command["signature"]))
 
     def _request(self, method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         state = self._connected()
@@ -90,9 +102,9 @@ class CloudDevicesClient:
                 result = json.load(response)
         except (HTTPError, URLError) as error:
             raise CloudDevicesError("No se pudo completar el pairing con Cloud Danenone Devices") from error
-        if not all(result.get(key) for key in ("id", "agentToken")):
+        if not all(result.get(key) for key in ("id", "agentToken", "commandKey")):
             raise CloudDevicesError("La respuesta de pairing no contiene una identidad válida")
-        state = {"server": server.rstrip("/"), "deviceId": result["id"], "agentToken": result["agentToken"], "displayName": display_name.strip()[:80] or "DaneDesk", "pendingActions": []}
+        state = {"server": server.rstrip("/"), "deviceId": result["id"], "agentToken": result["agentToken"], "commandKey": result["commandKey"], "displayName": display_name.strip()[:80] or "DaneDesk", "pendingActions": []}
         self._save(state)
         return {"deviceId": state["deviceId"], "server": state["server"], "platform": result.get("platform", "Danenone")}
 
@@ -113,13 +125,18 @@ class CloudDevicesClient:
         result = self._request("GET", f"/api/v1/devices/{state['deviceId']}/commands/next?wait={wait}")
         pending = state.setdefault("pendingActions", [])
         known = {item["id"] for item in pending}
+        accepted: list[dict[str, Any]] = []
         for command in result.get("commands", []):
+            if not self._valid_command_signature(command, state["commandKey"], state["deviceId"]):
+                self._request("POST", f"/api/v1/devices/{state['deviceId']}/events", {"topic": "command.rejected_signature", "data": {"commandId": command.get("id"), "reason": "invalid_signature"}})
+                continue
+            accepted.append(command)
             if command.get("id") not in known:
                 pending.append(command)
                 if command.get("type") == "install_request":
                     self._request("POST", f"/api/v1/devices/{state['deviceId']}/events", {"topic": "install.awaiting_approval", "data": {"commandId": command["id"], "package": command.get("payload", {}).get("package")}})
         self._save(state)
-        return {"commands": result.get("commands", []), "retryAfterSeconds": result.get("retryAfterSeconds", 15), "localApprovalRequired": [command["id"] for command in result.get("commands", []) if command.get("type") == "install_request"]}
+        return {"commands": accepted, "retryAfterSeconds": result.get("retryAfterSeconds", 15), "localApprovalRequired": [command["id"] for command in accepted if command.get("type") == "install_request"]}
 
     def announce_presence(self) -> dict[str, Any]:
         state = self._connected()

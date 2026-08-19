@@ -8,6 +8,8 @@ El servicio responde directamente en `/`; no existen redirecciones de aplicació
 
 Cloud Danenone Devices es la fuente de estado compartida. Foundstore consulta `GET /api/v1/devices` y mantiene una espera larga contra `GET /api/v1/devices/<id>/events/next`; el agente local usa la misma identidad DaneDesk, recibe órdenes en `commands/next` y devuelve eventos en `POST .../events`. Cada parte tiene una credencial distinta: la app operativa usa la credencial de propietario del servidor y el agente usa un token propio del DaneDesk, emitido una única vez al consumir el pairing.
 
+El servicio entrega además una firma HMAC por orden. Render mantiene `COMMAND_SIGNING_KEY` como secreto de servidor y deriva una clave exclusiva para cada DaneDesk al emparejarlo. El agente verifica `id`, `deviceId`, tipo, carga útil y vencimiento antes de almacenar una orden. Esto detecta una modificación en tránsito; no sustituye la protección de un equipo que ya ha sido comprometido localmente.
+
 Una instalación desde Foundstore se convierte en una orden `install_request`. El servidor entrega la solicitud, pero no instala nada: el agente debe mostrar y registrar la aprobación local antes de ejecutar `flut`. Después puede emitir `install.awaiting_approval`, `install.approved`, `install.rejected`, `install.completed` o `install.failed` para actualizar el estado de la tienda.
 
 ## Almacenamiento
