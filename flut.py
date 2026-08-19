@@ -8,6 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from cloud_devices import CloudDevicesClient
 import fluthin_manager as manager
 
 
@@ -84,6 +85,22 @@ def main(argv: list[str] | None = None) -> int:
     check = sub.add_parser("check-updates")
     check.add_argument("--no-notify", action="store_true")
 
+    cloud = sub.add_parser("cloud", help="Conectar Foundstore con Cloud Danenone Devices")
+    cloud_sub = cloud.add_subparsers(dest="cloud_command", required=True)
+    cloud_pair = cloud_sub.add_parser("pair", help="Vincular este DaneDesk con un código de un solo uso")
+    cloud_pair.add_argument("--server", required=True)
+    cloud_pair.add_argument("--code", required=True)
+    cloud_pair.add_argument("--name", default=os.environ.get("HOSTNAME", "DaneDesk"))
+    cloud_sub.add_parser("status")
+    cloud_poll = cloud_sub.add_parser("poll", help="Recibir solicitudes de la tienda sin ejecutarlas")
+    cloud_poll.add_argument("--wait", type=int, default=25)
+    cloud_sub.add_parser("daemon", help="Mantener el agente Cloud Danenone Devices en segundo plano")
+    cloud_approve = cloud_sub.add_parser("approve", help="Aprobar localmente una solicitud de instalación")
+    cloud_approve.add_argument("command_id")
+    cloud_reject = cloud_sub.add_parser("reject", help="Rechazar localmente una solicitud de instalación")
+    cloud_reject.add_argument("command_id")
+    cloud_sub.add_parser("restore-apps", help="Consultar las aplicaciones aprobadas para restauración")
+
     launch_parser = sub.add_parser("launch")
     launch_parser.add_argument("reference")
 
@@ -105,6 +122,25 @@ def main(argv: list[str] | None = None) -> int:
             value = manager.installed()
         elif args.command == "check-updates":
             value = manager.check_updates(notify=not args.no_notify)
+        elif args.command == "cloud":
+            cloud_client = CloudDevicesClient()
+            if args.cloud_command == "pair":
+                value = cloud_client.pair(args.server, args.code, args.name)
+            elif args.cloud_command == "status":
+                value = cloud_client.status()
+            elif args.cloud_command == "poll":
+                value = cloud_client.poll(wait=args.wait)
+            elif args.cloud_command == "daemon":
+                cloud_client.daemon()
+                return 0
+            elif args.cloud_command == "approve":
+                value = cloud_client.approve(args.command_id)
+            elif args.cloud_command == "reject":
+                value = cloud_client.reject(args.command_id)
+            elif args.cloud_command == "restore-apps":
+                value = cloud_client.restore_apps()
+            else:
+                parser.error("comando cloud desconocido")
         elif args.command == "launch":
             return launch(args.reference)
         else:

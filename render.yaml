@@ -1,19 +1,38 @@
 services:
   - type: web
-    name: foundstore
-    env: python
+    runtime: python
+    name: foundstore-fluthin
+    branch: render
+    rootDir: render-flask
+    plan: starter
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0
-      - key: SECRET_KEY
-        generateValue: true
-      - key: GITHUB_OAUTH_CLIENT_ID
-        sync: false
-      - key: GITHUB_OAUTH_CLIENT_SECRET
-        sync: false
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 45 app:app
+    healthCheckPath: /healthz
+    autoDeployTrigger: commit
+    maxShutdownDelaySeconds: 45
     disk:
-      name: data
-      mountPath: /home/ubuntu/foundstore/data
+      name: foundstore-data
+      mountPath: /var/data
       sizeGB: 1
+    envVars:
+      - key: DATA_DIR
+        value: /var/data
+      - key: MONGO_DATABASE
+        value: foundstore
+      - key: MONGODB_URI
+        sync: false
+      - key: OWNER_API_TOKEN
+        generateValue: true
+  - type: cron
+    runtime: python
+    name: foundstore-maintenance
+    branch: render
+    rootDir: render-flask
+    schedule: "*/15 * * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python maintenance.py
+    envVars:
+      - key: MONGO_DATABASE
+        value: foundstore
+      - key: MONGODB_URI
+        sync: false

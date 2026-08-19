@@ -1,0 +1,81 @@
+import tempfile
+import unittest
+
+from app import create_app
+
+
+class FlaskRenderAppTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.app = create_app({"TESTING": True, "DATA_DIR": self.tempdir.name, "MONGODB_URI": None, "OWNER_API_TOKEN": "owner-test-token"})
+        self.client = self.app.test_client()
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def owner_headers(self) -> dict[str, str]:
+        return {"X-Foundstore-Owner-Token": "owner-test-token"}
+
+    def test_direct_root_and_health_do_not_redirect(self) -> None:
+        self.assertEqual(self.client.get("/").status_code, 200)
+        health = self.client.get("/healthz")
+        self.assertEqual(health.status_code, 200)
+        self.assertEqual(health.json["storage"], "sqlite-fallback")
+
+    def test_pairing_is_single_use_and_returns_no_token_in_uri(self) -> None:
+        pairing = self.client.post("/api/v1/pairing-codes", headers=self.owner_headers(), json={"displayName": "DaneDesk Azul", "restoreApps": [{"publisher": "Influent", "slug": "packagemaker", "version": "0.1"}]})
+        self.assertEqual(pairing.status_code, 201)
+        code = pairing.json["code"]
+        self.assertTrue(6 <= len(code) <= 12 and code.isalnum())
+        self.assertNotIn("agentToken", pairing.json["agentUri"])
+
+        claimed = self.client.post("/api/v1/agent/bootstrap", json={"code": code, "displayName": "DaneDesk Azul"})
+        self.assertEqual(claimed.status_code, 201)
+        self.assertIn("agentToken", claimed.json)
+        duplicate = self.client.post("/api/v1/agent/bootstrap", json={"code": code, "displayName": "Otro"})
+        self.assertEqual(duplicate.status_code, 401)
+
+    def test_command_long_poll_and_restore_require_agent_token(self) -> None:
+        pairing = self.client.post("/api/v1/pairing-codes", headers=self.owner_headers(), json={"restoreApps": [{"publisher": "Influent", "slug": "packagemaker", "version": "0.1"}]}).json
+        device = self.client.post("/api/v1/agent/bootstrap", json={"code": pairing["code"], "displayName": "DaneDesk"}).json
+        agent_headers = {"X-Danenone-Agent-Token": device["agentToken"]}
+
+        unauthorized = self.client.get(f"/api/v1/devices/{device['id']}/restore-apps")
+        self.assertEqual(unauthorized.status_code, 401)
+        queued = self.client.post(f"/api/v1/devices/{device['id']}/commands", headers=self.owner_headers(), json={"type": "ring", "payload": {}})
+        self.assertEqual(queued.status_code, 202)
+        pending = self.client.get(f"/api/v1/devices/{device['id']}/commands/next?wait=0", headers=agent_headers)
+        self.assertEqual(pending.status_code, 200)
+        self.assertEqual(pending.json["commands"][0]["type"], "ring")
+        restored = self.client.get(f"/api/v1/devices/{device['id']}/restore-apps", headers=agent_headers)
+        self.assertEqual(restored.json["approvedApps"][0]["slug"], "packagemaker")
+
+    def test_foundstore_app_and_agent_share_device_events_and_install_requests(self) -> None:
+        pairing = self.client.post("/api/v1/pairing-codes", headers=self.owner_headers(), json={"displayName": "Equipo compartido"}).json
+        device = self.client.post("/api/v1/agent/bootstrap", json={"code": pairing["code"], "displayName": "Equipo compartido"}).json
+        agent_headers = {"X-Danenone-Agent-Token": device["agentToken"]}
+
+        devices = self.client.get("/api/v1/devices", headers=self.owner_headers())
+        self.assertEqual(devices.status_code, 200)
+        self.assertEqual(devices.json["devices"][0]["id"], device["id"])
+
+        queued = self.client.post(
+            f"/api/v1/devices/{device['id']}/installation-requests",
+            headers=self.owner_headers(),
+            json={"package": "Influent/packagemaker", "version": "0.1"},
+        )
+        self.assertEqual(queued.status_code, 202)
+        self.assertTrue(queued.json["localApprovalRequired"])
+        command = self.client.get(f"/api/v1/devices/{device['id']}/commands/next?wait=0", headers=agent_headers)
+        self.assertEqual(command.json["commands"][0]["type"], "install_request")
+        self.assertTrue(command.json["commands"][0]["payload"]["localApprovalRequired"])
+
+        event = self.client.post(
+            f"/api/v1/devices/{device['id']}/events",
+            headers=agent_headers,
+            json={"topic": "install.awaiting_approval", "data": {"package": "Influent/packagemaker"}},
+        )
+        self.assertEqual(event.status_code, 202)
+        observed = self.client.get(f"/api/v1/devices/{device['id']}/events/next?wait=0", headers=self.owner_headers())
+        self.assertEqual(observed.status_code, 200)
+        self.assertTrue(any(item["topic"] == "install.awaiting_approval" for item in observed.json["events"]))
