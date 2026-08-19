@@ -218,17 +218,19 @@ class StoreWindow(QMainWindow):
 
     def show_cloud_devices(self):
         try:
-            state = self.cloud_client.status()
-            self.cloud_state.setText(f"Cloud Devices: {state['displayName']} · {state['pendingActions']} solicitudes pendientes")
-            QMessageBox.information(self, "Cloud Danenone Devices", f"Conectado a {state['server']}\nDaneDesk: {state['deviceId']}\nSolicitudes pendientes: {state['pendingActions']}\n\nLas instalaciones recibidas desde la nube requieren aprobación local mediante flut cloud approve.")
+            state = self.cloud_client.cloud_state()
+            remote = state["remote"]
+            self.cloud_state.setText(f"Cloud Devices: {remote['displayName']} · {remote['status']} · {state['pendingActions']} solicitudes pendientes")
+            QMessageBox.information(self, "Cloud Danenone Devices", f"Conectado a {state['server']}\nDaneDesk: {remote['id']}\nEstado cloud: {remote['status']}\nSolicitudes pendientes: {state['pendingActions']}\n\nLas instalaciones recibidas desde la nube requieren aprobación local mediante flut cloud approve.")
         except CloudDevicesError:
             self.cloud_state.setText("Cloud Devices: sin conectar")
             QMessageBox.information(self, "Cloud Danenone Devices", "Este Foundstore aún no está vinculado a un DaneDesk. Usa Configuración para conectarlo con un código de pairing.")
 
     def refresh_cloud_indicator(self):
         try:
-            state = self.cloud_client.status()
-            self.cloud_state.setText(f"Cloud Devices: {state['displayName']} · {state['pendingActions']} solicitudes pendientes")
+            state = self.cloud_client.cloud_state()
+            remote = state["remote"]
+            self.cloud_state.setText(f"Cloud Devices: {remote['displayName']} · {remote['status']} · {state['pendingActions']} solicitudes pendientes")
         except CloudDevicesError:
             self.cloud_state.setText("Cloud Devices: sin conectar")
 

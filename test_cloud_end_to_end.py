@@ -40,6 +40,9 @@ class DaneDeskEndToEndTests(unittest.TestCase):
 
         paired = self.cloud.pair(self.base_url, pairing["code"], "DaneDesk E2E")
         device_id = paired["deviceId"]
+        cloud_state = self.cloud.cloud_state()
+        self.assertEqual(cloud_state["remote"]["id"], device_id)
+        self.assertEqual(cloud_state["remote"]["status"], "active")
         listed = self.app.test_client().get("/api/v1/devices", headers=self.owner_headers).json["devices"]
         self.assertEqual(listed[0]["id"], device_id)
 

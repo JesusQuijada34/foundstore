@@ -100,6 +100,13 @@ class CloudDevicesClient:
         state = self._connected()
         return {"connected": True, "deviceId": state["deviceId"], "displayName": state.get("displayName", "DaneDesk"), "server": state["server"], "pendingActions": len(state.get("pendingActions", []))}
 
+    def cloud_state(self) -> dict[str, Any]:
+        state = self._connected()
+        remote = self._request("GET", f"/api/v1/devices/{state['deviceId']}/state").get("device")
+        if not isinstance(remote, dict) or remote.get("id") != state["deviceId"]:
+            raise CloudDevicesError("Cloud Danenone Devices no devolvió el estado de este DaneDesk")
+        return {**self.status(), "remote": remote}
+
     def poll(self, wait: int = 25) -> dict[str, Any]:
         state = self._connected()
         wait = min(max(wait, 0), 25)

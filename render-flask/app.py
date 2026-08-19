@@ -530,6 +530,24 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         app.extensions["device_store"].update_heartbeat(device_id, location)
         return jsonify({"success": True, "locationStoredOnlyWhenLost": True})
 
+    @app.get("/api/v1/devices/<device_id>/state")
+    def device_state(device_id: str) -> Response:
+        device = app.extensions["device_store"].authenticate_device(device_id, agent_token())
+        if not device:
+            return jsonify({"error": "Agente no autorizado"}), 401
+        last_seen = device.get("last_seen_at") or device.get("lastSeenAt")
+        if isinstance(last_seen, datetime):
+            last_seen = last_seen.isoformat()
+        return jsonify({
+            "device": {
+                "id": device["id"],
+                "displayName": device.get("display_name") or device.get("displayName"),
+                "status": device.get("status", "active"),
+                "locationProtection": bool(device.get("location_protection", device.get("locationProtection", False))),
+                "lastSeenAt": last_seen,
+            },
+        })
+
     @app.get("/api/v1/devices/<device_id>/restore-apps")
     def restore_apps(device_id: str) -> Response:
         if not app.extensions["device_store"].authenticate_device(device_id, agent_token()):
