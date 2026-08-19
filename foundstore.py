@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QFrame,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -25,6 +26,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from cloud_devices import CloudDevicesClient, CloudDevicesError
 import fluthin_manager as manager
 
 try:
@@ -67,6 +69,7 @@ class StoreWindow(QMainWindow):
         self.resize(980, 680)
         self.setMinimumSize(760, 520)
         self.packages: list[dict[str, str]] = []
+        self.cloud_client = CloudDevicesClient()
         self._apply_leviathan()
         self._build_ui()
         self.refresh_catalog()
@@ -112,6 +115,9 @@ class StoreWindow(QMainWindow):
         website = QPushButton("Abrir tienda web")
         website.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://foundstore.onrender.com")))
         toolbar.addWidget(website)
+        cloud = QPushButton("Cloud Devices")
+        cloud.clicked.connect(self.show_cloud_devices)
+        toolbar.addWidget(cloud)
         layout.addLayout(toolbar)
 
         self.stack = QStackedWidget()
@@ -134,6 +140,18 @@ class StoreWindow(QMainWindow):
         self.notify_updates.setChecked(True)
         settings_layout.addWidget(self.notify_updates)
         settings_layout.addWidget(QLabel("El gestor `flut` conserva el catálogo en el estado de Danenone y registra las aplicaciones instaladas en FreeDesktop."))
+        cloud_label = QLabel("Cloud Danenone Devices comparte el mismo DaneDesk con el agente local. Las solicitudes de instalación remota se quedan pendientes hasta que las apruebes en este equipo.")
+        cloud_label.setWordWrap(True)
+        cloud_label.setStyleSheet("color:#9ac9bf;")
+        settings_layout.addWidget(cloud_label)
+        self.cloud_state = QLabel("Cloud Devices: sin conectar")
+        settings_layout.addWidget(self.cloud_state)
+        connect_cloud = QPushButton("Conectar este DaneDesk")
+        connect_cloud.clicked.connect(self.connect_cloud_devices)
+        settings_layout.addWidget(connect_cloud)
+        refresh_cloud = QPushButton("Actualizar estado Cloud")
+        refresh_cloud.clicked.connect(self.show_cloud_devices)
+        settings_layout.addWidget(refresh_cloud)
         settings_layout.addStretch(1)
         self.stack.addWidget(settings)
 
@@ -179,6 +197,29 @@ class StoreWindow(QMainWindow):
             QMessageBox.information(self, "Foundstore", f"Instalado: {result['metadata']['name']}\n{result['metadata']['version']}")
         except Exception as exc:
             QMessageBox.warning(self, "Instalación", str(exc))
+
+    def connect_cloud_devices(self):
+        server, accepted = QInputDialog.getText(self, "Cloud Danenone Devices", "Servidor HTTPS")
+        if not accepted:
+            return
+        code, accepted = QInputDialog.getText(self, "Cloud Danenone Devices", "Código de pairing")
+        if not accepted:
+            return
+        try:
+            result = self.cloud_client.pair(server, code, self.windowTitle() or "DaneDesk")
+            self.cloud_state.setText(f"Cloud Devices: conectado como {result['deviceId']}")
+            QMessageBox.information(self, "Cloud Danenone Devices", "Este DaneDesk quedó vinculado. El agente local recibirá solicitudes de la tienda para aprobación local.")
+        except CloudDevicesError as exc:
+            QMessageBox.warning(self, "Cloud Danenone Devices", str(exc))
+
+    def show_cloud_devices(self):
+        try:
+            state = self.cloud_client.status()
+            self.cloud_state.setText(f"Cloud Devices: {state['displayName']} · {state['pendingActions']} solicitudes pendientes")
+            QMessageBox.information(self, "Cloud Danenone Devices", f"Conectado a {state['server']}\nDaneDesk: {state['deviceId']}\nSolicitudes pendientes: {state['pendingActions']}\n\nLas instalaciones recibidas desde la nube requieren aprobación local mediante flut cloud approve.")
+        except CloudDevicesError:
+            self.cloud_state.setText("Cloud Devices: sin conectar")
+            QMessageBox.information(self, "Cloud Danenone Devices", "Este Foundstore aún no está vinculado a un DaneDesk. Usa Configuración para conectarlo con un código de pairing.")
 
 
 def main() -> int:
