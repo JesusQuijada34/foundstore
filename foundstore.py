@@ -4,7 +4,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PyQt6.QtCore import QUrl, Qt
+from PyQt6.QtCore import QTimer, QUrl, Qt
 from PyQt6.QtGui import QDesktopServices, QIcon
 from PyQt6.QtWidgets import (
     QApplication,
@@ -73,6 +73,10 @@ class StoreWindow(QMainWindow):
         self._apply_leviathan()
         self._build_ui()
         self.refresh_catalog()
+        self.cloud_timer = QTimer(self)
+        self.cloud_timer.setInterval(15_000)
+        self.cloud_timer.timeout.connect(self.refresh_cloud_indicator)
+        self.cloud_timer.start()
 
     def _apply_leviathan(self):
         if WipeWindow is not None:
@@ -220,6 +224,13 @@ class StoreWindow(QMainWindow):
         except CloudDevicesError:
             self.cloud_state.setText("Cloud Devices: sin conectar")
             QMessageBox.information(self, "Cloud Danenone Devices", "Este Foundstore aún no está vinculado a un DaneDesk. Usa Configuración para conectarlo con un código de pairing.")
+
+    def refresh_cloud_indicator(self):
+        try:
+            state = self.cloud_client.status()
+            self.cloud_state.setText(f"Cloud Devices: {state['displayName']} · {state['pendingActions']} solicitudes pendientes")
+        except CloudDevicesError:
+            self.cloud_state.setText("Cloud Devices: sin conectar")
 
 
 def main() -> int:
