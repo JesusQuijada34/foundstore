@@ -1,5 +1,7 @@
+import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from app import create_app
 
@@ -21,6 +23,17 @@ class FlaskRenderAppTests(unittest.TestCase):
         health = self.client.get("/healthz")
         self.assertEqual(health.status_code, 200)
         self.assertEqual(health.json["storage"], "sqlite-fallback")
+
+    def test_render_without_explicit_volume_uses_local_ephemeral_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as workdir, patch.dict(os.environ, {"RENDER": "true"}, clear=True):
+            previous = os.getcwd()
+            try:
+                os.chdir(workdir)
+                app = create_app({"TESTING": True, "MONGODB_URI": None, "OWNER_API_TOKEN": "owner-test-token"})
+                self.assertEqual(app.config["DATA_DIR"], "./var")
+                self.assertEqual(app.test_client().get("/healthz").json["storage"], "sqlite-fallback")
+            finally:
+                os.chdir(previous)
 
     def test_pairing_is_single_use_and_returns_no_token_in_uri(self) -> None:
         pairing = self.client.post("/api/v1/pairing-codes", headers=self.owner_headers(), json={"displayName": "DaneDesk Azul", "restoreApps": [{"publisher": "Influent", "slug": "packagemaker", "version": "0.1"}]})

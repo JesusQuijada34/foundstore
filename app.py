@@ -423,7 +423,10 @@ def long_poll_seconds() -> int | None:
 def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     app = Flask(__name__, template_folder="render_templates")
     app.config.from_mapping(
-        DATA_DIR=os.environ.get("DATA_DIR", "/var/data" if os.environ.get("RENDER") else "./var"),
+        # Render Free no monta un disco en /var/data. Un volumen persistente debe
+        # declararse explícitamente mediante DATA_DIR; el respaldo local es
+        # deliberadamente efímero y se expone en /healthz como sqlite-fallback.
+        DATA_DIR=os.environ.get("DATA_DIR", "./var"),
         MONGODB_URI=os.environ.get("MONGODB_URI"),
         MONGO_DATABASE=os.environ.get("MONGO_DATABASE", "foundstore"),
         OWNER_API_TOKEN=os.environ.get("OWNER_API_TOKEN", ""),
@@ -607,3 +610,10 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
 
 app = create_app()
+
+
+if __name__ == "__main__":
+    # Render debe usar Gunicorn según render.yaml. Esto permite que una
+    # configuración manual que ejecute `python app.py` siga iniciando el
+    # servicio en $PORT en lugar de salir inmediatamente.
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "10000")))

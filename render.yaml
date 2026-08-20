@@ -3,19 +3,13 @@ services:
     runtime: python
     name: foundstore-fluthin
     branch: render
-    plan: starter
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 45 app:app
     healthCheckPath: /healthz
     autoDeployTrigger: commit
     maxShutdownDelaySeconds: 45
-    disk:
-      name: foundstore-data
-      mountPath: /var/data
-      sizeGB: 1
     envVars:
-      - key: DATA_DIR
-        value: /var/data
       - key: MONGO_DATABASE
         value: foundstore
       - key: MONGODB_URI

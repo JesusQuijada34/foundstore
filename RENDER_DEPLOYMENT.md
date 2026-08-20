@@ -14,7 +14,7 @@ Una instalación desde Foundstore se convierte en una orden `install_request`. E
 
 ## Almacenamiento
 
-Si `MONGODB_URI` está configurada y responde, MongoDB guarda los códigos de pairing, dispositivos y órdenes de corta vigencia. Si no hay URI o MongoDB no está disponible, Flask usa SQLite en `DATA_DIR`. En Render, `DATA_DIR` se monta en `/var/data`; la unidad persistente del servicio web conserva esa ruta. Sin una unidad persistente, el sistema de archivos de un servicio Render es efímero y SQLite no debe tratarse como almacenamiento durable.
+Si `MONGODB_URI` está configurada y responde, MongoDB guarda los códigos de pairing, dispositivos y órdenes de corta vigencia. Si no hay URI o MongoDB no está disponible, Flask usa SQLite en `DATA_DIR`, que por defecto es `./var`. La ruta no presupone un volumen en `/var/data`: sólo se debe definir `DATA_DIR` para una ubicación persistente cuando el proveedor haya montado y autorizado explícitamente ese volumen. En Render Free, el respaldo SQLite es efímero y no debe tratarse como almacenamiento durable.
 
 Los trabajos cron no tienen acceso a discos persistentes. Por ello, `foundstore-maintenance` usa MongoDB para eliminar códigos de pairing y órdenes caducadas. Si se escoge solo SQLite, la limpieza ocurre al reiniciar o se debe ejecutar como una acción interna del servicio web.
 
