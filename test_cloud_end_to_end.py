@@ -13,7 +13,7 @@ os.environ.setdefault("DATA_DIR", str(Path(tempfile.gettempdir()) / "foundstore-
 sys.path.insert(0, str(ROOT / "render-flask"))
 
 from app import create_app
-from cloud_devices import CloudDevicesClient
+from cloud_devices import CloudDevicesClient, CloudDevicesError
 
 
 class DaneDeskEndToEndTests(unittest.TestCase):
@@ -82,6 +82,17 @@ class DaneDeskEndToEndTests(unittest.TestCase):
 
         events = self.app.test_client().get(f"/api/v1/devices/{device_id}/events/next?wait=0", headers=self.owner_headers).json["events"]
         self.assertTrue(any(event["topic"] == "device.ring.started" and event["data"]["commandId"] == polled["commands"][0]["id"] for event in events))
+
+    def test_daemon_reannounces_after_failure_and_uses_progressive_backoff(self):
+        delays: list[int] = []
+        with patch.object(self.cloud, "announce_presence") as announce, patch.object(
+            self.cloud,
+            "poll",
+            side_effect=[CloudDevicesError("sin red"), {"retryAfterSeconds": 7}],
+        ):
+            self.cloud.daemon(max_cycles=2, sleep_fn=delays.append)
+        self.assertEqual(announce.call_count, 2)
+        self.assertEqual(delays, [2])
 
 
 if __name__ == "__main__":

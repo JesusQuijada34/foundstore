@@ -209,17 +209,29 @@ class CloudDevicesClient:
         state = self._connected()
         return self._request("POST", f"/api/v1/devices/{state['deviceId']}/events", {"topic": "agent.connected", "data": {"client": "flut", "nonce": secrets.token_hex(8)}})
 
-    def daemon(self) -> None:
-        """Mantiene un único long-poll, con retroceso progresivo al fallar la red."""
-        self.announce_presence()
+    def daemon(self, max_cycles: int | None = None, sleep_fn: Any = time.sleep) -> None:
+        """Mantiene un único long-poll, con retroceso progresivo al fallar la red.
+
+        `max_cycles` y `sleep_fn` sólo permiten una prueba determinista; el CLI
+        usa el valor predeterminado y mantiene el proceso hasta que se detenga.
+        """
         delay = 1
+        announced = False
+        cycles = 0
         while True:
             try:
+                if not announced:
+                    self.announce_presence()
+                    announced = True
                 result = self.poll(wait=25)
                 delay = max(1, int(result.get("retryAfterSeconds", 15)))
             except CloudDevicesError:
+                announced = False
                 delay = min(delay * 2, 120)
-            time.sleep(delay)
+            cycles += 1
+            if max_cycles is not None and cycles >= max_cycles:
+                return
+            sleep_fn(delay)
 
     def approve(self, command_id: str) -> dict[str, Any]:
         state = self._connected()
