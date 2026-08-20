@@ -226,8 +226,9 @@ class LocalStore:
             device = conn.execute("SELECT location_protection, status FROM devices WHERE id = ?", (device_id,)).fetchone()
             if not device:
                 return False
-            stored_location = json.dumps(location) if location and device["location_protection"] and device["status"] == "lost" else None
-            conn.execute("UPDATE devices SET last_seen_at = ?, location_json = COALESCE(?, location_json) WHERE id = ?", (iso_now(), stored_location, device_id))
+            allow_location = bool(location and device["location_protection"] and device["status"] == "lost")
+            stored_location = json.dumps(location) if allow_location else None
+            conn.execute("UPDATE devices SET last_seen_at = ?, location_json = ? WHERE id = ?", (iso_now(), stored_location, device_id))
         return True
 
     def restore_apps(self, device_id: str) -> list[dict[str, str]]:
@@ -325,9 +326,12 @@ class MongoStore:
         if not device:
             return False
         update: dict[str, Any] = {"lastSeenAt": utc_now()}
-        if location and device.get("locationProtection") and device.get("status") == "lost":
+        allow_location = bool(location and device.get("locationProtection") and device.get("status") == "lost")
+        if allow_location:
             update["lastKnownLocation"] = location
-        self.db.devices.update_one({"id": device_id}, {"$set": update})
+            self.db.devices.update_one({"id": device_id}, {"$set": update})
+        else:
+            self.db.devices.update_one({"id": device_id}, {"$set": update, "$unset": {"lastKnownLocation": ""}})
         return True
 
     def restore_apps(self, device_id: str) -> list[dict[str, str]]:

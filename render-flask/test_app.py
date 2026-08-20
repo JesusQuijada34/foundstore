@@ -52,6 +52,27 @@ class FlaskRenderAppTests(unittest.TestCase):
         restored = self.client.get(f"/api/v1/devices/{device['id']}/restore-apps", headers=agent_headers)
         self.assertEqual(restored.json["approvedApps"][0]["slug"], "packagemaker")
 
+    def test_location_is_stored_only_while_lost_and_is_cleared_after_recovery(self) -> None:
+        pairing = self.client.post("/api/v1/pairing-codes", headers=self.owner_headers(), json={}).json
+        device = self.client.post("/api/v1/agent/bootstrap", json={"code": pairing["code"], "displayName": "DaneDesk privado"}).json
+        agent_headers = {"X-Danenone-Agent-Token": device["agentToken"]}
+        location = {"latitude": 18.4861, "longitude": -69.9312, "accuracy": 25}
+        store = self.app.extensions["device_store"]
+
+        self.assertEqual(self.client.post(f"/api/v1/devices/{device['id']}/heartbeat", headers=agent_headers, json={"location": location}).status_code, 200)
+        with store._connect() as conn:
+            self.assertIsNone(conn.execute("SELECT location_json FROM devices WHERE id = ?", (device["id"],)).fetchone()["location_json"])
+            conn.execute("UPDATE devices SET status = 'lost' WHERE id = ?", (device["id"],))
+
+        self.client.post(f"/api/v1/devices/{device['id']}/heartbeat", headers=agent_headers, json={"location": location})
+        with store._connect() as conn:
+            self.assertIn("latitude", conn.execute("SELECT location_json FROM devices WHERE id = ?", (device["id"],)).fetchone()["location_json"])
+            conn.execute("UPDATE devices SET status = 'active' WHERE id = ?", (device["id"],))
+
+        self.client.post(f"/api/v1/devices/{device['id']}/heartbeat", headers=agent_headers, json={})
+        with store._connect() as conn:
+            self.assertIsNone(conn.execute("SELECT location_json FROM devices WHERE id = ?", (device["id"],)).fetchone()["location_json"])
+
     def test_foundstore_app_and_agent_share_device_events_and_install_requests(self) -> None:
         pairing = self.client.post("/api/v1/pairing-codes", headers=self.owner_headers(), json={"displayName": "Equipo compartido"}).json
         device = self.client.post("/api/v1/agent/bootstrap", json={"code": pairing["code"], "displayName": "Equipo compartido"}).json
