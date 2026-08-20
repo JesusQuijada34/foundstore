@@ -47,6 +47,8 @@ class FlaskRenderAppTests(unittest.TestCase):
         pending = self.client.get(f"/api/v1/devices/{device['id']}/commands/next?wait=0", headers=agent_headers)
         self.assertEqual(pending.status_code, 200)
         self.assertEqual(pending.json["commands"][0]["type"], "ring")
+        self.assertIn("signature", pending.json["commands"][0])
+        self.assertIn("expiresAt", pending.json["commands"][0])
         restored = self.client.get(f"/api/v1/devices/{device['id']}/restore-apps", headers=agent_headers)
         self.assertEqual(restored.json["approvedApps"][0]["slug"], "packagemaker")
 

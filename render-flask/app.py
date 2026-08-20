@@ -81,7 +81,7 @@ class DeviceStore(Protocol):
     def claim_device(self, code: str, display_name: str) -> dict[str, Any] | None: ...
     def authenticate_device(self, device_id: str, agent_token: str) -> dict[str, Any] | None: ...
     def pending_commands(self, device_id: str) -> list[dict[str, Any]]: ...
-    def enqueue_command(self, device_id: str, command_type: str, payload: dict[str, Any]) -> dict[str, Any] | None: ...
+    def enqueue_command(self, device_id: str, command_type: str, payload: dict[str, Any], expires_in_seconds: int | None = None) -> dict[str, Any] | None: ...
     def update_heartbeat(self, device_id: str, location: dict[str, float] | None) -> bool: ...
     def restore_apps(self, device_id: str) -> list[dict[str, str]]: ...
     def list_devices(self) -> list[dict[str, Any]]: ...
@@ -203,13 +203,13 @@ class LocalStore:
                 )
         return [{"id": row["id"], "type": row["command_type"], "payload": json.loads(row["payload_json"]), "expiresAt": row["expires_at"]} for row in rows]
 
-    def enqueue_command(self, device_id: str, command_type: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+    def enqueue_command(self, device_id: str, command_type: str, payload: dict[str, Any], expires_in_seconds: int | None = None) -> dict[str, Any] | None:
         with self._connect() as conn:
             device = conn.execute("SELECT id FROM devices WHERE id = ?", (device_id,)).fetchone()
             if not device:
                 return None
             command_id = secrets.token_urlsafe(18)
-            expires_at = utc_now() + timedelta(minutes=5)
+            expires_at = utc_now() + timedelta(seconds=expires_in_seconds or 300)
             conn.execute(
                 """INSERT INTO commands(id, device_id, command_type, payload_json, expires_at, created_at)
                    VALUES (?, ?, ?, ?, ?, ?)""",
@@ -311,11 +311,11 @@ class MongoStore:
             self.db.device_events.insert_many([{"id": secrets.token_urlsafe(18), "deviceId": device_id, "topic": "command.delivered", "data": {"commandId": item}, "createdAt": now} for item in identifiers])
         return [{"id": command["id"], "type": command["type"], "payload": command["payload"], "expiresAt": command["expiresAt"].isoformat()} for command in commands]
 
-    def enqueue_command(self, device_id: str, command_type: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+    def enqueue_command(self, device_id: str, command_type: str, payload: dict[str, Any], expires_in_seconds: int | None = None) -> dict[str, Any] | None:
         if not self.db.devices.find_one({"id": device_id}, {"_id": 1}):
             return None
         command_id = secrets.token_urlsafe(18)
-        expires_at = utc_now() + timedelta(minutes=5)
+        expires_at = utc_now() + timedelta(seconds=expires_in_seconds or 300)
         self.db.commands.insert_one({"id": command_id, "deviceId": device_id, "type": command_type, "payload": payload, "status": "pending", "createdAt": utc_now(), "expiresAt": expires_at})
         self.record_event(device_id, "command.queued", {"commandId": command_id, "type": command_type})
         return {"id": command_id, "expiresAt": expires_at.isoformat()}
@@ -487,7 +487,17 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         command_type = str(payload.get("type", ""))
         if command_type not in {"ring", "lock", "show_message", "install_request"}:
             return jsonify({"error": "Tipo de orden no permitido"}), 400
-        command = app.extensions["device_store"].enqueue_command(device_id, command_type, payload.get("payload", {}))
+        command_payload = payload.get("payload", {})
+        if not isinstance(command_payload, dict):
+            return jsonify({"error": "La carga de la orden debe ser un objeto"}), 400
+        expires_in_seconds = None
+        if command_type == "ring":
+            duration = command_payload.get("durationSeconds", 5)
+            if isinstance(duration, bool) or not isinstance(duration, int) or not 1 <= duration <= 10:
+                return jsonify({"error": "El timbre requiere durationSeconds entre 1 y 10"}), 400
+            command_payload = {"durationSeconds": duration}
+            expires_in_seconds = max(15, duration + 15)
+        command = app.extensions["device_store"].enqueue_command(device_id, command_type, command_payload, expires_in_seconds)
         if not command:
             return jsonify({"error": "Dispositivo no encontrado"}), 404
         return jsonify(command), 202
@@ -528,7 +538,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         payload = request.get_json(silent=True) or {}
         topic = str(payload.get("topic", ""))
         data = payload.get("data", {})
-        allowed_topics = {"agent.connected", "command.rejected_signature", "install.awaiting_approval", "install.approved", "install.rejected", "install.completed", "install.failed", "device.locked"}
+        allowed_topics = {"agent.connected", "command.rejected_signature", "command.rejected_expired", "install.awaiting_approval", "install.approved", "install.rejected", "install.completed", "install.failed", "device.locked", "device.ring.started", "device.ring.failed"}
         if topic not in allowed_topics or not isinstance(data, dict):
             return jsonify({"error": "Evento no permitido"}), 400
         return jsonify(app.extensions["device_store"].record_event(device_id, topic, data)), 202

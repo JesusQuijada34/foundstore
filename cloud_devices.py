@@ -14,8 +14,11 @@ import json
 import os
 import re
 import secrets
+import shutil
+import subprocess
 import tempfile
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -26,6 +29,7 @@ import fluthin_manager as manager
 DEFAULT_STATE_PATH = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")) / "foundstore" / "cloud-devices.json"
 PAIRING_CODE = re.compile(r"^[A-Za-z0-9]{6,12}$")
 PACKAGE_REFERENCE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}/[A-Za-z0-9][A-Za-z0-9_.-]{0,119}$")
+MAX_RING_SECONDS = 10
 
 
 class CloudDevicesError(RuntimeError):
@@ -73,6 +77,63 @@ class CloudDevicesClient:
         canonical = json.dumps(signed, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
         expected = hmac.new(command_key.encode("utf-8"), canonical, hashlib.sha256).hexdigest()
         return hmac.compare_digest(expected, str(command["signature"]))
+
+    @staticmethod
+    def _command_not_expired(command: dict[str, Any]) -> bool:
+        try:
+            expiry = datetime.fromisoformat(str(command["expiresAt"]).replace("Z", "+00:00"))
+        except (KeyError, TypeError, ValueError):
+            return False
+        return expiry > datetime.now(timezone.utc)
+
+    @staticmethod
+    def _ring_duration(command: dict[str, Any]) -> int:
+        duration = command.get("payload", {}).get("durationSeconds", 5)
+        if isinstance(duration, bool) or not isinstance(duration, int) or not 1 <= duration <= MAX_RING_SECONDS:
+            raise CloudDevicesError("La orden de timbre tiene una duración inválida")
+        return duration
+
+    @staticmethod
+    def _play_ring(duration_seconds: int) -> None:
+        """Reproduce una alerta local mediante el motor de audio disponible, sin shell."""
+        sound = next(
+            (path for path in (
+                "/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga",
+                "/usr/share/sounds/freedesktop/stereo/bell.oga",
+            ) if Path(path).is_file()),
+            None,
+        )
+        canberra = shutil.which("canberra-gtk-play")
+        if canberra:
+            subprocess.run(
+                [canberra, "-i", "alarm-clock-elapsed"],
+                check=True,
+                timeout=duration_seconds + 3,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return
+        paplay = shutil.which("paplay")
+        if paplay and sound:
+            subprocess.run(
+                [paplay, sound],
+                check=True,
+                timeout=duration_seconds + 3,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return
+        raise CloudDevicesError("No hay un motor de audio compatible para el timbre DaneDesk")
+
+    def _execute_ring(self, state: dict[str, Any], command: dict[str, Any]) -> None:
+        duration = self._ring_duration(command)
+        event_path = f"/api/v1/devices/{state['deviceId']}/events"
+        try:
+            self._play_ring(duration)
+        except (CloudDevicesError, OSError, subprocess.SubprocessError) as error:
+            self._request("POST", event_path, {"topic": "device.ring.failed", "data": {"commandId": command["id"], "reason": str(error)[:240]}})
+            return
+        self._request("POST", event_path, {"topic": "device.ring.started", "data": {"commandId": command["id"], "durationSeconds": duration}})
 
     def _request(self, method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         state = self._connected()
@@ -130,7 +191,13 @@ class CloudDevicesClient:
             if not self._valid_command_signature(command, state["commandKey"], state["deviceId"]):
                 self._request("POST", f"/api/v1/devices/{state['deviceId']}/events", {"topic": "command.rejected_signature", "data": {"commandId": command.get("id"), "reason": "invalid_signature"}})
                 continue
+            if not self._command_not_expired(command):
+                self._request("POST", f"/api/v1/devices/{state['deviceId']}/events", {"topic": "command.rejected_expired", "data": {"commandId": command.get("id")}})
+                continue
             accepted.append(command)
+            if command.get("type") == "ring":
+                self._execute_ring(state, command)
+                continue
             if command.get("id") not in known:
                 pending.append(command)
                 if command.get("type") == "install_request":

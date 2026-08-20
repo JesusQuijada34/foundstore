@@ -4,6 +4,7 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from werkzeug.serving import make_server
 
@@ -62,6 +63,25 @@ class DaneDeskEndToEndTests(unittest.TestCase):
         topics = {event["topic"] for event in events}
         self.assertIn("device.paired", topics)
         self.assertIn("install.awaiting_approval", topics)
+
+    def test_signed_ring_runs_only_after_agent_signature_validation_and_is_audited(self):
+        pairing = self.app.test_client().post("/api/v1/pairing-codes", headers=self.owner_headers, json={"displayName": "DaneDesk Timbre"}).json
+        device_id = self.cloud.pair(self.base_url, pairing["code"], "DaneDesk Timbre")["deviceId"]
+
+        queued = self.app.test_client().post(
+            f"/api/v1/devices/{device_id}/commands",
+            headers=self.owner_headers,
+            json={"type": "ring", "payload": {"durationSeconds": 3}},
+        )
+        self.assertEqual(queued.status_code, 202)
+
+        with patch.object(self.cloud, "_play_ring") as play_ring:
+            polled = self.cloud.poll(wait=0)
+        self.assertEqual([command["type"] for command in polled["commands"]], ["ring"])
+        play_ring.assert_called_once_with(3)
+
+        events = self.app.test_client().get(f"/api/v1/devices/{device_id}/events/next?wait=0", headers=self.owner_headers).json["events"]
+        self.assertTrue(any(event["topic"] == "device.ring.started" and event["data"]["commandId"] == polled["commands"][0]["id"] for event in events))
 
 
 if __name__ == "__main__":
