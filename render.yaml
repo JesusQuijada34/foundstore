@@ -3,7 +3,6 @@ services:
     runtime: python
     name: foundstore-fluthin
     branch: render
-    rootDir: render-flask
     plan: starter
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 45 app:app
@@ -29,7 +28,6 @@ services:
     runtime: python
     name: foundstore-maintenance
     branch: render
-    rootDir: render-flask
     schedule: "*/15 * * * *"
     buildCommand: pip install -r requirements.txt
     startCommand: python maintenance.py

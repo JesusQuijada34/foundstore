@@ -1,6 +1,6 @@
 # Foundstore Flask para Render
 
-La rama `render` aísla este servicio Flask de la aplicación React/tRPC que permanece en `main`. Render debe desplegar el servicio web desde `render-flask/` con `gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 45 app:app`.
+La rama `render` aísla este servicio Flask de la aplicación React/tRPC que permanece en `main`. En esta rama, `app.py`, `maintenance.py`, `requirements.txt`, `test_app.py`, `render.yaml` y `render_templates/` viven en la raíz. Render debe desplegar desde la raíz con `gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 45 app:app`.
 
 El servicio responde directamente en `/`; no existen redirecciones de aplicación. Render puede redirigir HTTP a HTTPS, lo cual es una protección de transporte del proveedor y no una redirección de Foundstore.
 

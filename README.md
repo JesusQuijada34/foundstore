@@ -25,6 +25,12 @@ El tag y el título del release de esta iteración deben ser exactamente `v1.1-2
 
 # foundstore
 
+## Rama `render`: entrypoint en la raíz
+
+La rama `render` despliega la variante Flask directamente desde la raíz del repositorio. `app.py` es el entrypoint WSGI, `maintenance.py` ejecuta la limpieza programada, `render_templates/` contiene las plantillas del servicio, `requirements.txt` reúne sus dependencias y `render.yaml` no define `rootDir`. La aplicación histórica que ocupaba el nombre `app.py` se conserva como `app-main-legacy.py` únicamente como referencia de esta rama; `main` no se modifica.
+
+Para ejecutar localmente la variante Render, instala `requirements.txt` y usa `gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 45 app:app`. El servicio usa MongoDB cuando `MONGODB_URI` está configurada y sólo emplea SQLite como fallback local o con almacenamiento persistente explícitamente configurado.
+
 ## Arquitectura de la Aplicación
 
 `foundstore` es una tienda virtual construida con Flask, diseñada para alojar paquetes `iflapp` y proporcionar perfiles dinámicos para desarrolladores. La aplicación integra autenticación a través de GitHub OAuth y gestiona cuentas de desarrolladores 'ondev' con una base de datos local.

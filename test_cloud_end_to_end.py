@@ -10,8 +10,6 @@ from werkzeug.serving import make_server
 
 ROOT = Path(__file__).resolve().parent
 os.environ.setdefault("DATA_DIR", str(Path(tempfile.gettempdir()) / "foundstore-import-state"))
-sys.path.insert(0, str(ROOT / "render-flask"))
-
 from app import create_app
 from cloud_devices import CloudDevicesClient, CloudDevicesError
 

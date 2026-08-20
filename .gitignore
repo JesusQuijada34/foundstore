@@ -10,3 +10,7 @@ data/ondev_accounts.list
 data/catalog.json
 static/img/
 !static/img/.gitkeep
+
+# Datos locales de la variante Flask Render
+var/
+.pytest_cache/
