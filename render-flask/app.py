@@ -83,6 +83,7 @@ class DeviceStore(Protocol):
     def pending_commands(self, device_id: str) -> list[dict[str, Any]]: ...
     def enqueue_command(self, device_id: str, command_type: str, payload: dict[str, Any], expires_in_seconds: int | None = None) -> dict[str, Any] | None: ...
     def update_heartbeat(self, device_id: str, location: dict[str, float] | None) -> bool: ...
+    def get_protected_location(self, device_id: str) -> dict[str, float] | None: ...
     def restore_apps(self, device_id: str) -> list[dict[str, str]]: ...
     def list_devices(self) -> list[dict[str, Any]]: ...
     def record_event(self, device_id: str, topic: str, data: dict[str, Any]) -> dict[str, Any]: ...
@@ -231,6 +232,13 @@ class LocalStore:
             conn.execute("UPDATE devices SET last_seen_at = ?, location_json = ? WHERE id = ?", (iso_now(), stored_location, device_id))
         return True
 
+    def get_protected_location(self, device_id: str) -> dict[str, float] | None:
+        with self._connect() as conn:
+            row = conn.execute("SELECT status, location_protection, location_json FROM devices WHERE id = ?", (device_id,)).fetchone()
+        if not row or row["status"] != "lost" or not row["location_protection"] or not row["location_json"]:
+            return None
+        return json.loads(row["location_json"])
+
     def restore_apps(self, device_id: str) -> list[dict[str, str]]:
         with self._connect() as conn:
             row = conn.execute("SELECT restore_apps_json FROM devices WHERE id = ?", (device_id,)).fetchone()
@@ -333,6 +341,10 @@ class MongoStore:
         else:
             self.db.devices.update_one({"id": device_id}, {"$set": update, "$unset": {"lastKnownLocation": ""}})
         return True
+
+    def get_protected_location(self, device_id: str) -> dict[str, float] | None:
+        row = self.db.devices.find_one({"id": device_id, "status": "lost", "locationProtection": True}, {"_id": 0, "lastKnownLocation": 1})
+        return row.get("lastKnownLocation") if row else None
 
     def restore_apps(self, device_id: str) -> list[dict[str, str]]:
         row = self.db.devices.find_one({"id": device_id}, {"restoreApps": 1})
@@ -575,6 +587,15 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 "lastSeenAt": last_seen,
             },
         })
+
+    @app.get("/api/v1/devices/<device_id>/location")
+    def protected_location(device_id: str) -> Response:
+        if not owner_authorized(app):
+            return jsonify({"error": "Propietario no autorizado"}), 401
+        location = app.extensions["device_store"].get_protected_location(device_id)
+        if not location:
+            return jsonify({"error": "No hay ubicación protegida disponible"}), 404
+        return jsonify({"deviceId": device_id, "location": location})
 
     @app.get("/api/v1/devices/<device_id>/restore-apps")
     def restore_apps(device_id: str) -> Response:

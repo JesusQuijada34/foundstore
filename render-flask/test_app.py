@@ -73,6 +73,21 @@ class FlaskRenderAppTests(unittest.TestCase):
         with store._connect() as conn:
             self.assertIsNone(conn.execute("SELECT location_json FROM devices WHERE id = ?", (device["id"],)).fetchone()["location_json"])
 
+    def test_protected_location_requires_owner_and_lost_state(self) -> None:
+        pairing = self.client.post("/api/v1/pairing-codes", headers=self.owner_headers(), json={}).json
+        device = self.client.post("/api/v1/agent/bootstrap", json={"code": pairing["code"], "displayName": "DaneDesk privado"}).json
+        agent_headers = {"X-Danenone-Agent-Token": device["agentToken"]}
+        location = {"latitude": 18.4861, "longitude": -69.9312, "accuracy": 25}
+        store = self.app.extensions["device_store"]
+        with store._connect() as conn:
+            conn.execute("UPDATE devices SET status = 'lost' WHERE id = ?", (device["id"],))
+        self.client.post(f"/api/v1/devices/{device['id']}/heartbeat", headers=agent_headers, json={"location": location})
+
+        self.assertEqual(self.client.get(f"/api/v1/devices/{device['id']}/location").status_code, 401)
+        response = self.client.get(f"/api/v1/devices/{device['id']}/location", headers=self.owner_headers())
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json["location"], location)
+
     def test_foundstore_app_and_agent_share_device_events_and_install_requests(self) -> None:
         pairing = self.client.post("/api/v1/pairing-codes", headers=self.owner_headers(), json={"displayName": "Equipo compartido"}).json
         device = self.client.post("/api/v1/agent/bootstrap", json={"code": pairing["code"], "displayName": "Equipo compartido"}).json
