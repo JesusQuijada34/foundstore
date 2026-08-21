@@ -1213,7 +1213,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     def star_grant(author: str, slug: str) -> dict[str, Any] | None:
         grant_id = str(session.get("github_star_grant_id") or "")
         grant = app.extensions["github_star_grants"].get(grant_id)
-        if not grant or grant.get("expiresAt", 0) <= time.time() or grant.get("author", "").lower() != author.lower() or grant.get("slug", "").lower() != slug.lower():
+        if not grant or grant.get("expiresAt", 0) <= time.time() or grant.get("login", "").lower() != str(github_login() or "").lower():
             if grant_id:
                 app.extensions["github_star_grants"].pop(grant_id, None)
             session.pop("github_star_grant_id", None)
@@ -1319,7 +1319,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             if not public_catalog_package(author, slug):
                 return jsonify({"error": "La aplicación ya no está disponible en el catálogo"}), 404
             grant_id = secrets.token_urlsafe(24)
-            app.extensions["github_star_grants"][grant_id] = {"accessToken": access_token, "login": login, "author": author, "slug": slug, "confirmation": secrets.token_urlsafe(24), "expiresAt": time.time() + 900}
+            app.extensions["github_star_grants"][grant_id] = {"accessToken": access_token, "login": login, "confirmation": secrets.token_urlsafe(24), "expiresAt": time.time() + app.permanent_session_lifetime.total_seconds()}
             session["github_star_grant_id"] = grant_id
             return redirect(url_for("package_detail", author=author, slug=slug, starConsent="granted"))
         link_id = session.pop("github_oauth_link", "")
