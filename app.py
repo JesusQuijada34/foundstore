@@ -150,8 +150,8 @@ def raw_github_text(author: str, slug: str, branch: str, path: str) -> str:
         return response.read().decode("utf-8")
 
 
-def package_metadata(slug: str, branch: str = "main", author: str = CATALOG_OWNER) -> dict[str, Any]:
-    cache_key = f"{author}:{slug}:{branch}"
+def package_metadata(slug: str, branch: str = "main", author: str = CATALOG_OWNER, include_readme: bool = True) -> dict[str, Any]:
+    cache_key = f"{author}:{slug}:{branch}:{'readme' if include_readme else 'manifest'}"
     cached = PACKAGE_METADATA_CACHE.get(cache_key)
     if cached and cached[0] > time.time():
         return cached[1]
@@ -168,10 +168,11 @@ def package_metadata(slug: str, branch: str = "main", author: str = CATALOG_OWNE
         metadata["platformTargets"] = platforms_for(str(metadata.get("platform", "")))
     except (ET.ParseError, OSError, ValueError):
         pass
-    try:
-        metadata["readme"] = raw_github_text(author, slug, branch, "README.md")[:50000]
-    except OSError:
-        pass
+    if include_readme:
+        try:
+            metadata["readme"] = raw_github_text(author, slug, branch, "README.md")[:50000]
+        except OSError:
+            pass
     PACKAGE_METADATA_CACHE[cache_key] = (time.time() + 300, metadata)
     return metadata
 
@@ -985,15 +986,21 @@ PACKAGEMAKER_REQUIRED_FILES = ("app/app-icon.ico", "assets/product_logo.png", "a
 def github_file_exists(author: str, slug: str, branch: str, path: str) -> bool:
     url = f"https://raw.githubusercontent.com/{quote(author)}/{quote(slug)}/{quote(branch)}/{path}"
     try:
-        response = requests.head(url, headers={"User-Agent": "Foundstore-Flask-Render"}, timeout=8, allow_redirects=True)
-        return response.ok and int(response.headers.get("Content-Length", "0") or 0) <= 8_000_000
+        # GitHub puede degradar una ráfaga de HEAD paralelos. GET en streaming
+        # confirma el recurso sin descargarlo y usa el mismo comportamiento que
+        # los navegadores para los assets de la ficha.
+        response = requests.get(url, headers={"User-Agent": "Foundstore-Flask-Render"}, timeout=8, stream=True)
+        try:
+            return response.ok and int(response.headers.get("Content-Length", "0") or 0) <= 8_000_000
+        finally:
+            response.close()
     except (ValueError, requests.RequestException):
         return False
 
 
 def packagemaker_repository_audit(author: str, slug: str, branch: str) -> dict[str, Any]:
     """Read public metadata and resource headers only; never execute repository content."""
-    metadata = package_metadata(slug, branch, author)
+    metadata = package_metadata(slug, branch, author, include_readme=False)
     reasons: list[str] = []
     if not metadata.get("manifestValid"):
         reasons.append("Falta un details.xml XML válido.")
@@ -1003,9 +1010,10 @@ def packagemaker_repository_audit(author: str, slug: str, branch: str) -> dict[s
         reasons.append("El author de details.xml no coincide con el usuario propietario de GitHub.")
     if not metadata.get("app"):
         reasons.append("details.xml no declara app.")
-    for required_path in PACKAGEMAKER_REQUIRED_FILES:
-        if not github_file_exists(author, slug, branch, required_path):
-            reasons.append(f"Falta el recurso obligatorio {required_path}.")
+    if not reasons:
+        for required_path in PACKAGEMAKER_REQUIRED_FILES:
+            if not github_file_exists(author, slug, branch, required_path):
+                reasons.append(f"Falta el recurso obligatorio {required_path}.")
     return {"repository": f"{author}/{slug}", "valid": not reasons, "reasons": reasons, "metadata": metadata}
 
 
