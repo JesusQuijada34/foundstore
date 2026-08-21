@@ -33,6 +33,9 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn("https://github.com/login/oauth/authorize?", response.location)
         self.assertIn("redirect_uri=http%3A%2F%2Flocalhost%2Fauth%2Fgithub%2Fcallback", response.location)
+        legacy = oauth_app.test_client().get("/login", follow_redirects=False)
+        self.assertEqual(legacy.status_code, 302)
+        self.assertTrue(legacy.location.endswith("/auth/github/login"))
 
     def test_render_without_explicit_volume_uses_local_ephemeral_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as workdir, patch.dict(os.environ, {"RENDER": "true"}, clear=True):

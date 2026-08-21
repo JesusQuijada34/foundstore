@@ -660,6 +660,10 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         query = urlencode({"client_id": app.config["GITHUB_CLIENT_ID"], "redirect_uri": callback, "state": state, "scope": "read:user"})
         return redirect(f"https://github.com/login/oauth/authorize?{query}")
 
+    @app.get("/login")
+    def legacy_login() -> Response:
+        return redirect(url_for("github_oauth_login"))
+
     @app.get("/auth/github/callback")
     def github_oauth_callback() -> Response:
         if not oauth_ready() or not secrets.compare_digest(str(session.pop("github_oauth_state", "")), str(request.args.get("state", ""))):
@@ -947,7 +951,6 @@ app = create_app()
 
 
 if __name__ == "__main__":
-    # Render debe usar Gunicorn según render.yaml. Esto permite que una
-    # configuración manual que ejecute `python app.py` siga iniciando el
-    # servicio en $PORT en lugar de salir inmediatamente.
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "10000")))
+    from waitress import serve
+
+    serve(app, host="0.0.0.0", port=int(os.environ.get("PORT", "10000")), threads=8)
