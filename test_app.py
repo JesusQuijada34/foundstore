@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from app import create_app
+from app import catalog_references, create_app
 
 
 class FlaskRenderAppTests(unittest.TestCase):
@@ -63,6 +63,10 @@ class FlaskRenderAppTests(unittest.TestCase):
         legacy = oauth_app.test_client().get("/login", follow_redirects=False)
         self.assertEqual(legacy.status_code, 302)
         self.assertTrue(legacy.location.endswith("/auth/github/login"))
+
+    def test_catalog_references_reject_invalid_entries_and_deduplicates_repositories(self) -> None:
+        references = catalog_references("camera, JesusQuijada34/packagemaker\n# comentario\nno válido, camera, OtherDev/app", "JesusQuijada34")
+        self.assertEqual(references, [("JesusQuijada34", "camera"), ("JesusQuijada34", "packagemaker"), ("OtherDev", "app")])
 
     def test_render_without_explicit_volume_uses_local_ephemeral_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as workdir, patch.dict(os.environ, {"RENDER": "true"}, clear=True):
@@ -215,6 +219,26 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(public.status_code, 200)
         self.assertEqual(public.json["profile"]["githubLogin"], "jq34")
         self.assertEqual(self.client.get("/developer/jq34").status_code, 200)
+
+    def test_authenticated_profile_discovers_only_public_repositories_and_marks_own_profile(self) -> None:
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "jq34"
+        identity = {"githubLogin": "jq34", "githubName": "JQ 34", "avatarUrl": "", "githubUrl": "https://github.com/jq34"}
+        snapshot = {"packages": [], "fetchedAt": "2026-01-01T00:00:00+00:00", "source": "GitHub API"}
+        public_repositories = [{"name": "catalog", "url": "https://github.com/jq34/catalog", "description": "Público", "updatedAt": "2026-01-01T00:00:00Z"}]
+        with patch("app.github_public_profile", return_value=identity), patch("app.catalog_snapshot", return_value=snapshot), patch("app.github_public_repositories", return_value=public_repositories):
+            repositories = self.client.get("/api/v1/me/repositories")
+            profile = self.client.get("/api/v1/developers/jq34")
+            page = self.client.get("/developer/jq34")
+        self.assertEqual(repositories.status_code, 200)
+        self.assertEqual(repositories.json["scope"], "public_only")
+        self.assertTrue(repositories.json["privateRepositoriesRequireConsent"])
+        self.assertEqual(repositories.json["repositories"], public_repositories)
+        self.assertTrue(profile.json["isOwnProfile"])
+        self.assertIn('id="ownerStatus"', page.get_data(as_text=True))
+        own_profile = self.client.get("/profile").get_data(as_text=True)
+        self.assertIn("Repositorios públicos de GitHub", own_profile)
+        self.assertIn("/api/v1/me/repositories", own_profile)
 
     def test_authenticated_user_can_follow_and_unfollow_a_developer(self) -> None:
         with self.client.session_transaction() as browser_session:

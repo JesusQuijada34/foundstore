@@ -9,6 +9,7 @@ through a busy loop.
 from __future__ import annotations
 
 import base64
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import hmac
 import json
@@ -33,6 +34,7 @@ CATALOG_REPOSITORY = os.environ.get("CATALOG_REPOSITORY", "catalog")
 DEFAULT_LONG_POLL_SECONDS = 25
 MAX_LONG_POLL_SECONDS = 25
 PACKAGE_METADATA_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+CATALOG_SNAPSHOT_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 PAIRING_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 LICENSE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
@@ -94,6 +96,29 @@ def title_for(slug: str) -> str:
     return " ".join(part.capitalize() for part in slug.replace("_", "-").split("-") if part)
 
 
+def valid_repository_name(value: str) -> bool:
+    return bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}", value))
+
+
+def catalog_references(source_text: str, default_owner: str) -> list[tuple[str, str]]:
+    """Parse public repo.list entries without trusting stale or malformed references."""
+    references: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for raw_entry in re.split(r"[,\n]", source_text):
+        entry = raw_entry.strip()
+        if not entry or entry.startswith("#"):
+            continue
+        parts = entry.split("/", 1)
+        owner, slug = (parts[0].strip(), parts[1].strip()) if len(parts) == 2 else (default_owner, parts[0].strip())
+        if not valid_github_login(owner) or not valid_repository_name(slug):
+            continue
+        key = (owner.lower(), slug.lower())
+        if key not in seen:
+            seen.add(key)
+            references.append((owner, slug))
+    return references
+
+
 def package_revision(package: dict[str, Any]) -> str:
     stable = {key: package.get(key) for key in ("author", "slug", "branch", "updatedAt", "description", "repositoryUrl")}
     return hashlib.sha256(json.dumps(stable, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()[:20]
@@ -130,9 +155,10 @@ def package_metadata(slug: str, branch: str = "main", author: str = CATALOG_OWNE
     cached = PACKAGE_METADATA_CACHE.get(cache_key)
     if cached and cached[0] > time.time():
         return cached[1]
-    metadata: dict[str, Any] = {"platform": "", "platformTargets": [], "readme": "", "version": "", "publisher": ""}
+    metadata: dict[str, Any] = {"platform": "", "platformTargets": [], "readme": "", "version": "", "publisher": "", "manifestValid": False}
     try:
         root = ET.fromstring(raw_github_text(author, slug, branch, "details.xml"))
+        metadata["manifestValid"] = bool(root.tag)
         for key in ("platform", "version", "publisher", "name", "description"):
             element = root.find(key)
             if element is not None and element.text:
@@ -824,6 +850,10 @@ def build_store(config: dict[str, Any]) -> DeviceStore:
 
 
 def catalog_snapshot(catalog_owner: str = CATALOG_OWNER, catalog_repository: str = CATALOG_REPOSITORY) -> dict[str, Any]:
+    cache_key = f"{catalog_owner.lower()}:{catalog_repository.lower()}"
+    cached = CATALOG_SNAPSHOT_CACHE.get(cache_key)
+    if cached and cached[0] > time.time():
+        return cached[1]
     headers = {"Accept": "application/vnd.github+json", "User-Agent": "Foundstore-Flask-Render"}
 
     def github(path: str) -> Any:
@@ -837,23 +867,34 @@ def catalog_snapshot(catalog_owner: str = CATALOG_OWNER, catalog_repository: str
         raw_url = f"https://raw.githubusercontent.com/{catalog_owner}/{catalog_repository}/main/repo.list"
         with urlopen(Request(raw_url, headers={"User-Agent": "Foundstore-Flask-Render"}), timeout=10) as response:  # nosec B310: fixed GitHub raw origin
             source_text = response.read().decode("utf-8")
-    slugs = [item.strip() for item in source_text.split(",") if item.strip()]
-    try:
-        repositories = {item["name"].lower(): item for item in github(f"/users/{quote(catalog_owner)}/repos?per_page=100&sort=updated")}
-    except Exception:
-        repositories = {}
-    packages: list[dict[str, Any]] = []
-    for slug in slugs:
-        repository = repositories.get(slug.lower(), {})
+    references = catalog_references(source_text, catalog_owner)
+    owners = sorted({author.lower(): author for author, _ in references}.values(), key=str.lower)
+    repositories: dict[tuple[str, str], dict[str, Any]] = {}
+    for author in owners:
+        try:
+            for item in github(f"/users/{quote(author)}/repos?per_page=100&sort=updated&type=owner"):
+                name = str(item.get("name", ""))
+                if valid_repository_name(name):
+                    repositories[(author.lower(), name.lower())] = item
+        except Exception:
+            continue
+    def build_package(reference: tuple[str, str]) -> dict[str, Any] | None:
+        author, slug = reference
+        repository = repositories.get((author.lower(), slug.lower()))
+        if not repository:
+            return None
         description = repository.get("description")
         topics = repository.get("topics", [])
         branch = repository.get("default_branch", "main")
-        asset_base = f"https://raw.githubusercontent.com/{catalog_owner}/{slug}/{branch}/assets"
+        metadata = package_metadata(slug, branch, author)
+        if not metadata.get("manifestValid"):
+            return None
+        asset_base = f"https://raw.githubusercontent.com/{author}/{slug}/{branch}/assets"
         package = {
             "slug": slug,
             "name": title_for(slug),
-            "author": catalog_owner,
-            "description": description,
+            "author": author,
+            "description": metadata.get("description") or description,
             "category": category_for(slug, description, topics),
             "tags": topics,
             "repositoryUrl": repository.get("html_url", f"https://github.com/{catalog_owner}/{slug}"),
@@ -866,10 +907,15 @@ def catalog_snapshot(catalog_owner: str = CATALOG_OWNER, catalog_repository: str
             },
         }
         package["revision"] = package_revision(package)
-        packages.append(package)
+        return package
+
+    with ThreadPoolExecutor(max_workers=max(1, min(8, len(references)))) as executor:
+        packages = [package for package in executor.map(build_package, references) if package]
     packages.sort(key=lambda item: item["name"].lower())
     catalog_version = hashlib.sha256("|".join(f"{item['author']}/{item['slug']}:{item['revision']}" for item in packages).encode("utf-8")).hexdigest()[:20]
-    return {"packages": packages, "catalogVersion": catalog_version, "fetchedAt": iso_now(), "source": "GitHub API"}
+    snapshot = {"packages": packages, "catalogVersion": catalog_version, "fetchedAt": iso_now(), "source": "GitHub API"}
+    CATALOG_SNAPSHOT_CACHE[cache_key] = (time.time() + 300, snapshot)
+    return snapshot
 
 
 def valid_github_login(value: str) -> bool:
@@ -897,6 +943,35 @@ def github_public_profile(github_login: str) -> dict[str, str]:
     except requests.RequestException:
         pass
     return {"githubLogin": github_login, "githubName": github_login, "avatarUrl": f"https://github.com/{quote(github_login)}.png?size=176", "githubUrl": f"https://github.com/{github_login}"}
+
+
+def github_public_repositories(github_login: str) -> list[dict[str, str]]:
+    """Discover only public repositories. Private repositories require a separate OAuth consent."""
+    if not valid_github_login(github_login):
+        return []
+    repositories: list[dict[str, str]] = []
+    for page in range(1, 6):
+        try:
+            response = requests.get(
+                f"https://api.github.com/users/{quote(github_login)}/repos",
+                params={"type": "owner", "sort": "updated", "per_page": 100, "page": page},
+                headers={"Accept": "application/vnd.github+json", "User-Agent": "Foundstore-Flask-Render"},
+                timeout=8,
+            )
+            if not response.ok:
+                break
+            page_items = response.json()
+            if not isinstance(page_items, list):
+                break
+            for item in page_items:
+                name = str(item.get("name") or "")
+                if valid_repository_name(name):
+                    repositories.append({"name": name, "url": str(item.get("html_url") or f"https://github.com/{github_login}/{name}"), "description": str(item.get("description") or ""), "updatedAt": str(item.get("updated_at") or "")})
+            if len(page_items) < 100:
+                break
+        except requests.RequestException:
+            break
+    return repositories
 
 
 def developer_profile(store: DeviceStore, github_login: str) -> dict[str, str]:
@@ -1187,7 +1262,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         profile_data, snapshot = developer_catalog(github_login)
         viewer = session.get("github_login")
         store = app.extensions["device_store"]
-        return jsonify({"profile": profile_data, "catalog": snapshot, "catalogAvailable": bool(snapshot), "followerCount": store.developer_follower_count(github_login), "following": bool(viewer and store.is_following_developer(str(viewer), github_login))})
+        own_profile = bool(viewer and str(viewer).lower() == github_login.lower())
+        return jsonify({"profile": profile_data, "catalog": snapshot, "catalogAvailable": bool(snapshot), "followerCount": store.developer_follower_count(github_login), "following": bool(viewer and store.is_following_developer(str(viewer), github_login)), "isOwnProfile": own_profile})
 
     @app.get("/api/v1/me/following")
     def my_following() -> Response:
@@ -1195,6 +1271,13 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if not login:
             return jsonify({"error": "Inicia sesión con GitHub para seguir desarrolladores"}), 401
         return jsonify({"developers": app.extensions["device_store"].list_followed_developers(login)})
+
+    @app.get("/api/v1/me/repositories")
+    def my_public_repositories() -> Response:
+        login = github_login()
+        if not login:
+            return jsonify({"error": "Inicia sesión con GitHub para descubrir repositorios públicos"}), 401
+        return jsonify({"repositories": github_public_repositories(login), "scope": "public_only", "privateRepositoriesRequireConsent": True})
 
     @app.route("/api/v1/me/following/<developer_login>", methods=["POST", "DELETE"])
     def following_developer(developer_login: str) -> Response:
