@@ -278,12 +278,13 @@ class LocalStore:
     def authenticate_device(self, device_id: str, agent_token: str) -> dict[str, Any] | None:
         with self._connect() as conn:
             device = conn.execute(
-                "SELECT * FROM devices WHERE id = ? AND agent_token_hash = ? AND status != 'revoked'",
+                "SELECT * FROM devices WHERE id = ? AND agent_token_hash = ?",
                 (device_id, token_hash(agent_token)),
             ).fetchone()
             if not device:
                 return None
-            conn.execute("UPDATE devices SET last_seen_at = ? WHERE id = ?", (iso_now(), device_id))
+            if device["status"] != "revoked":
+                conn.execute("UPDATE devices SET last_seen_at = ? WHERE id = ?", (iso_now(), device_id))
             return dict(device)
 
     def pending_commands(self, device_id: str) -> list[dict[str, Any]]:
@@ -458,7 +459,9 @@ class MongoStore:
         return True
 
     def authenticate_device(self, device_id: str, agent_token: str) -> dict[str, Any] | None:
-        device = self.db.devices.find_one_and_update({"id": device_id, "agentTokenHash": token_hash(agent_token), "status": {"$ne": "revoked"}}, {"$set": {"lastSeenAt": utc_now()}}, return_document=True)
+        device = self.db.devices.find_one({"id": device_id, "agentTokenHash": token_hash(agent_token)})
+        if device and device.get("status") != "revoked":
+            self.db.devices.update_one({"id": device_id}, {"$set": {"lastSeenAt": utc_now()}})
         return device
 
     def pending_commands(self, device_id: str) -> list[dict[str, Any]]:
@@ -561,6 +564,15 @@ def owner_authorized(app: Flask) -> bool:
 
 def agent_token() -> str:
     return request.headers.get("X-Danenone-Agent-Token", "")
+
+
+def agent_device_or_error(app: Flask, device_id: str) -> tuple[dict[str, Any] | None, Response | None]:
+    device = app.extensions["device_store"].authenticate_device(device_id, agent_token())
+    if not device:
+        return None, (jsonify({"error": "Agente no autorizado"}), 401)
+    if device.get("status") == "revoked":
+        return None, (jsonify({"error": "agent_revoked", "relinkRequired": True}), 403)
+    return device, None
 
 
 def long_poll_seconds() -> int | None:
@@ -737,8 +749,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.get("/api/v1/devices/<device_id>/commands/next")
     def next_command(device_id: str) -> Response:
-        if not app.extensions["device_store"].authenticate_device(device_id, agent_token()):
-            return jsonify({"error": "Agente no autorizado"}), 401
+        _, error = agent_device_or_error(app, device_id)
+        if error:
+            return error
         wait_seconds = long_poll_seconds()
         if wait_seconds is None:
             return jsonify({"error": "wait debe ser un número entero"}), 400
@@ -805,8 +818,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.post("/api/v1/devices/<device_id>/events")
     def agent_event(device_id: str) -> Response:
-        if not app.extensions["device_store"].authenticate_device(device_id, agent_token()):
-            return jsonify({"error": "Agente no autorizado"}), 401
+        _, error = agent_device_or_error(app, device_id)
+        if error:
+            return error
         payload = request.get_json(silent=True) or {}
         topic = str(payload.get("topic", ""))
         data = payload.get("data", {})
@@ -817,8 +831,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.post("/api/v1/devices/<device_id>/heartbeat")
     def heartbeat(device_id: str) -> Response:
-        if not app.extensions["device_store"].authenticate_device(device_id, agent_token()):
-            return jsonify({"error": "Agente no autorizado"}), 401
+        _, error = agent_device_or_error(app, device_id)
+        if error:
+            return error
         payload = request.get_json(silent=True) or {}
         location = payload.get("location")
         if location is not None and (not isinstance(location, dict) or not all(key in location for key in ("latitude", "longitude", "accuracy"))):
@@ -828,9 +843,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.get("/api/v1/devices/<device_id>/state")
     def device_state(device_id: str) -> Response:
-        device = app.extensions["device_store"].authenticate_device(device_id, agent_token())
-        if not device:
-            return jsonify({"error": "Agente no autorizado"}), 401
+        device, error = agent_device_or_error(app, device_id)
+        if error:
+            return error
         last_seen = device.get("last_seen_at") or device.get("lastSeenAt")
         if isinstance(last_seen, datetime):
             last_seen = last_seen.isoformat()
@@ -855,8 +870,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.get("/api/v1/devices/<device_id>/restore-apps")
     def restore_apps(device_id: str) -> Response:
-        if not app.extensions["device_store"].authenticate_device(device_id, agent_token()):
-            return jsonify({"error": "Agente no autorizado"}), 401
+        _, error = agent_device_or_error(app, device_id)
+        if error:
+            return error
         return jsonify({"approvedApps": app.extensions["device_store"].restore_apps(device_id)})
 
     return app

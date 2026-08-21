@@ -68,7 +68,9 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(self.client.post(f"/api/v1/license-links/{link_id}/claim", headers=link_headers).status_code, 401)
         self.assertEqual(self.client.post("/api/v1/licenses/revoke", headers=self.owner_headers(), json={"license": license_code, "reason": "Equipo reportado como robado"}).status_code, 200)
         agent_headers = {"X-Danenone-Agent-Token": claimed.json["agentToken"]}
-        self.assertEqual(self.client.get(f"/api/v1/devices/{claimed.json['id']}/state", headers=agent_headers).status_code, 401)
+        revoked = self.client.get(f"/api/v1/devices/{claimed.json['id']}/state", headers=agent_headers)
+        self.assertEqual(revoked.status_code, 403)
+        self.assertTrue(revoked.json["relinkRequired"])
 
     def test_command_long_poll_and_restore_require_agent_token(self) -> None:
         pairing = self.client.post("/api/v1/pairing-codes", headers=self.owner_headers(), json={"restoreApps": [{"publisher": "Influent", "slug": "packagemaker", "version": "0.1"}]}).json
