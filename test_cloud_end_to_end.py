@@ -17,7 +17,7 @@ from cloud_devices import CloudDevicesClient, CloudDevicesError
 class DaneDeskEndToEndTests(unittest.TestCase):
     def setUp(self):
         self.tempdir = tempfile.TemporaryDirectory()
-        self.app = create_app({"TESTING": True, "DATA_DIR": self.tempdir.name, "MONGODB_URI": None, "OWNER_API_TOKEN": "owner-e2e-token"})
+        self.app = create_app({"TESTING": True, "DATA_DIR": self.tempdir.name, "MONGODB_URI": None, "OWNER_API_TOKEN": "owner-e2e-token", "ALLOW_LEGACY_PAIRING": True})
         self.server = make_server("127.0.0.1", 0, self.app)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()

@@ -22,13 +22,15 @@ from pathlib import Path
 from typing import Any, Protocol
 from urllib.request import Request, urlopen
 
-from flask import Flask, Response, jsonify, render_template, request
+import requests
+from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for
 
 CATALOG_OWNER = os.environ.get("CATALOG_OWNER", "JesusQuijada34")
 CATALOG_REPOSITORY = os.environ.get("CATALOG_REPOSITORY", "catalog")
 DEFAULT_LONG_POLL_SECONDS = 25
 MAX_LONG_POLL_SECONDS = 25
 PAIRING_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+LICENSE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 
 def utc_now() -> datetime:
@@ -41,6 +43,14 @@ def iso_now() -> str:
 
 def token_hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def normalize_license(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9]", "", value).upper()
+
+
+def display_license(value: str) -> str:
+    return "-".join(value[index:index + 5] for index in range(0, len(value), 5))
 
 
 def device_command_key(master_key: str, device_id: str) -> str:
@@ -79,6 +89,12 @@ class DeviceStore(Protocol):
 
     def create_pairing_code(self, display_name: str, restore_apps: list[dict[str, str]]) -> dict[str, Any]: ...
     def claim_device(self, code: str, display_name: str) -> dict[str, Any] | None: ...
+    def create_license(self, restore_apps: list[dict[str, str]]) -> dict[str, Any]: ...
+    def begin_license_link(self, license_code: str, display_name: str) -> dict[str, Any] | None: ...
+    def license_link_status(self, link_id: str, link_token: str) -> dict[str, Any] | None: ...
+    def approve_license_link(self, link_id: str, user_code: str, github_login: str) -> bool: ...
+    def claim_license_link(self, link_id: str, link_token: str) -> dict[str, Any] | None: ...
+    def revoke_license(self, license_code: str, reason: str) -> bool: ...
     def authenticate_device(self, device_id: str, agent_token: str) -> dict[str, Any] | None: ...
     def pending_commands(self, device_id: str) -> list[dict[str, Any]]: ...
     def enqueue_command(self, device_id: str, command_type: str, payload: dict[str, Any], expires_in_seconds: int | None = None) -> dict[str, Any] | None: ...
@@ -144,6 +160,28 @@ class LocalStore:
                   data_json TEXT NOT NULL,
                   created_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS device_licenses (
+                  code_hash TEXT PRIMARY KEY,
+                  status TEXT NOT NULL DEFAULT 'active',
+                  owner_login TEXT,
+                  device_id TEXT,
+                  restore_apps_json TEXT NOT NULL,
+                  issued_at TEXT NOT NULL,
+                  revoked_at TEXT,
+                  revoke_reason TEXT
+                );
+                CREATE TABLE IF NOT EXISTS license_links (
+                  id TEXT PRIMARY KEY,
+                  license_hash TEXT NOT NULL,
+                  link_token_hash TEXT NOT NULL,
+                  user_code_hash TEXT NOT NULL,
+                  display_name TEXT NOT NULL,
+                  status TEXT NOT NULL DEFAULT 'awaiting_owner',
+                  owner_login TEXT,
+                  expires_at TEXT NOT NULL,
+                  used_at TEXT
+                );
+                CREATE INDEX IF NOT EXISTS idx_license_links_license ON license_links(license_hash);
                 CREATE INDEX IF NOT EXISTS idx_device_events_device_time
                   ON device_events(device_id, created_at);
                 """
@@ -175,6 +213,67 @@ class LocalStore:
             conn.execute("UPDATE pairing_codes SET used_at = ? WHERE code_hash = ?", (now, token_hash(code)))
         self.record_event(device_id, "device.paired", {"displayName": display_name})
         return {"id": device_id, "agentToken": agent_token, "platform": "Danenone"}
+
+    def create_license(self, restore_apps: list[dict[str, str]]) -> dict[str, Any]:
+        code = "".join(secrets.choice(LICENSE_ALPHABET) for _ in range(20))
+        with self._connect() as conn:
+            conn.execute("INSERT INTO device_licenses(code_hash, restore_apps_json, issued_at) VALUES (?, ?, ?)", (token_hash(code), json.dumps(restore_apps), iso_now()))
+        return {"license": display_license(code), "status": "active"}
+
+    def begin_license_link(self, license_code: str, display_name: str) -> dict[str, Any] | None:
+        license_hash = token_hash(normalize_license(license_code))
+        with self._connect() as conn:
+            license_row = conn.execute("SELECT status, device_id FROM device_licenses WHERE code_hash = ?", (license_hash,)).fetchone()
+            if not license_row or license_row["status"] != "active" or license_row["device_id"]:
+                return None
+            link_id, link_token = secrets.token_urlsafe(18), secrets.token_urlsafe(32)
+            user_code = "".join(secrets.choice(LICENSE_ALPHABET) for _ in range(8))
+            expires_at = utc_now() + timedelta(minutes=10)
+            conn.execute("INSERT INTO license_links(id, license_hash, link_token_hash, user_code_hash, display_name, expires_at) VALUES (?, ?, ?, ?, ?, ?)", (link_id, license_hash, token_hash(link_token), token_hash(user_code), display_name, expires_at.isoformat()))
+        return {"linkId": link_id, "linkToken": link_token, "userCode": user_code, "expiresAt": expires_at.isoformat()}
+
+    def license_link_status(self, link_id: str, link_token: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            link = conn.execute("SELECT status, expires_at, used_at FROM license_links WHERE id = ? AND link_token_hash = ?", (link_id, token_hash(link_token))).fetchone()
+        if not link:
+            return None
+        status = "expired" if parse_iso(link["expires_at"]) <= utc_now() and link["status"] == "awaiting_owner" else link["status"]
+        return {"status": status, "expiresAt": link["expires_at"], "claimed": bool(link["used_at"])}
+
+    def approve_license_link(self, link_id: str, user_code: str, github_login: str) -> bool:
+        with self._connect() as conn:
+            link = conn.execute("SELECT * FROM license_links WHERE id = ?", (link_id,)).fetchone()
+            if not link or link["status"] != "awaiting_owner" or parse_iso(link["expires_at"]) <= utc_now() or not secrets.compare_digest(link["user_code_hash"], token_hash(user_code.upper())):
+                return False
+            return bool(conn.execute("UPDATE license_links SET status = 'approved', owner_login = ? WHERE id = ? AND status = 'awaiting_owner'", (github_login, link_id)).rowcount)
+
+    def claim_license_link(self, link_id: str, link_token: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            link = conn.execute("SELECT * FROM license_links WHERE id = ? AND link_token_hash = ?", (link_id, token_hash(link_token))).fetchone()
+            if not link or link["status"] != "approved" or link["used_at"] or parse_iso(link["expires_at"]) <= utc_now():
+                return None
+            license_row = conn.execute("SELECT * FROM device_licenses WHERE code_hash = ?", (link["license_hash"],)).fetchone()
+            if not license_row or license_row["status"] != "active" or license_row["device_id"]:
+                return None
+            device_id, agent_token, now = secrets.token_urlsafe(18), secrets.token_urlsafe(32), iso_now()
+            conn.execute("INSERT INTO devices(id, display_name, agent_token_hash, last_seen_at, restore_apps_json) VALUES (?, ?, ?, ?, ?)", (device_id, link["display_name"], token_hash(agent_token), now, license_row["restore_apps_json"]))
+            conn.execute("UPDATE device_licenses SET device_id = ?, owner_login = ? WHERE code_hash = ?", (device_id, link["owner_login"], link["license_hash"]))
+            conn.execute("UPDATE license_links SET status = 'claimed', used_at = ? WHERE id = ?", (now, link_id))
+        self.record_event(device_id, "device.paired", {"displayName": link["display_name"], "ownerLogin": link["owner_login"]})
+        return {"id": device_id, "agentToken": agent_token, "platform": "Danenone"}
+
+    def revoke_license(self, license_code: str, reason: str) -> bool:
+        license_hash = token_hash(normalize_license(license_code))
+        with self._connect() as conn:
+            license_row = conn.execute("SELECT device_id FROM device_licenses WHERE code_hash = ? AND status = 'active'", (license_hash,)).fetchone()
+            if not license_row:
+                return False
+            conn.execute("UPDATE device_licenses SET status = 'revoked', revoked_at = ?, revoke_reason = ? WHERE code_hash = ?", (iso_now(), reason[:240], license_hash))
+            if license_row["device_id"]:
+                conn.execute("UPDATE devices SET status = 'revoked' WHERE id = ?", (license_row["device_id"],))
+        if license_row["device_id"]:
+            self.record_event(license_row["device_id"], "license.revoked", {"reason": reason[:240]})
+        return True
 
     def authenticate_device(self, device_id: str, agent_token: str) -> dict[str, Any] | None:
         with self._connect() as conn:
@@ -284,6 +383,7 @@ class MongoStore:
         self.client.admin.command("ping")
         self.db = self.client[database_name]
         self.db.pairing_codes.create_index("expiresAt", expireAfterSeconds=0)
+        self.db.license_links.create_index("expiresAt", expireAfterSeconds=0)
         self.db.commands.create_index("expiresAt", expireAfterSeconds=0)
         self.db.device_events.create_index([("deviceId", 1), ("createdAt", 1)])
 
@@ -306,6 +406,56 @@ class MongoStore:
         self.db.devices.insert_one({"id": device_id, "displayName": display_name, "agentTokenHash": token_hash(agent_token), "status": "active", "locationProtection": True, "lastSeenAt": utc_now(), "restoreApps": pair.get("restoreApps", [])})
         self.record_event(device_id, "device.paired", {"displayName": display_name})
         return {"id": device_id, "agentToken": agent_token, "platform": "Danenone"}
+
+    def create_license(self, restore_apps: list[dict[str, str]]) -> dict[str, Any]:
+        code = "".join(secrets.choice(LICENSE_ALPHABET) for _ in range(20))
+        self.db.device_licenses.insert_one({"codeHash": token_hash(code), "status": "active", "restoreApps": restore_apps, "issuedAt": utc_now(), "deviceId": None})
+        return {"license": display_license(code), "status": "active"}
+
+    def begin_license_link(self, license_code: str, display_name: str) -> dict[str, Any] | None:
+        license_hash = token_hash(normalize_license(license_code))
+        license_row = self.db.device_licenses.find_one({"codeHash": license_hash, "status": "active", "deviceId": None})
+        if not license_row:
+            return None
+        link_id, link_token = secrets.token_urlsafe(18), secrets.token_urlsafe(32)
+        user_code, expires_at = "".join(secrets.choice(LICENSE_ALPHABET) for _ in range(8)), utc_now() + timedelta(minutes=10)
+        self.db.license_links.insert_one({"id": link_id, "licenseHash": license_hash, "linkTokenHash": token_hash(link_token), "userCodeHash": token_hash(user_code), "displayName": display_name, "status": "awaiting_owner", "expiresAt": expires_at, "usedAt": None})
+        return {"linkId": link_id, "linkToken": link_token, "userCode": user_code, "expiresAt": expires_at.isoformat()}
+
+    def license_link_status(self, link_id: str, link_token: str) -> dict[str, Any] | None:
+        link = self.db.license_links.find_one({"id": link_id, "linkTokenHash": token_hash(link_token)}, {"_id": 0})
+        if not link:
+            return None
+        status = "expired" if link["expiresAt"] <= utc_now() and link["status"] == "awaiting_owner" else link["status"]
+        return {"status": status, "expiresAt": link["expiresAt"].isoformat(), "claimed": bool(link.get("usedAt"))}
+
+    def approve_license_link(self, link_id: str, user_code: str, github_login: str) -> bool:
+        result = self.db.license_links.update_one({"id": link_id, "status": "awaiting_owner", "userCodeHash": token_hash(user_code.upper()), "expiresAt": {"$gt": utc_now()}}, {"$set": {"status": "approved", "ownerLogin": github_login}})
+        return bool(result.modified_count)
+
+    def claim_license_link(self, link_id: str, link_token: str) -> dict[str, Any] | None:
+        link = self.db.license_links.find_one({"id": link_id, "linkTokenHash": token_hash(link_token), "status": "approved", "usedAt": None, "expiresAt": {"$gt": utc_now()}})
+        if not link:
+            return None
+        license_row = self.db.device_licenses.find_one_and_update({"codeHash": link["licenseHash"], "status": "active", "deviceId": None}, {"$set": {"ownerLogin": link["ownerLogin"], "deviceId": "pending"}})
+        if not license_row:
+            return None
+        device_id, agent_token = secrets.token_urlsafe(18), secrets.token_urlsafe(32)
+        self.db.devices.insert_one({"id": device_id, "displayName": link["displayName"], "agentTokenHash": token_hash(agent_token), "status": "active", "locationProtection": True, "lastSeenAt": utc_now(), "restoreApps": license_row.get("restoreApps", [])})
+        self.db.device_licenses.update_one({"codeHash": link["licenseHash"]}, {"$set": {"deviceId": device_id}})
+        self.db.license_links.update_one({"id": link_id}, {"$set": {"status": "claimed", "usedAt": utc_now()}})
+        self.record_event(device_id, "device.paired", {"displayName": link["displayName"], "ownerLogin": link["ownerLogin"]})
+        return {"id": device_id, "agentToken": agent_token, "platform": "Danenone"}
+
+    def revoke_license(self, license_code: str, reason: str) -> bool:
+        license_hash = token_hash(normalize_license(license_code))
+        license_row = self.db.device_licenses.find_one_and_update({"codeHash": license_hash, "status": "active"}, {"$set": {"status": "revoked", "revokedAt": utc_now(), "revokeReason": reason[:240]}})
+        if not license_row:
+            return False
+        if license_row.get("deviceId"):
+            self.db.devices.update_one({"id": license_row["deviceId"]}, {"$set": {"status": "revoked"}})
+            self.record_event(license_row["deviceId"], "license.revoked", {"reason": reason[:240]})
+        return True
 
     def authenticate_device(self, device_id: str, agent_token: str) -> dict[str, Any] | None:
         device = self.db.devices.find_one_and_update({"id": device_id, "agentTokenHash": token_hash(agent_token), "status": {"$ne": "revoked"}}, {"$set": {"lastSeenAt": utc_now()}}, return_document=True)
@@ -431,15 +581,70 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         MONGO_DATABASE=os.environ.get("MONGO_DATABASE", "foundstore"),
         OWNER_API_TOKEN=os.environ.get("OWNER_API_TOKEN", ""),
         COMMAND_SIGNING_KEY=os.environ.get("COMMAND_SIGNING_KEY", "development-command-signing-key"),
+        SECRET_KEY=os.environ.get("FLASK_SECRET_KEY", ""),
+        GITHUB_CLIENT_ID=os.environ.get("GITHUB_CLIENT_ID", ""),
+        GITHUB_CLIENT_SECRET=os.environ.get("GITHUB_CLIENT_SECRET", ""),
+        ALLOW_LEGACY_PAIRING=os.environ.get("ALLOW_LEGACY_PAIRING", "").lower() == "true",
         MONGO_FALLBACK_REASON=None,
     )
     if test_config:
         app.config.update(test_config)
+    if not app.config["SECRET_KEY"]:
+        app.config["SECRET_KEY"] = secrets.token_urlsafe(32)
+        app.config["SESSION_EPHEMERAL"] = True
     app.extensions["device_store"] = build_store(app.config)
+
+    def github_login() -> str | None:
+        return session.get("github_login")
+
+    def oauth_ready() -> bool:
+        return bool(app.config["GITHUB_CLIENT_ID"] and app.config["GITHUB_CLIENT_SECRET"])
 
     @app.get("/")
     def index() -> str:
         return render_template("index.html", catalog_owner=CATALOG_OWNER)
+
+    @app.get("/auth/github/login")
+    def github_oauth_login() -> Response:
+        if not oauth_ready():
+            return jsonify({"error": "GitHub OAuth no está configurado"}), 503
+        state = secrets.token_urlsafe(24)
+        session["github_oauth_state"] = state
+        link_id = request.args.get("link", "")
+        if link_id:
+            session["github_oauth_link"] = link_id
+        callback = url_for("github_oauth_callback", _external=True)
+        query = urllib.parse.urlencode({"client_id": app.config["GITHUB_CLIENT_ID"], "redirect_uri": callback, "state": state, "scope": "read:user"})
+        return redirect(f"https://github.com/login/oauth/authorize?{query}")
+
+    @app.get("/auth/github/callback")
+    def github_oauth_callback() -> Response:
+        if not oauth_ready() or not secrets.compare_digest(str(session.pop("github_oauth_state", "")), str(request.args.get("state", ""))):
+            return jsonify({"error": "La confirmación de GitHub no es válida"}), 400
+        code = request.args.get("code", "")
+        try:
+            token_response = requests.post("https://github.com/login/oauth/access_token", data={"client_id": app.config["GITHUB_CLIENT_ID"], "client_secret": app.config["GITHUB_CLIENT_SECRET"], "code": code}, headers={"Accept": "application/json"}, timeout=10).json()
+            access_token = token_response.get("access_token", "")
+            profile = requests.get("https://api.github.com/user", headers={"Accept": "application/vnd.github+json", "Authorization": f"Bearer {access_token}"}, timeout=10).json()
+            login = str(profile.get("login", "")).strip()
+        except requests.RequestException:
+            return jsonify({"error": "No se pudo confirmar GitHub"}), 502
+        if not login:
+            return jsonify({"error": "GitHub no devolvió una identidad válida"}), 401
+        session["github_login"] = login
+        link_id = session.pop("github_oauth_link", "")
+        return redirect(url_for("license_link_page", link_id=link_id) if link_id else url_for("index"))
+
+    @app.route("/link/<link_id>", methods=["GET", "POST"])
+    def license_link_page(link_id: str) -> Response | str:
+        if not github_login():
+            return redirect(url_for("github_oauth_login", link=link_id))
+        if request.method == "POST":
+            code = str(request.form.get("code", ""))
+            if app.extensions["device_store"].approve_license_link(link_id, code, github_login() or ""):
+                return "<h1>DaneDesk vinculado</h1><p>Ya puedes volver al dispositivo. Foundstore activará el agente con una credencial exclusiva.</p>"
+            return "<h1>No se pudo vincular</h1><p>Verifica el código visible en el dispositivo o solicita una nueva operación.</p>", 400
+        return f"<h1>Vincular DaneDesk</h1><p>Sesión de GitHub: <strong>{github_login()}</strong></p><form method='post'><label>Código mostrado por el dispositivo <input name='code' autocomplete='one-time-code' required></label><button type='submit'>Confirmar este dispositivo</button></form>"
 
     @app.get("/healthz")
     def healthz() -> Response:
@@ -470,8 +675,56 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         pairing = app.extensions["device_store"].create_pairing_code(display_name, restore_apps)
         return jsonify({**pairing, "agentUri": f"foundstore://agent/pair?server={request.host_url.rstrip('/')}&code={pairing['code']}"}), 201
 
+    @app.post("/api/v1/licenses")
+    def create_license() -> Response:
+        if not owner_authorized(app):
+            return jsonify({"error": "Propietario no autorizado"}), 401
+        payload = request.get_json(silent=True) or {}
+        restore_apps = payload.get("restoreApps", [])
+        if not isinstance(restore_apps, list) or any(not isinstance(item, dict) for item in restore_apps):
+            return jsonify({"error": "restoreApps debe ser una lista de aplicaciones aprobadas"}), 400
+        return jsonify(app.extensions["device_store"].create_license(restore_apps)), 201
+
+    @app.post("/api/v1/license-links")
+    def begin_license_link() -> Response:
+        payload = request.get_json(silent=True) or {}
+        license_code = str(payload.get("license", ""))
+        display_name = str(payload.get("displayName", "DaneDesk")).strip()[:80] or "DaneDesk"
+        link = app.extensions["device_store"].begin_license_link(license_code, display_name)
+        if not link:
+            return jsonify({"error": "La licencia no es válida, fue revocada o ya está vinculada"}), 401
+        return jsonify({**link, "verificationUri": url_for("license_link_page", link_id=link["linkId"], _external=True)}), 201
+
+    @app.get("/api/v1/license-links/<link_id>")
+    def license_link_status(link_id: str) -> Response:
+        link_token = request.headers.get("X-Foundstore-Link-Token", "")
+        status = app.extensions["device_store"].license_link_status(link_id, link_token)
+        if not status:
+            return jsonify({"error": "Solicitud de vínculo no válida"}), 401
+        return jsonify(status)
+
+    @app.post("/api/v1/license-links/<link_id>/claim")
+    def claim_license_link(link_id: str) -> Response:
+        link_token = request.headers.get("X-Foundstore-Link-Token", "")
+        device = app.extensions["device_store"].claim_license_link(link_id, link_token)
+        if not device:
+            return jsonify({"error": "El vínculo aún no está aprobado, venció o fue consumido"}), 401
+        return jsonify({**device, "commandKey": device_command_key(app.config["COMMAND_SIGNING_KEY"], device["id"])}), 201
+
+    @app.post("/api/v1/licenses/revoke")
+    def revoke_license() -> Response:
+        if not owner_authorized(app):
+            return jsonify({"error": "Propietario no autorizado"}), 401
+        payload = request.get_json(silent=True) or {}
+        reason = str(payload.get("reason", "Revocación solicitada por el propietario")).strip()[:240] or "Revocación solicitada por el propietario"
+        if not app.extensions["device_store"].revoke_license(str(payload.get("license", "")), reason):
+            return jsonify({"error": "La licencia no está activa o no existe"}), 404
+        return jsonify({"success": True, "reason": reason})
+
     @app.post("/api/v1/agent/bootstrap")
     def bootstrap() -> Response:
+        if not app.config["ALLOW_LEGACY_PAIRING"]:
+            return jsonify({"error": "El emparejamiento directo está retirado; inicia un vínculo de licencia aprobado por el propietario"}), 410
         payload = request.get_json(silent=True) or {}
         code = str(payload.get("code", "")).upper()
         display_name = str(payload.get("displayName", "DaneDesk")).strip()[:80]

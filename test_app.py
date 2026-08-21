@@ -9,7 +9,7 @@ from app import create_app
 class FlaskRenderAppTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
-        self.app = create_app({"TESTING": True, "DATA_DIR": self.tempdir.name, "MONGODB_URI": None, "OWNER_API_TOKEN": "owner-test-token"})
+        self.app = create_app({"TESTING": True, "DATA_DIR": self.tempdir.name, "MONGODB_URI": None, "OWNER_API_TOKEN": "owner-test-token", "ALLOW_LEGACY_PAIRING": True})
         self.client = self.app.test_client()
 
     def tearDown(self) -> None:
@@ -36,6 +36,7 @@ class FlaskRenderAppTests(unittest.TestCase):
                 os.chdir(previous)
 
     def test_pairing_is_single_use_and_returns_no_token_in_uri(self) -> None:
+        self.app.config["ALLOW_LEGACY_PAIRING"] = True
         pairing = self.client.post("/api/v1/pairing-codes", headers=self.owner_headers(), json={"displayName": "DaneDesk Azul", "restoreApps": [{"publisher": "Influent", "slug": "packagemaker", "version": "0.1"}]})
         self.assertEqual(pairing.status_code, 201)
         code = pairing.json["code"]
@@ -47,6 +48,27 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertIn("agentToken", claimed.json)
         duplicate = self.client.post("/api/v1/agent/bootstrap", json={"code": code, "displayName": "Otro"})
         self.assertEqual(duplicate.status_code, 401)
+
+    def test_license_link_requires_owner_session_then_can_be_claimed_once_and_revoked(self) -> None:
+        license_response = self.client.post("/api/v1/licenses", headers=self.owner_headers(), json={"restoreApps": [{"publisher": "Influent", "slug": "packagemaker", "version": "0.1"}]})
+        self.assertEqual(license_response.status_code, 201)
+        license_code = license_response.json["license"]
+        link = self.client.post("/api/v1/license-links", json={"license": license_code, "displayName": "DaneDesk de prueba"})
+        self.assertEqual(link.status_code, 201)
+        link_id, link_token, user_code = link.json["linkId"], link.json["linkToken"], link.json["userCode"]
+        link_headers = {"X-Foundstore-Link-Token": link_token}
+        self.assertEqual(self.client.get(f"/api/v1/license-links/{link_id}", headers=link_headers).json["status"], "awaiting_owner")
+        self.assertEqual(self.client.post(f"/api/v1/license-links/{link_id}/claim", headers=link_headers).status_code, 401)
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "jq34"
+        self.assertEqual(self.client.post(f"/link/{link_id}", data={"code": user_code}).status_code, 200)
+        claimed = self.client.post(f"/api/v1/license-links/{link_id}/claim", headers=link_headers)
+        self.assertEqual(claimed.status_code, 201)
+        self.assertIn("agentToken", claimed.json)
+        self.assertEqual(self.client.post(f"/api/v1/license-links/{link_id}/claim", headers=link_headers).status_code, 401)
+        self.assertEqual(self.client.post("/api/v1/licenses/revoke", headers=self.owner_headers(), json={"license": license_code, "reason": "Equipo reportado como robado"}).status_code, 200)
+        agent_headers = {"X-Danenone-Agent-Token": claimed.json["agentToken"]}
+        self.assertEqual(self.client.get(f"/api/v1/devices/{claimed.json['id']}/state", headers=agent_headers).status_code, 401)
 
     def test_command_long_poll_and_restore_require_agent_token(self) -> None:
         pairing = self.client.post("/api/v1/pairing-codes", headers=self.owner_headers(), json={"restoreApps": [{"publisher": "Influent", "slug": "packagemaker", "version": "0.1"}]}).json
