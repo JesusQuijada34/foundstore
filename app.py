@@ -1156,6 +1156,10 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         GITHUB_CLIENT_ID=os.environ.get("GITHUB_OAUTH_CLIENT_ID", ""),
         GITHUB_CLIENT_SECRET=os.environ.get("GITHUB_OAUTH_CLIENT_SECRET", ""),
         PUBLIC_ORIGIN="https://imfoundstore.onrender.com",
+        SESSION_COOKIE_SECURE=True,
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",
+        PERMANENT_SESSION_LIFETIME=timedelta(days=30),
         ALLOW_LEGACY_PAIRING=os.environ.get("ALLOW_LEGACY_PAIRING", "").lower() == "true",
         MONGO_FALLBACK_REASON=None,
     )
@@ -1240,6 +1244,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if not oauth_ready():
             return jsonify({"error": "GitHub OAuth no está configurado"}), 503
         state = secrets.token_urlsafe(24)
+        session.pop("github_star_oauth_state", None)
+        session.pop("github_star_target", None)
         session["github_oauth_state"] = state
         link_id = request.args.get("link", "")
         next_path = safe_next_path(str(request.args.get("next", "")))
@@ -1272,10 +1278,20 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.get("/auth/github/callback")
     def github_oauth_callback() -> Response:
-        star_target = session.pop("github_star_target", None)
-        expected_state = session.pop("github_star_oauth_state", "") if star_target else session.pop("github_oauth_state", "")
-        if not oauth_ready() or not secrets.compare_digest(str(expected_state), str(request.args.get("state", ""))):
+        incoming_state = str(request.args.get("state", ""))
+        star_target = session.get("github_star_target")
+        star_state = str(session.get("github_star_oauth_state", ""))
+        regular_state = str(session.get("github_oauth_state", ""))
+        is_star_flow = bool(star_target and star_state and secrets.compare_digest(star_state, incoming_state))
+        is_regular_flow = bool(regular_state and secrets.compare_digest(regular_state, incoming_state))
+        if not oauth_ready() or not (is_star_flow or is_regular_flow):
             return jsonify({"error": "La confirmación de GitHub no es válida"}), 400
+        if is_star_flow:
+            star_target = session.pop("github_star_target", None)
+            session.pop("github_star_oauth_state", None)
+        else:
+            star_target = None
+            session.pop("github_oauth_state", None)
         code = request.args.get("code", "")
         try:
             token_response = requests.post("https://github.com/login/oauth/access_token", data={"client_id": app.config["GITHUB_CLIENT_ID"], "client_secret": app.config["GITHUB_CLIENT_SECRET"], "code": code}, headers={"Accept": "application/json"}, timeout=10).json()
@@ -1287,6 +1303,13 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if not login:
             return jsonify({"error": "GitHub no devolvió una identidad válida"}), 401
         session["github_login"] = login
+        session.permanent = True
+        try:
+            app.extensions["device_store"].update_developer_profile(login, {"displayName": str(profile.get("name") or login), "website": str(profile.get("blog") or "")})
+            catalog_snapshot(login)
+        except Exception:
+            # El inicio de sesión no depende del inventario público; se reintentará al abrir el perfil.
+            pass
         if isinstance(star_target, dict):
             author, slug = str(star_target.get("author", "")), str(star_target.get("slug", ""))
             if not public_catalog_package(author, slug):

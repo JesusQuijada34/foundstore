@@ -134,6 +134,24 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(legacy.status_code, 200)
         self.assertIn("Continuar con GitHub", legacy.get_data(as_text=True))
 
+    def test_regular_oauth_callback_ignores_abandoned_star_state_and_persists_session(self) -> None:
+        oauth_app = create_app({"TESTING": True, "DATA_DIR": self.tempdir.name, "MONGODB_URI": None, "GITHUB_CLIENT_ID": "client-id", "GITHUB_CLIENT_SECRET": "client-secret", "SECRET_KEY": "test-session"})
+        client = oauth_app.test_client()
+        with client.session_transaction() as browser_session:
+            browser_session["github_oauth_state"] = "regular-state"
+            browser_session["github_star_oauth_state"] = "old-star-state"
+            browser_session["github_star_target"] = {"author": "JesusQuijada34", "slug": "camera"}
+        class TokenResponse:
+            def json(self) -> dict[str, str]: return {"access_token": "test-token"}
+        class ProfileResponse:
+            def json(self) -> dict[str, str]: return {"login": "reader", "name": "Reader", "blog": ""}
+        with patch("app.requests.post", return_value=TokenResponse()), patch("app.requests.get", return_value=ProfileResponse()), patch("app.catalog_snapshot", return_value={"packages": []}):
+            callback = client.get("/auth/github/callback?code=test-code&state=regular-state", follow_redirects=False)
+        self.assertEqual(callback.status_code, 302)
+        with client.session_transaction() as browser_session:
+            self.assertEqual(browser_session["github_login"], "reader")
+            self.assertTrue(browser_session.permanent)
+
     def test_catalog_references_reject_invalid_entries_and_deduplicates_repositories(self) -> None:
         references = catalog_references("camera, JesusQuijada34/packagemaker\n# comentario\nno válido, camera, OtherDev/app", "JesusQuijada34")
         self.assertEqual(references, [("JesusQuijada34", "camera"), ("JesusQuijada34", "packagemaker"), ("OtherDev", "app")])
