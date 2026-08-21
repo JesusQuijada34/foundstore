@@ -140,13 +140,26 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(missing.status_code, 404)
 
     def test_static_repository_scan_is_exposed_without_executing_a_package(self) -> None:
-        package = {"slug": "packagemaker", "name": "PackageMaker", "author": "JesusQuijada34", "branch": "main"}
+        package = {"slug": "packagemaker", "name": "PackageMaker", "author": "ExternalDev", "branch": "main"}
         report = {"status": "review_required", "highestSeverity": "medium", "findings": [{"path": "updater.py", "severity": "medium"}], "method": "static_public_text_only"}
-        with patch("app.catalog_snapshot", return_value={"packages": [package]}), patch("app.static_repository_scan", return_value=report) as scan:
-            response = self.client.get("/api/v1/catalog/packagemaker/security")
+        with patch("app.github_public_profile", return_value={"githubLogin": "ExternalDev", "githubName": "External Dev", "avatarUrl": "", "githubUrl": "https://github.com/ExternalDev"}), patch("app.catalog_snapshot", return_value={"packages": [package]}), patch("app.package_metadata", return_value={}), patch("app.static_repository_scan", return_value=report) as scan:
+            response = self.client.get("/api/v1/packages/ExternalDev/packagemaker/security")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json["scan"]["method"], "static_public_text_only")
         scan.assert_called_once()
+
+    def test_catalog_changes_returns_only_revised_packages_and_removed_keys(self) -> None:
+        package = {"slug": "camera", "name": "Camera", "author": "JesusQuijada34", "branch": "main", "revision": "current-revision"}
+        snapshot = {"packages": [package], "catalogVersion": "version-2", "fetchedAt": "2026-01-01T00:00:00+00:00"}
+        with patch("app.catalog_snapshot", return_value=snapshot), patch("app.package_metadata", return_value={"platformTargets": ["Danenone"]}):
+            unchanged = self.client.post("/api/v1/catalog/changes", json={"known": {"JesusQuijada34/camera": "current-revision", "old/app": "legacy"}})
+            changed = self.client.post("/api/v1/catalog/changes", json={"known": {"JesusQuijada34/camera": "older-revision"}})
+        self.assertEqual(unchanged.status_code, 200)
+        self.assertEqual(unchanged.json["packages"], [])
+        self.assertEqual(unchanged.json["removed"], ["old/app"])
+        self.assertEqual(changed.status_code, 200)
+        self.assertEqual(changed.json["packages"][0]["slug"], "camera")
+        self.assertEqual(changed.json["catalogVersion"], "version-2")
 
     def test_profile_keeps_owner_license_and_links_a_knosthalij_device(self) -> None:
         with self.client.session_transaction() as browser_session:

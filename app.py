@@ -94,6 +94,11 @@ def title_for(slug: str) -> str:
     return " ".join(part.capitalize() for part in slug.replace("_", "-").split("-") if part)
 
 
+def package_revision(package: dict[str, Any]) -> str:
+    stable = {key: package.get(key) for key in ("author", "slug", "branch", "updatedAt", "description", "repositoryUrl")}
+    return hashlib.sha256(json.dumps(stable, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()[:20]
+
+
 def canonical_platform(value: str) -> str:
     normalized = value.strip().lower()
     if normalized == "danenone":
@@ -782,7 +787,7 @@ def catalog_snapshot(catalog_owner: str = CATALOG_OWNER, catalog_repository: str
         topics = repository.get("topics", [])
         branch = repository.get("default_branch", "main")
         asset_base = f"https://raw.githubusercontent.com/{catalog_owner}/{slug}/{branch}/assets"
-        packages.append({
+        package = {
             "slug": slug,
             "name": title_for(slug),
             "author": catalog_owner,
@@ -797,9 +802,12 @@ def catalog_snapshot(catalog_owner: str = CATALOG_OWNER, catalog_repository: str
                 "splash": f"{asset_base}/splash.png",
                 "portrait": f"{asset_base}/splash_setup.png",
             },
-        })
+        }
+        package["revision"] = package_revision(package)
+        packages.append(package)
     packages.sort(key=lambda item: item["name"].lower())
-    return {"packages": packages, "fetchedAt": iso_now(), "source": "GitHub API"}
+    catalog_version = hashlib.sha256("|".join(f"{item['author']}/{item['slug']}:{item['revision']}" for item in packages).encode("utf-8")).hexdigest()[:20]
+    return {"packages": packages, "catalogVersion": catalog_version, "fetchedAt": iso_now(), "source": "GitHub API"}
 
 
 def valid_github_login(value: str) -> bool:
@@ -1059,6 +1067,21 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         except Exception as error:
             return jsonify({"error": "No se pudo obtener el catálogo de GitHub", "detail": type(error).__name__}), 502
 
+    @app.post("/api/v1/catalog/changes")
+    def catalog_changes() -> Response:
+        payload = request.get_json(silent=True) or {}
+        known = payload.get("known", {})
+        if not isinstance(known, dict) or len(known) > 500 or any(not isinstance(key, str) or not isinstance(value, str) or len(key) > 160 or len(value) > 64 for key, value in known.items()):
+            return jsonify({"error": "El estado de catálogo no es válido"}), 400
+        try:
+            snapshot = catalog_snapshot()
+            current = {f"{item['author']}/{item['slug']}": item for item in snapshot["packages"]}
+            changed = [{**package, **package_metadata(package["slug"], package.get("branch", "main"), package["author"])} for key, package in current.items() if known.get(key) != package["revision"]]
+            removed = sorted(key for key in known if key not in current)
+            return jsonify({"packages": changed, "removed": removed, "catalogVersion": snapshot["catalogVersion"], "fetchedAt": snapshot["fetchedAt"]})
+        except Exception as error:
+            return jsonify({"error": "No se pudo actualizar el catálogo de GitHub", "detail": type(error).__name__}), 502
+
     @app.get("/api/v1/catalog/<slug>")
     def catalog_package(slug: str) -> Response:
         try:
@@ -1069,12 +1092,15 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return jsonify({"error": "Aplicación no encontrada"}), 404
         return jsonify({"package": {**package, **package_metadata(slug, package.get("branch", "main"), package["author"])}})
 
-    @app.get("/api/v1/catalog/<slug>/security")
-    def catalog_package_security(slug: str) -> Response:
-        try:
-            package = next((item for item in catalog_snapshot()["packages"] if item["slug"].lower() == slug.lower()), None)
-        except Exception as error:
-            return jsonify({"error": "No se pudo obtener el catálogo de GitHub", "detail": type(error).__name__}), 502
+    @app.get("/api/v1/packages/<author>/<slug>/security")
+    @app.get("/api/v1/catalog/<slug>/security", defaults={"author": CATALOG_OWNER})
+    def catalog_package_security(author: str, slug: str) -> Response:
+        if not valid_github_login(author):
+            return jsonify({"error": "Desarrollador no encontrado"}), 404
+        _, snapshot = developer_catalog(author)
+        if not snapshot:
+            return jsonify({"error": "El catálogo del desarrollador no está disponible"}), 503
+        package = next((item for item in snapshot["packages"] if item["slug"].lower() == slug.lower()), None)
         if not package:
             return jsonify({"error": "Aplicación no encontrada"}), 404
         return jsonify({"scan": static_repository_scan(app.extensions["device_store"], package["author"], package["slug"], package.get("branch", "main"))})
