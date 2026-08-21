@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from app import catalog_references, create_app, raw_github_text
+from app import catalog_references, create_app, github_public_repositories, raw_github_text
 
 
 class FlaskRenderAppTests(unittest.TestCase):
@@ -49,6 +49,21 @@ class FlaskRenderAppTests(unittest.TestCase):
             content = raw_github_text("JesusQuijada34", "camera", "main", "details.xml")
         self.assertIn("JesusQuijada34", content)
         self.assertIn("raw.githubusercontent.com", get.call_args.args[0])
+
+    def test_public_repository_discovery_falls_back_to_the_public_profile_listing(self) -> None:
+        class ApiResponse:
+            ok = False
+
+        class ProfileResponse:
+            ok = True
+            text = '<a href="/JesusQuijada34/camera">Camera</a><a href="/JesusQuijada34/matchmeter">MatchMeter</a>'
+
+        def fake_get(url: str, **_: object) -> object:
+            return ApiResponse() if url.startswith("https://api.github.com/") else ProfileResponse()
+
+        with patch("app.requests.get", side_effect=fake_get):
+            repositories = github_public_repositories("JesusQuijada34")
+        self.assertEqual([item["name"] for item in repositories], ["camera", "matchmeter"])
 
     def test_pwa_manifest_and_service_worker_are_available_from_root_scope(self) -> None:
         manifest = self.client.get("/manifest.webmanifest")

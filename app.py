@@ -984,6 +984,33 @@ def github_public_repositories(github_login: str) -> list[dict[str, Any]]:
                 break
         except requests.RequestException:
             break
+    if repositories:
+        return repositories
+
+    # Algunos despliegues comparten una cuota anónima de API de GitHub. Si esa
+    # cuota no devuelve inventario, el listado público del propio perfil ofrece
+    # un respaldo de sólo lectura; nunca enumera repositorios privados.
+    escaped_login = re.escape(github_login)
+    seen: set[str] = set()
+    for page in range(1, 6):
+        try:
+            response = requests.get(
+                f"https://github.com/{quote(github_login)}",
+                params={"tab": "repositories", "page": page},
+                headers={"User-Agent": "Foundstore-Flask-Render"},
+                timeout=8,
+            )
+        except requests.RequestException:
+            break
+        if not response.ok:
+            break
+        names = re.findall(rf'href="/{escaped_login}/([A-Za-z0-9][A-Za-z0-9._-]{{0,99}})"', response.text)
+        page_names = [name for name in names if valid_repository_name(name) and name.lower() not in seen]
+        for name in page_names:
+            seen.add(name.lower())
+            repositories.append({"name": name, "url": f"https://github.com/{github_login}/{name}", "description": "", "updatedAt": "", "defaultBranch": "main", "topics": [], "stars": 0})
+        if not page_names:
+            break
     return repositories
 
 
