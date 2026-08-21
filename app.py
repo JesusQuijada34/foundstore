@@ -1175,6 +1175,15 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     def oauth_ready() -> bool:
         return bool(app.config["GITHUB_CLIENT_ID"] and app.config["GITHUB_CLIENT_SECRET"])
 
+    def safe_next_path(value: str) -> str:
+        return value if value.startswith("/") and not value.startswith("//") else ""
+
+    def web_session_or_login() -> Response | None:
+        if github_login():
+            return None
+        next_path = safe_next_path(request.full_path.rstrip("?") or request.path)
+        return Response(render_template("login.html", next_path=next_path), status=401)
+
     def developer_catalog(github_login: str, include_diagnostics: bool = False) -> tuple[dict[str, str], dict[str, Any] | None]:
         profile_data = developer_profile(app.extensions["device_store"], github_login)
         try:
@@ -1204,11 +1213,17 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         return grant
 
     @app.get("/")
-    def index() -> str:
+    def index() -> Response | str:
+        blocked = web_session_or_login()
+        if blocked:
+            return blocked
         return render_template("index.html", catalog_owner=CATALOG_OWNER, visitor_country=request.headers.get("CF-IPCountry", ""))
 
     @app.get("/<author>/<slug>")
     def package_detail(author: str, slug: str) -> Response | str:
+        blocked = web_session_or_login()
+        if blocked:
+            return blocked
         if not valid_github_login(author) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}", slug):
             return jsonify({"error": "Aplicación no encontrada"}), 404
         profile_data, snapshot = developer_catalog(author)
@@ -1227,8 +1242,11 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         state = secrets.token_urlsafe(24)
         session["github_oauth_state"] = state
         link_id = request.args.get("link", "")
+        next_path = safe_next_path(str(request.args.get("next", "")))
         if link_id:
             session["github_oauth_link"] = link_id
+        if next_path:
+            session["github_oauth_next"] = next_path
         callback = f"{app.config['PUBLIC_ORIGIN']}/auth/github/callback"
         query = urlencode({"client_id": app.config["GITHUB_CLIENT_ID"], "redirect_uri": callback, "state": state, "scope": "read:user"})
         return redirect(f"https://github.com/login/oauth/authorize?{query}")
@@ -1247,8 +1265,10 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         return redirect(f"https://github.com/login/oauth/authorize?{query}")
 
     @app.get("/login")
-    def legacy_login() -> Response:
-        return redirect(url_for("github_oauth_login"))
+    def legacy_login() -> Response | str:
+        if github_login():
+            return redirect(url_for("index"))
+        return render_template("login.html", next_path=safe_next_path(str(request.args.get("next", ""))) or "/")
 
     @app.get("/auth/github/callback")
     def github_oauth_callback() -> Response:
@@ -1276,16 +1296,21 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             session["github_star_grant_id"] = grant_id
             return redirect(url_for("package_detail", author=author, slug=slug, starConsent="granted"))
         link_id = session.pop("github_oauth_link", "")
-        return redirect(url_for("license_link_page", link_id=link_id) if link_id else url_for("index"))
+        next_path = safe_next_path(str(session.pop("github_oauth_next", "")))
+        return redirect(url_for("license_link_page", link_id=link_id) if link_id else next_path or url_for("index"))
 
     @app.get("/profile")
     def profile() -> Response | str:
-        if not github_login():
-            return redirect(url_for("github_oauth_login"))
+        blocked = web_session_or_login()
+        if blocked:
+            return blocked
         return render_template("profile.html", github_login=github_login(), visitor_country=request.headers.get("CF-IPCountry", ""))
 
     @app.get("/developer/<github_login>")
     def developer_page(github_login: str) -> Response | str:
+        blocked = web_session_or_login()
+        if blocked:
+            return blocked
         if not valid_github_login(github_login):
             return jsonify({"error": "Desarrollador no encontrado"}), 404
         return render_template("developer.html", github_login=github_login, visitor_country=request.headers.get("CF-IPCountry", ""))

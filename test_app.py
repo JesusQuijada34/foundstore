@@ -18,8 +18,10 @@ class FlaskRenderAppTests(unittest.TestCase):
     def owner_headers(self) -> dict[str, str]:
         return {"X-Foundstore-Owner-Token": "owner-test-token"}
 
-    def test_direct_root_and_health_do_not_redirect(self) -> None:
-        self.assertEqual(self.client.get("/").status_code, 200)
+    def test_web_root_requires_session_but_health_remains_public(self) -> None:
+        root = self.client.get("/")
+        self.assertEqual(root.status_code, 401)
+        self.assertIn("Continuar con GitHub", root.get_data(as_text=True))
         health = self.client.get("/healthz")
         self.assertEqual(health.status_code, 200)
         self.assertEqual(health.json["storage"], "sqlite-fallback")
@@ -109,6 +111,8 @@ class FlaskRenderAppTests(unittest.TestCase):
     def test_pwa_manifest_and_service_worker_are_available_from_root_scope(self) -> None:
         manifest = self.client.get("/manifest.webmanifest")
         worker = self.client.get("/service-worker.js")
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "reader"
         catalog = self.client.get("/").get_data(as_text=True)
         self.assertEqual(manifest.status_code, 200)
         self.assertEqual(manifest.json["display"], "standalone")
@@ -127,8 +131,8 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertIn("https://github.com/login/oauth/authorize?", response.location)
         self.assertIn("redirect_uri=https%3A%2F%2Fimfoundstore.onrender.com%2Fauth%2Fgithub%2Fcallback", response.location)
         legacy = oauth_app.test_client().get("/login", follow_redirects=False)
-        self.assertEqual(legacy.status_code, 302)
-        self.assertTrue(legacy.location.endswith("/auth/github/login"))
+        self.assertEqual(legacy.status_code, 200)
+        self.assertIn("Continuar con GitHub", legacy.get_data(as_text=True))
 
     def test_catalog_references_reject_invalid_entries_and_deduplicates_repositories(self) -> None:
         references = catalog_references("camera, JesusQuijada34/packagemaker\n# comentario\nno válido, camera, OtherDev/app", "JesusQuijada34")
@@ -209,6 +213,8 @@ class FlaskRenderAppTests(unittest.TestCase):
 
     def test_public_package_detail_and_catalog_item_hide_download_urls(self) -> None:
         package = {"slug": "packagemaker", "name": "PackageMaker", "author": "JesusQuijada34", "description": "Creador de paquetes Fluthin", "category": "Desarrollo", "tags": [], "visuals": {"icon": "https://example.test/icon.png", "splash": "https://example.test/splash.png", "portrait": "https://example.test/portrait.png"}}
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "reader"
         with patch("app.catalog_snapshot", return_value={"packages": [package]}), patch("app.package_metadata", return_value={"platform": "AlphaCube", "platformTargets": ["Danenone", "Knosthalij"], "readme": "# README oficial", "version": "v1", "publisher": "Influent"}):
             page = self.client.get("/JesusQuijada34/packagemaker")
             api = self.client.get("/api/v1/catalog/packagemaker")
