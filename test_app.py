@@ -23,6 +23,16 @@ class FlaskRenderAppTests(unittest.TestCase):
         health = self.client.get("/healthz")
         self.assertEqual(health.status_code, 200)
         self.assertEqual(health.json["storage"], "sqlite-fallback")
+        favicon = self.client.get("/favicon.ico")
+        self.assertEqual(favicon.status_code, 200)
+        self.assertEqual(favicon.content_type, "image/svg+xml")
+
+    def test_github_login_starts_authorization_with_configured_callback(self) -> None:
+        oauth_app = create_app({"TESTING": True, "DATA_DIR": self.tempdir.name, "MONGODB_URI": None, "GITHUB_CLIENT_ID": "client-id", "GITHUB_CLIENT_SECRET": "client-secret", "SECRET_KEY": "test-session"})
+        response = oauth_app.test_client().get("/auth/github/login", follow_redirects=False)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("https://github.com/login/oauth/authorize?", response.location)
+        self.assertIn("redirect_uri=http%3A%2F%2Flocalhost%2Fauth%2Fgithub%2Fcallback", response.location)
 
     def test_render_without_explicit_volume_uses_local_ephemeral_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as workdir, patch.dict(os.environ, {"RENDER": "true"}, clear=True):

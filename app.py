@@ -20,6 +20,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Protocol
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 import requests
@@ -562,9 +563,18 @@ def catalog_snapshot() -> dict[str, Any]:
         with urlopen(Request(f"https://api.github.com{path}", headers=headers), timeout=10) as response:  # nosec B310: fixed GitHub API origin
             return json.load(response)
 
-    catalog_file = github(f"/repos/{CATALOG_OWNER}/{CATALOG_REPOSITORY}/contents/repo.list?ref=main")
-    slugs = [item.strip() for item in base64.b64decode(catalog_file["content"]).decode("utf-8").split(",") if item.strip()]
-    repositories = {item["name"].lower(): item for item in github(f"/users/{CATALOG_OWNER}/repos?per_page=100&sort=updated")}
+    try:
+        catalog_file = github(f"/repos/{CATALOG_OWNER}/{CATALOG_REPOSITORY}/contents/repo.list?ref=main")
+        source_text = base64.b64decode(catalog_file["content"]).decode("utf-8")
+    except Exception:
+        raw_url = f"https://raw.githubusercontent.com/{CATALOG_OWNER}/{CATALOG_REPOSITORY}/main/repo.list"
+        with urlopen(Request(raw_url, headers={"User-Agent": "Foundstore-Flask-Render"}), timeout=10) as response:  # nosec B310: fixed GitHub raw origin
+            source_text = response.read().decode("utf-8")
+    slugs = [item.strip() for item in source_text.split(",") if item.strip()]
+    try:
+        repositories = {item["name"].lower(): item for item in github(f"/users/{CATALOG_OWNER}/repos?per_page=100&sort=updated")}
+    except Exception:
+        repositories = {}
     packages: list[dict[str, Any]] = []
     for slug in slugs:
         repository = repositories.get(slug.lower(), {})
@@ -647,7 +657,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if link_id:
             session["github_oauth_link"] = link_id
         callback = url_for("github_oauth_callback", _external=True)
-        query = urllib.parse.urlencode({"client_id": app.config["GITHUB_CLIENT_ID"], "redirect_uri": callback, "state": state, "scope": "read:user"})
+        query = urlencode({"client_id": app.config["GITHUB_CLIENT_ID"], "redirect_uri": callback, "state": state, "scope": "read:user"})
         return redirect(f"https://github.com/login/oauth/authorize?{query}")
 
     @app.get("/auth/github/callback")
@@ -682,6 +692,11 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     @app.get("/healthz")
     def healthz() -> Response:
         return jsonify({"status": "ok", "storage": app.extensions["device_store"].backend_name, "mongoFallbackReason": app.config.get("MONGO_FALLBACK_REASON"), "serverTime": iso_now()})
+
+    @app.get("/favicon.ico")
+    def favicon() -> Response:
+        icon = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='#0c3b29'/><path d='M16 20 32 11l16 9v20L32 53 16 40Z' fill='#72e2aa'/><path d='m32 11 16 9-16 10-16-10Z' fill='#c9ffe3'/></svg>"
+        return Response(icon, content_type="image/svg+xml", headers={"Cache-Control": "public, max-age=86400"})
 
     @app.get("/api/v1/catalog")
     def catalog() -> Response:
