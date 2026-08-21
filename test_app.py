@@ -35,6 +35,13 @@ class FlaskRenderAppTests(unittest.TestCase):
             finally:
                 os.chdir(previous)
 
+    def test_legacy_secret_names_are_accepted_during_render_migration(self) -> None:
+        with patch.dict(os.environ, {"GITHUB_OAUTH_CLIENT_ID": "legacy-id", "GITHUB_OAUTH_CLIENT_SECRET": "legacy-secret", "SECRET_KEY": "legacy-session-key", "MONGO_URI": ""}, clear=False):
+            migrated = create_app({"TESTING": True, "DATA_DIR": self.tempdir.name, "MONGODB_URI": None, "OWNER_API_TOKEN": "owner-test-token"})
+        self.assertEqual(migrated.config["GITHUB_CLIENT_ID"], "legacy-id")
+        self.assertEqual(migrated.config["GITHUB_CLIENT_SECRET"], "legacy-secret")
+        self.assertEqual(migrated.config["SECRET_KEY"], "legacy-session-key")
+
     def test_pairing_is_single_use_and_returns_no_token_in_uri(self) -> None:
         self.app.config["ALLOW_LEGACY_PAIRING"] = True
         pairing = self.client.post("/api/v1/pairing-codes", headers=self.owner_headers(), json={"displayName": "DaneDesk Azul", "restoreApps": [{"publisher": "Influent", "slug": "packagemaker", "version": "0.1"}]})

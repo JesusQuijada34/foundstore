@@ -16,6 +16,16 @@ Una instalación desde Foundstore se convierte en una orden `install_request`. E
 
 Si `MONGODB_URI` está configurada y responde, MongoDB guarda los códigos de pairing, dispositivos y órdenes de corta vigencia. Si no hay URI o MongoDB no está disponible, Flask usa SQLite en `DATA_DIR`, que por defecto es `./var`. La ruta no presupone un volumen en `/var/data`: sólo se debe definir `DATA_DIR` para una ubicación persistente cuando el proveedor haya montado y autorizado explícitamente ese volumen. En Render Free, el respaldo SQLite es efímero y no debe tratarse como almacenamiento durable.
 
+La rama acepta los nombres actuales `MONGODB_URI`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` y `FLASK_SECRET_KEY`. Durante la transición también reconoce `MONGO_URI`, `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET` y `SECRET_KEY`; las instalaciones nuevas deben utilizar los nombres actuales.
+
+La GitHub OAuth App debe registrar exactamente este callback:
+
+```text
+https://imfoundstore.onrender.com/auth/github/callback
+```
+
+El callback heredado `/login/github/authorized` pertenece a la aplicación anterior y no completa el vínculo de licencia de esta rama Flask.
+
 Los trabajos cron no tienen acceso a discos persistentes. Por ello, `foundstore-maintenance` usa MongoDB para eliminar códigos de pairing y órdenes caducadas. Si se escoge solo SQLite, la limpieza ocurre al reiniciar o se debe ejecutar como una acción interna del servicio web.
 
 ## Flujo DaneDesk
