@@ -94,15 +94,24 @@ def title_for(slug: str) -> str:
     return " ".join(part.capitalize() for part in slug.replace("_", "-").split("-") if part)
 
 
+def canonical_platform(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized == "danenone":
+        return "Danenone"
+    if normalized in {"knosthalij", "windows"}:
+        return "Knosthalij"
+    return value.strip()
+
+
 def platforms_for(value: str) -> list[str]:
     normalized = value.strip().lower()
     if normalized == "alphacube":
-        return ["Danenone", "Windows"]
+        return ["Danenone", "Knosthalij"]
     if normalized == "knosthalij":
-        return ["Windows"]
+        return ["Knosthalij"]
     if normalized == "danenone":
         return ["Danenone"]
-    return [value.strip()] if value.strip() else []
+    return [canonical_platform(value)] if value.strip() else []
 
 
 def raw_github_text(slug: str, branch: str, path: str) -> str:
@@ -250,6 +259,8 @@ class LocalStore:
                     conn.execute(migration)
                 except sqlite3.OperationalError:
                     pass
+            conn.execute("UPDATE devices SET platform = 'Knosthalij' WHERE lower(platform) = 'windows'")
+            conn.execute("UPDATE license_links SET platform = 'Knosthalij' WHERE lower(platform) = 'windows'")
 
     def create_pairing_code(self, display_name: str, restore_apps: list[dict[str, str]]) -> dict[str, Any]:
         code = "".join(secrets.choice(PAIRING_ALPHABET) for _ in range(8))
@@ -288,7 +299,8 @@ class LocalStore:
         return {"license": display_license(code), "status": "active"}
 
     def begin_license_link(self, license_code: str, display_name: str, platform: str = "Danenone") -> dict[str, Any] | None:
-        if platform not in {"Danenone", "Windows"}:
+        platform = canonical_platform(platform)
+        if platform not in {"Danenone", "Knosthalij"}:
             return None
         license_hash = token_hash(normalize_license(license_code))
         with self._connect() as conn:
@@ -486,6 +498,8 @@ class MongoStore:
         self.db.license_links.create_index("expiresAt", expireAfterSeconds=0)
         self.db.commands.create_index("expiresAt", expireAfterSeconds=0)
         self.db.device_events.create_index([("deviceId", 1), ("createdAt", 1)])
+        self.db.devices.update_many({"platform": "Windows"}, {"$set": {"platform": "Knosthalij"}})
+        self.db.license_links.update_many({"platform": "Windows"}, {"$set": {"platform": "Knosthalij"}})
 
     def create_pairing_code(self, display_name: str, restore_apps: list[dict[str, str]]) -> dict[str, Any]:
         code = "".join(secrets.choice(PAIRING_ALPHABET) for _ in range(8))
@@ -513,7 +527,8 @@ class MongoStore:
         return {"license": display_license(code), "status": "active"}
 
     def begin_license_link(self, license_code: str, display_name: str, platform: str = "Danenone") -> dict[str, Any] | None:
-        if platform not in {"Danenone", "Windows"}:
+        platform = canonical_platform(platform)
+        if platform not in {"Danenone", "Knosthalij"}:
             return None
         license_hash = token_hash(normalize_license(license_code))
         license_row = self.db.device_licenses.find_one({"codeHash": license_hash, "status": "active", "deviceId": None})
@@ -947,8 +962,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         payload = request.get_json(silent=True) or {}
         license_code = str(payload.get("license", ""))
         display_name = str(payload.get("displayName", "DaneDesk")).strip()[:80] or "DaneDesk"
-        requested_platform = str(payload.get("platform", "Danenone")).strip()
-        platform = "Windows" if requested_platform.lower() in {"windows", "knosthalij"} else "Danenone" if requested_platform.lower() == "danenone" else ""
+        platform = canonical_platform(str(payload.get("platform", "Danenone")))
         link = app.extensions["device_store"].begin_license_link(license_code, display_name, platform)
         if not link:
             return jsonify({"error": "La licencia no es válida, fue revocada o ya está vinculada"}), 401

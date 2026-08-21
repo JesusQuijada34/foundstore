@@ -112,7 +112,7 @@ class FlaskRenderAppTests(unittest.TestCase):
 
     def test_public_package_detail_and_catalog_item_hide_download_urls(self) -> None:
         package = {"slug": "packagemaker", "name": "PackageMaker", "author": "JesusQuijada34", "description": "Creador de paquetes Fluthin", "category": "Desarrollo", "tags": [], "visuals": {"icon": "https://example.test/icon.png", "splash": "https://example.test/splash.png", "portrait": "https://example.test/portrait.png"}}
-        with patch("app.catalog_snapshot", return_value={"packages": [package]}), patch("app.package_metadata", return_value={"platform": "AlphaCube", "platformTargets": ["Danenone", "Windows"], "readme": "# README oficial", "version": "v1", "publisher": "Influent"}):
+        with patch("app.catalog_snapshot", return_value={"packages": [package]}), patch("app.package_metadata", return_value={"platform": "AlphaCube", "platformTargets": ["Danenone", "Knosthalij"], "readme": "# README oficial", "version": "v1", "publisher": "Influent"}):
             page = self.client.get("/JesusQuijada34/packagemaker")
             api = self.client.get("/api/v1/catalog/packagemaker")
             missing = self.client.get("/JesusQuijada34/no-existe")
@@ -122,12 +122,12 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(api.status_code, 200)
         self.assertEqual(api.json["package"]["slug"], "packagemaker")
         self.assertEqual(api.json["package"]["visuals"]["portrait"], "https://example.test/portrait.png")
-        self.assertEqual(api.json["package"]["platformTargets"], ["Danenone", "Windows"])
+        self.assertEqual(api.json["package"]["platformTargets"], ["Danenone", "Knosthalij"])
         self.assertEqual(api.json["package"]["publisher"], "Influent")
         self.assertIn("README oficial", page.get_data(as_text=True))
         self.assertEqual(missing.status_code, 404)
 
-    def test_profile_keeps_owner_license_and_links_a_windows_device(self) -> None:
+    def test_profile_keeps_owner_license_and_links_a_knosthalij_device(self) -> None:
         with self.client.session_transaction() as browser_session:
             browser_session["github_login"] = "jq34"
         self.assertEqual(self.client.get("/profile").status_code, 200)
@@ -138,7 +138,7 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(listed.status_code, 200)
         self.assertEqual(listed.json["licenses"][0]["license"], license_code)
 
-        link = self.client.post("/api/v1/license-links", json={"license": license_code, "displayName": "Foundstore para Windows", "platform": "Windows"}).json
+        link = self.client.post("/api/v1/license-links", json={"license": license_code, "displayName": "Foundstore para Knosthalij", "platform": "Knosthalij"}).json
         intruder = self.app.test_client()
         with intruder.session_transaction() as browser_session:
             browser_session["github_login"] = "otro-usuario"
@@ -146,13 +146,13 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(self.client.post(f"/link/{link['linkId']}", data={"code": link["userCode"]}).status_code, 200)
         claimed = self.client.post(f"/api/v1/license-links/{link['linkId']}/claim", headers={"X-Foundstore-Link-Token": link["linkToken"]})
         self.assertEqual(claimed.status_code, 201)
-        self.assertEqual(claimed.json["platform"], "Windows")
+        self.assertEqual(claimed.json["platform"], "Knosthalij")
 
     def test_catalog_install_rejects_platform_incompatible_device(self) -> None:
         with self.client.session_transaction() as browser_session:
             browser_session["github_login"] = "jq34"
         license_code = self.client.post("/api/v1/me/licenses", json={}).json["license"]
-        link = self.client.post("/api/v1/license-links", json={"license": license_code, "displayName": "Windows", "platform": "Windows"}).json
+        link = self.client.post("/api/v1/license-links", json={"license": license_code, "displayName": "Knosthalij", "platform": "Knosthalij"}).json
         self.client.post(f"/link/{link['linkId']}", data={"code": link["userCode"]})
         device = self.client.post(f"/api/v1/license-links/{link['linkId']}/claim", headers={"X-Foundstore-Link-Token": link["linkToken"]}).json
         package = {"slug": "solo-danenone", "name": "Sólo Danenone", "description": "Prueba", "category": "Sistema", "branch": "main"}
