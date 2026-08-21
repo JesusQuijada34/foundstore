@@ -107,8 +107,21 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertTrue(response.json["localApprovalRequired"])
         self.assertNotIn("downloadUrl", response.json)
         root = self.client.get("/").get_data(as_text=True)
-        self.assertIn("Solicitar instalación", root)
+        self.assertIn("Ver ficha", root)
         self.assertNotIn("repositoryUrl", root)
+
+    def test_public_package_detail_and_catalog_item_hide_download_urls(self) -> None:
+        package = {"slug": "packagemaker", "name": "PackageMaker", "author": "JesusQuijada34", "description": "Creador de paquetes Fluthin", "category": "Desarrollo", "tags": []}
+        with patch("app.catalog_snapshot", return_value={"packages": [package]}):
+            page = self.client.get("/JesusQuijada34/packagemaker")
+            api = self.client.get("/api/v1/catalog/packagemaker")
+            missing = self.client.get("/JesusQuijada34/no-existe")
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("Instalar en DaneDesk", page.get_data(as_text=True))
+        self.assertNotIn("downloadUrl", page.get_data(as_text=True))
+        self.assertEqual(api.status_code, 200)
+        self.assertEqual(api.json["package"]["slug"], "packagemaker")
+        self.assertEqual(missing.status_code, 404)
 
     def test_command_long_poll_and_restore_require_agent_token(self) -> None:
         pairing = self.client.post("/api/v1/pairing-codes", headers=self.owner_headers(), json={"restoreApps": [{"publisher": "Influent", "slug": "packagemaker", "version": "0.1"}]}).json

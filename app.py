@@ -646,7 +646,19 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.get("/")
     def index() -> str:
-        return render_template("index.html", catalog_owner=CATALOG_OWNER)
+        return render_template("index.html", catalog_owner=CATALOG_OWNER, visitor_country=request.headers.get("CF-IPCountry", ""))
+
+    @app.get("/<author>/<slug>")
+    def package_detail(author: str, slug: str) -> Response | str:
+        if author.lower() != CATALOG_OWNER.lower() or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}", slug):
+            return jsonify({"error": "Aplicación no encontrada"}), 404
+        try:
+            package = next((item for item in catalog_snapshot()["packages"] if item["slug"].lower() == slug.lower()), None)
+        except Exception:
+            return jsonify({"error": "El catálogo no está disponible"}), 503
+        if not package:
+            return jsonify({"error": "Aplicación no encontrada"}), 404
+        return render_template("package.html", package=package, catalog_owner=CATALOG_OWNER, visitor_country=request.headers.get("CF-IPCountry", ""))
 
     @app.get("/auth/github/login")
     def github_oauth_login() -> Response:
@@ -709,6 +721,16 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return jsonify(catalog_snapshot())
         except Exception as error:
             return jsonify({"error": "No se pudo obtener el catálogo de GitHub", "detail": type(error).__name__}), 502
+
+    @app.get("/api/v1/catalog/<slug>")
+    def catalog_package(slug: str) -> Response:
+        try:
+            package = next((item for item in catalog_snapshot()["packages"] if item["slug"].lower() == slug.lower()), None)
+        except Exception as error:
+            return jsonify({"error": "No se pudo obtener el catálogo de GitHub", "detail": type(error).__name__}), 502
+        if not package:
+            return jsonify({"error": "Aplicación no encontrada"}), 404
+        return jsonify({"package": package})
 
     @app.get("/api/v1/devices")
     def devices() -> Response:
