@@ -112,7 +112,7 @@ class FlaskRenderAppTests(unittest.TestCase):
 
     def test_public_package_detail_and_catalog_item_hide_download_urls(self) -> None:
         package = {"slug": "packagemaker", "name": "PackageMaker", "author": "JesusQuijada34", "description": "Creador de paquetes Fluthin", "category": "Desarrollo", "tags": [], "visuals": {"icon": "https://example.test/icon.png", "splash": "https://example.test/splash.png", "portrait": "https://example.test/portrait.png"}}
-        with patch("app.catalog_snapshot", return_value={"packages": [package]}):
+        with patch("app.catalog_snapshot", return_value={"packages": [package]}), patch("app.package_metadata", return_value={"platform": "AlphaCube", "platformTargets": ["Danenone", "Windows"], "readme": "# README oficial", "version": "v1"}):
             page = self.client.get("/JesusQuijada34/packagemaker")
             api = self.client.get("/api/v1/catalog/packagemaker")
             missing = self.client.get("/JesusQuijada34/no-existe")
@@ -122,7 +122,43 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(api.status_code, 200)
         self.assertEqual(api.json["package"]["slug"], "packagemaker")
         self.assertEqual(api.json["package"]["visuals"]["portrait"], "https://example.test/portrait.png")
+        self.assertEqual(api.json["package"]["platformTargets"], ["Danenone", "Windows"])
+        self.assertIn("README oficial", page.get_data(as_text=True))
         self.assertEqual(missing.status_code, 404)
+
+    def test_profile_keeps_owner_license_and_links_a_windows_device(self) -> None:
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "jq34"
+        self.assertEqual(self.client.get("/profile").status_code, 200)
+        created = self.client.post("/api/v1/me/licenses", json={})
+        self.assertEqual(created.status_code, 201)
+        license_code = created.json["license"]
+        listed = self.client.get("/api/v1/me/licenses")
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(listed.json["licenses"][0]["license"], license_code)
+
+        link = self.client.post("/api/v1/license-links", json={"license": license_code, "displayName": "Foundstore para Windows", "platform": "Windows"}).json
+        intruder = self.app.test_client()
+        with intruder.session_transaction() as browser_session:
+            browser_session["github_login"] = "otro-usuario"
+        self.assertEqual(intruder.post(f"/link/{link['linkId']}", data={"code": link["userCode"]}).status_code, 400)
+        self.assertEqual(self.client.post(f"/link/{link['linkId']}", data={"code": link["userCode"]}).status_code, 200)
+        claimed = self.client.post(f"/api/v1/license-links/{link['linkId']}/claim", headers={"X-Foundstore-Link-Token": link["linkToken"]})
+        self.assertEqual(claimed.status_code, 201)
+        self.assertEqual(claimed.json["platform"], "Windows")
+
+    def test_catalog_install_rejects_platform_incompatible_device(self) -> None:
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "jq34"
+        license_code = self.client.post("/api/v1/me/licenses", json={}).json["license"]
+        link = self.client.post("/api/v1/license-links", json={"license": license_code, "displayName": "Windows", "platform": "Windows"}).json
+        self.client.post(f"/link/{link['linkId']}", data={"code": link["userCode"]})
+        device = self.client.post(f"/api/v1/license-links/{link['linkId']}/claim", headers={"X-Foundstore-Link-Token": link["linkToken"]}).json
+        package = {"slug": "solo-danenone", "name": "Sólo Danenone", "description": "Prueba", "category": "Sistema", "branch": "main"}
+        with patch("app.catalog_snapshot", return_value={"packages": [package]}), patch("app.package_metadata", return_value={"platformTargets": ["Danenone"]}):
+            response = self.client.post(f"/api/v1/me/devices/{device['id']}/installations", json={"slug": "solo-danenone"})
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json["platformTargets"], ["Danenone"])
 
     def test_command_long_poll_and_restore_require_agent_token(self) -> None:
         pairing = self.client.post("/api/v1/pairing-codes", headers=self.owner_headers(), json={"restoreApps": [{"publisher": "Influent", "slug": "packagemaker", "version": "0.1"}]}).json

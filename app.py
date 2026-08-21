@@ -17,6 +17,7 @@ import re
 import secrets
 import sqlite3
 import time
+import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Protocol
@@ -24,12 +25,14 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 import requests
+from cryptography.fernet import Fernet, InvalidToken
 from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for
 
 CATALOG_OWNER = os.environ.get("CATALOG_OWNER", "JesusQuijada34")
 CATALOG_REPOSITORY = os.environ.get("CATALOG_REPOSITORY", "catalog")
 DEFAULT_LONG_POLL_SECONDS = 25
 MAX_LONG_POLL_SECONDS = 25
+PACKAGE_METADATA_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 PAIRING_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 LICENSE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
@@ -52,6 +55,12 @@ def normalize_license(value: str) -> str:
 
 def display_license(value: str) -> str:
     return "-".join(value[index:index + 5] for index in range(0, len(value), 5))
+
+
+def license_cipher(secret: str) -> Fernet:
+    """Derive a stable Fernet key without persisting raw license codes in storage."""
+    key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode("utf-8")).digest())
+    return Fernet(key)
 
 
 def device_command_key(master_key: str, device_id: str) -> str:
@@ -85,13 +94,53 @@ def title_for(slug: str) -> str:
     return " ".join(part.capitalize() for part in slug.replace("_", "-").split("-") if part)
 
 
+def platforms_for(value: str) -> list[str]:
+    normalized = value.strip().lower()
+    if normalized == "alphacube":
+        return ["Danenone", "Windows"]
+    if normalized == "knosthalij":
+        return ["Windows"]
+    if normalized == "danenone":
+        return ["Danenone"]
+    return [value.strip()] if value.strip() else []
+
+
+def raw_github_text(slug: str, branch: str, path: str) -> str:
+    raw_url = f"https://raw.githubusercontent.com/{CATALOG_OWNER}/{slug}/{branch}/{path}"
+    with urlopen(Request(raw_url, headers={"User-Agent": "Foundstore-Flask-Render"}), timeout=8) as response:  # nosec B310: fixed GitHub raw origin
+        return response.read().decode("utf-8")
+
+
+def package_metadata(slug: str, branch: str = "main") -> dict[str, Any]:
+    cache_key = f"{slug}:{branch}"
+    cached = PACKAGE_METADATA_CACHE.get(cache_key)
+    if cached and cached[0] > time.time():
+        return cached[1]
+    metadata: dict[str, Any] = {"platform": "", "platformTargets": [], "readme": "", "version": "", "publisher": ""}
+    try:
+        root = ET.fromstring(raw_github_text(slug, branch, "details.xml"))
+        for key in ("platform", "version", "publisher", "name", "description"):
+            element = root.find(key)
+            if element is not None and element.text:
+                metadata[key] = element.text.strip()
+        metadata["platformTargets"] = platforms_for(str(metadata.get("platform", "")))
+    except (ET.ParseError, OSError, ValueError):
+        pass
+    try:
+        metadata["readme"] = raw_github_text(slug, branch, "README.md")[:50000]
+    except OSError:
+        pass
+    PACKAGE_METADATA_CACHE[cache_key] = (time.time() + 300, metadata)
+    return metadata
+
+
 class DeviceStore(Protocol):
     backend_name: str
 
     def create_pairing_code(self, display_name: str, restore_apps: list[dict[str, str]]) -> dict[str, Any]: ...
     def claim_device(self, code: str, display_name: str) -> dict[str, Any] | None: ...
-    def create_license(self, restore_apps: list[dict[str, str]]) -> dict[str, Any]: ...
-    def begin_license_link(self, license_code: str, display_name: str) -> dict[str, Any] | None: ...
+    def create_license(self, restore_apps: list[dict[str, str]], owner_login: str = "") -> dict[str, Any]: ...
+    def begin_license_link(self, license_code: str, display_name: str, platform: str = "Danenone") -> dict[str, Any] | None: ...
     def license_link_status(self, link_id: str, link_token: str) -> dict[str, Any] | None: ...
     def approve_license_link(self, link_id: str, user_code: str, github_login: str) -> bool: ...
     def claim_license_link(self, link_id: str, link_token: str) -> dict[str, Any] | None: ...
@@ -104,6 +153,7 @@ class DeviceStore(Protocol):
     def restore_apps(self, device_id: str) -> list[dict[str, str]]: ...
     def list_devices(self) -> list[dict[str, Any]]: ...
     def list_devices_for_owner(self, github_login: str) -> list[dict[str, Any]]: ...
+    def list_licenses_for_owner(self, github_login: str) -> list[dict[str, Any]]: ...
     def record_event(self, device_id: str, topic: str, data: dict[str, Any]) -> dict[str, Any]: ...
     def events_after(self, device_id: str, after: str | None) -> list[dict[str, Any]]: ...
     def maintain(self) -> dict[str, int]: ...
@@ -114,9 +164,10 @@ class LocalStore:
 
     backend_name = "sqlite-fallback"
 
-    def __init__(self, data_dir: str):
+    def __init__(self, data_dir: str, license_secret: str):
         self.path = Path(data_dir) / "foundstore-render.sqlite3"
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.license_fernet = license_cipher(license_secret)
         self._initialize()
 
     def _connect(self) -> sqlite3.Connection:
@@ -188,6 +239,15 @@ class LocalStore:
                   ON device_events(device_id, created_at);
                 """
             )
+            for migration in (
+                "ALTER TABLE devices ADD COLUMN platform TEXT NOT NULL DEFAULT 'Danenone'",
+                "ALTER TABLE device_licenses ADD COLUMN license_ciphertext TEXT",
+                "ALTER TABLE license_links ADD COLUMN platform TEXT NOT NULL DEFAULT 'Danenone'",
+            ):
+                try:
+                    conn.execute(migration)
+                except sqlite3.OperationalError:
+                    pass
 
     def create_pairing_code(self, display_name: str, restore_apps: list[dict[str, str]]) -> dict[str, Any]:
         code = "".join(secrets.choice(PAIRING_ALPHABET) for _ in range(8))
@@ -216,13 +276,18 @@ class LocalStore:
         self.record_event(device_id, "device.paired", {"displayName": display_name})
         return {"id": device_id, "agentToken": agent_token, "platform": "Danenone"}
 
-    def create_license(self, restore_apps: list[dict[str, str]]) -> dict[str, Any]:
+    def create_license(self, restore_apps: list[dict[str, str]], owner_login: str = "") -> dict[str, Any]:
         code = "".join(secrets.choice(LICENSE_ALPHABET) for _ in range(20))
         with self._connect() as conn:
-            conn.execute("INSERT INTO device_licenses(code_hash, restore_apps_json, issued_at) VALUES (?, ?, ?)", (token_hash(code), json.dumps(restore_apps), iso_now()))
+            conn.execute(
+                "INSERT INTO device_licenses(code_hash, owner_login, restore_apps_json, issued_at, license_ciphertext) VALUES (?, ?, ?, ?, ?)",
+                (token_hash(code), owner_login or None, json.dumps(restore_apps), iso_now(), self.license_fernet.encrypt(code.encode("utf-8")).decode("ascii")),
+            )
         return {"license": display_license(code), "status": "active"}
 
-    def begin_license_link(self, license_code: str, display_name: str) -> dict[str, Any] | None:
+    def begin_license_link(self, license_code: str, display_name: str, platform: str = "Danenone") -> dict[str, Any] | None:
+        if platform not in {"Danenone", "Windows"}:
+            return None
         license_hash = token_hash(normalize_license(license_code))
         with self._connect() as conn:
             license_row = conn.execute("SELECT status, device_id FROM device_licenses WHERE code_hash = ?", (license_hash,)).fetchone()
@@ -231,7 +296,7 @@ class LocalStore:
             link_id, link_token = secrets.token_urlsafe(18), secrets.token_urlsafe(32)
             user_code = "".join(secrets.choice(LICENSE_ALPHABET) for _ in range(8))
             expires_at = utc_now() + timedelta(minutes=10)
-            conn.execute("INSERT INTO license_links(id, license_hash, link_token_hash, user_code_hash, display_name, expires_at) VALUES (?, ?, ?, ?, ?, ?)", (link_id, license_hash, token_hash(link_token), token_hash(user_code), display_name, expires_at.isoformat()))
+            conn.execute("INSERT INTO license_links(id, license_hash, link_token_hash, user_code_hash, display_name, platform, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)", (link_id, license_hash, token_hash(link_token), token_hash(user_code), display_name, platform, expires_at.isoformat()))
         return {"linkId": link_id, "linkToken": link_token, "userCode": user_code, "expiresAt": expires_at.isoformat()}
 
     def license_link_status(self, link_id: str, link_token: str) -> dict[str, Any] | None:
@@ -244,8 +309,10 @@ class LocalStore:
 
     def approve_license_link(self, link_id: str, user_code: str, github_login: str) -> bool:
         with self._connect() as conn:
-            link = conn.execute("SELECT * FROM license_links WHERE id = ?", (link_id,)).fetchone()
+            link = conn.execute("SELECT l.*, d.owner_login AS license_owner FROM license_links l JOIN device_licenses d ON d.code_hash = l.license_hash WHERE l.id = ?", (link_id,)).fetchone()
             if not link or link["status"] != "awaiting_owner" or parse_iso(link["expires_at"]) <= utc_now() or not secrets.compare_digest(link["user_code_hash"], token_hash(user_code.upper())):
+                return False
+            if link["license_owner"] and link["license_owner"] != github_login:
                 return False
             return bool(conn.execute("UPDATE license_links SET status = 'approved', owner_login = ? WHERE id = ? AND status = 'awaiting_owner'", (github_login, link_id)).rowcount)
 
@@ -258,11 +325,11 @@ class LocalStore:
             if not license_row or license_row["status"] != "active" or license_row["device_id"]:
                 return None
             device_id, agent_token, now = secrets.token_urlsafe(18), secrets.token_urlsafe(32), iso_now()
-            conn.execute("INSERT INTO devices(id, display_name, agent_token_hash, last_seen_at, restore_apps_json) VALUES (?, ?, ?, ?, ?)", (device_id, link["display_name"], token_hash(agent_token), now, license_row["restore_apps_json"]))
-            conn.execute("UPDATE device_licenses SET device_id = ?, owner_login = ? WHERE code_hash = ?", (device_id, link["owner_login"], link["license_hash"]))
+            conn.execute("INSERT INTO devices(id, display_name, agent_token_hash, last_seen_at, restore_apps_json, platform) VALUES (?, ?, ?, ?, ?, ?)", (device_id, link["display_name"], token_hash(agent_token), now, license_row["restore_apps_json"], link["platform"]))
+            conn.execute("UPDATE device_licenses SET device_id = ?, owner_login = COALESCE(owner_login, ?) WHERE code_hash = ?", (device_id, link["owner_login"], link["license_hash"]))
             conn.execute("UPDATE license_links SET status = 'claimed', used_at = ? WHERE id = ?", (now, link_id))
-        self.record_event(device_id, "device.paired", {"displayName": link["display_name"], "ownerLogin": link["owner_login"]})
-        return {"id": device_id, "agentToken": agent_token, "platform": "Danenone"}
+        self.record_event(device_id, "device.paired", {"displayName": link["display_name"], "ownerLogin": link["owner_login"], "platform": link["platform"]})
+        return {"id": device_id, "agentToken": agent_token, "platform": link["platform"]}
 
     def revoke_license(self, license_code: str, reason: str) -> bool:
         license_hash = token_hash(normalize_license(license_code))
@@ -348,18 +415,35 @@ class LocalStore:
 
     def list_devices(self) -> list[dict[str, Any]]:
         with self._connect() as conn:
-            rows = conn.execute("SELECT id, display_name, status, location_protection, last_seen_at FROM devices ORDER BY last_seen_at DESC").fetchall()
-        return [{"id": row["id"], "displayName": row["display_name"], "status": row["status"], "locationProtection": bool(row["location_protection"]), "lastSeenAt": row["last_seen_at"]} for row in rows]
+            rows = conn.execute("SELECT id, display_name, status, location_protection, last_seen_at, platform FROM devices ORDER BY last_seen_at DESC").fetchall()
+        return [{"id": row["id"], "displayName": row["display_name"], "status": row["status"], "locationProtection": bool(row["location_protection"]), "lastSeenAt": row["last_seen_at"], "platform": row["platform"]} for row in rows]
 
     def list_devices_for_owner(self, github_login: str) -> list[dict[str, Any]]:
         with self._connect() as conn:
             rows = conn.execute(
-                """SELECT d.id, d.display_name, d.status, d.location_protection, d.last_seen_at
+                """SELECT d.id, d.display_name, d.status, d.location_protection, d.last_seen_at, d.platform
                    FROM devices d JOIN device_licenses l ON l.device_id = d.id
                    WHERE l.owner_login = ? AND l.status = 'active' ORDER BY d.last_seen_at DESC""",
                 (github_login,),
             ).fetchall()
-        return [{"id": row["id"], "displayName": row["display_name"], "status": row["status"], "locationProtection": bool(row["location_protection"]), "lastSeenAt": row["last_seen_at"]} for row in rows]
+        return [{"id": row["id"], "displayName": row["display_name"], "status": row["status"], "locationProtection": bool(row["location_protection"]), "lastSeenAt": row["last_seen_at"], "platform": row["platform"]} for row in rows]
+
+    def list_licenses_for_owner(self, github_login: str) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT l.status, l.issued_at, l.license_ciphertext, d.display_name, d.platform
+                   FROM device_licenses l LEFT JOIN devices d ON d.id = l.device_id
+                   WHERE l.owner_login = ? ORDER BY l.issued_at DESC""",
+                (github_login,),
+            ).fetchall()
+        licenses = []
+        for row in rows:
+            try:
+                code = display_license(self.license_fernet.decrypt(row["license_ciphertext"].encode("ascii")).decode("utf-8")) if row["license_ciphertext"] else None
+            except (InvalidToken, AttributeError):
+                code = None
+            licenses.append({"license": code, "status": row["status"], "issuedAt": row["issued_at"], "deviceName": row["display_name"], "platform": row["platform"]})
+        return licenses
 
     def record_event(self, device_id: str, topic: str, data: dict[str, Any]) -> dict[str, Any]:
         event = {"id": secrets.token_urlsafe(18), "topic": topic, "data": data, "createdAt": iso_now()}
@@ -389,12 +473,13 @@ class LocalStore:
 class MongoStore:
     backend_name = "mongodb"
 
-    def __init__(self, uri: str, database_name: str):
+    def __init__(self, uri: str, database_name: str, license_secret: str):
         from pymongo import MongoClient
 
         self.client = MongoClient(uri, connectTimeoutMS=5_000, serverSelectionTimeoutMS=5_000)
         self.client.admin.command("ping")
         self.db = self.client[database_name]
+        self.license_fernet = license_cipher(license_secret)
         self.db.pairing_codes.create_index("expiresAt", expireAfterSeconds=0)
         self.db.license_links.create_index("expiresAt", expireAfterSeconds=0)
         self.db.commands.create_index("expiresAt", expireAfterSeconds=0)
@@ -420,19 +505,21 @@ class MongoStore:
         self.record_event(device_id, "device.paired", {"displayName": display_name})
         return {"id": device_id, "agentToken": agent_token, "platform": "Danenone"}
 
-    def create_license(self, restore_apps: list[dict[str, str]]) -> dict[str, Any]:
+    def create_license(self, restore_apps: list[dict[str, str]], owner_login: str = "") -> dict[str, Any]:
         code = "".join(secrets.choice(LICENSE_ALPHABET) for _ in range(20))
-        self.db.device_licenses.insert_one({"codeHash": token_hash(code), "status": "active", "restoreApps": restore_apps, "issuedAt": utc_now(), "deviceId": None})
+        self.db.device_licenses.insert_one({"codeHash": token_hash(code), "status": "active", "ownerLogin": owner_login or None, "restoreApps": restore_apps, "issuedAt": utc_now(), "deviceId": None, "licenseCiphertext": self.license_fernet.encrypt(code.encode("utf-8")).decode("ascii")})
         return {"license": display_license(code), "status": "active"}
 
-    def begin_license_link(self, license_code: str, display_name: str) -> dict[str, Any] | None:
+    def begin_license_link(self, license_code: str, display_name: str, platform: str = "Danenone") -> dict[str, Any] | None:
+        if platform not in {"Danenone", "Windows"}:
+            return None
         license_hash = token_hash(normalize_license(license_code))
         license_row = self.db.device_licenses.find_one({"codeHash": license_hash, "status": "active", "deviceId": None})
         if not license_row:
             return None
         link_id, link_token = secrets.token_urlsafe(18), secrets.token_urlsafe(32)
         user_code, expires_at = "".join(secrets.choice(LICENSE_ALPHABET) for _ in range(8)), utc_now() + timedelta(minutes=10)
-        self.db.license_links.insert_one({"id": link_id, "licenseHash": license_hash, "linkTokenHash": token_hash(link_token), "userCodeHash": token_hash(user_code), "displayName": display_name, "status": "awaiting_owner", "expiresAt": expires_at, "usedAt": None})
+        self.db.license_links.insert_one({"id": link_id, "licenseHash": license_hash, "linkTokenHash": token_hash(link_token), "userCodeHash": token_hash(user_code), "displayName": display_name, "platform": platform, "status": "awaiting_owner", "expiresAt": expires_at, "usedAt": None})
         return {"linkId": link_id, "linkToken": link_token, "userCode": user_code, "expiresAt": expires_at.isoformat()}
 
     def license_link_status(self, link_id: str, link_token: str) -> dict[str, Any] | None:
@@ -443,7 +530,13 @@ class MongoStore:
         return {"status": status, "expiresAt": link["expiresAt"].isoformat(), "claimed": bool(link.get("usedAt"))}
 
     def approve_license_link(self, link_id: str, user_code: str, github_login: str) -> bool:
-        result = self.db.license_links.update_one({"id": link_id, "status": "awaiting_owner", "userCodeHash": token_hash(user_code.upper()), "expiresAt": {"$gt": utc_now()}}, {"$set": {"status": "approved", "ownerLogin": github_login}})
+        link = self.db.license_links.find_one({"id": link_id, "status": "awaiting_owner", "userCodeHash": token_hash(user_code.upper()), "expiresAt": {"$gt": utc_now()}})
+        if not link:
+            return False
+        license_row = self.db.device_licenses.find_one({"codeHash": link["licenseHash"]}, {"ownerLogin": 1})
+        if license_row and license_row.get("ownerLogin") and license_row["ownerLogin"] != github_login:
+            return False
+        result = self.db.license_links.update_one({"id": link_id, "status": "awaiting_owner"}, {"$set": {"status": "approved", "ownerLogin": github_login}})
         return bool(result.modified_count)
 
     def claim_license_link(self, link_id: str, link_token: str) -> dict[str, Any] | None:
@@ -454,11 +547,11 @@ class MongoStore:
         if not license_row:
             return None
         device_id, agent_token = secrets.token_urlsafe(18), secrets.token_urlsafe(32)
-        self.db.devices.insert_one({"id": device_id, "displayName": link["displayName"], "agentTokenHash": token_hash(agent_token), "status": "active", "locationProtection": True, "lastSeenAt": utc_now(), "restoreApps": license_row.get("restoreApps", [])})
-        self.db.device_licenses.update_one({"codeHash": link["licenseHash"]}, {"$set": {"deviceId": device_id}})
+        self.db.devices.insert_one({"id": device_id, "displayName": link["displayName"], "agentTokenHash": token_hash(agent_token), "status": "active", "locationProtection": True, "lastSeenAt": utc_now(), "restoreApps": license_row.get("restoreApps", []), "platform": link.get("platform", "Danenone")})
+        self.db.device_licenses.update_one({"codeHash": link["licenseHash"]}, {"$set": {"deviceId": device_id, "ownerLogin": license_row.get("ownerLogin") or link["ownerLogin"]}})
         self.db.license_links.update_one({"id": link_id}, {"$set": {"status": "claimed", "usedAt": utc_now()}})
-        self.record_event(device_id, "device.paired", {"displayName": link["displayName"], "ownerLogin": link["ownerLogin"]})
-        return {"id": device_id, "agentToken": agent_token, "platform": "Danenone"}
+        self.record_event(device_id, "device.paired", {"displayName": link["displayName"], "ownerLogin": link["ownerLogin"], "platform": link.get("platform", "Danenone")})
+        return {"id": device_id, "agentToken": agent_token, "platform": link.get("platform", "Danenone")}
 
     def revoke_license(self, license_code: str, reason: str) -> bool:
         license_hash = token_hash(normalize_license(license_code))
@@ -524,8 +617,20 @@ class MongoStore:
         device_ids = [row["deviceId"] for row in licenses]
         if not device_ids:
             return []
-        rows = self.db.devices.find({"id": {"$in": device_ids}}, {"_id": 0, "id": 1, "displayName": 1, "status": 1, "locationProtection": 1, "lastSeenAt": 1}).sort("lastSeenAt", -1)
+        rows = self.db.devices.find({"id": {"$in": device_ids}}, {"_id": 0, "id": 1, "displayName": 1, "status": 1, "locationProtection": 1, "lastSeenAt": 1, "platform": 1}).sort("lastSeenAt", -1)
         return [{**row, "lastSeenAt": row["lastSeenAt"].isoformat()} for row in rows]
+
+    def list_licenses_for_owner(self, github_login: str) -> list[dict[str, Any]]:
+        rows = self.db.device_licenses.find({"ownerLogin": github_login}, {"_id": 0}).sort("issuedAt", -1)
+        licenses = []
+        for row in rows:
+            try:
+                code = display_license(self.license_fernet.decrypt(row.get("licenseCiphertext", "").encode("ascii")).decode("utf-8")) if row.get("licenseCiphertext") else None
+            except (InvalidToken, AttributeError):
+                code = None
+            device = self.db.devices.find_one({"id": row.get("deviceId")}, {"_id": 0, "displayName": 1, "platform": 1}) if row.get("deviceId") else None
+            licenses.append({"license": code, "status": row["status"], "issuedAt": row["issuedAt"].isoformat(), "deviceName": device.get("displayName") if device else None, "platform": device.get("platform") if device else None})
+        return licenses
 
     def record_event(self, device_id: str, topic: str, data: dict[str, Any]) -> dict[str, Any]:
         event = {"id": secrets.token_urlsafe(18), "deviceId": device_id, "topic": topic, "data": data, "createdAt": utc_now()}
@@ -550,10 +655,10 @@ def build_store(config: dict[str, Any]) -> DeviceStore:
     mongo_uri = config.get("MONGODB_URI")
     if mongo_uri:
         try:
-            return MongoStore(mongo_uri, config["MONGO_DATABASE"])
+            return MongoStore(mongo_uri, config["MONGO_DATABASE"], config["COMMAND_SIGNING_KEY"])
         except Exception as error:  # fallback remains deliberate and visible in /healthz
             config["MONGO_FALLBACK_REASON"] = type(error).__name__
-    return LocalStore(config["DATA_DIR"])
+    return LocalStore(config["DATA_DIR"], config["COMMAND_SIGNING_KEY"])
 
 
 def catalog_snapshot() -> dict[str, Any]:
@@ -591,6 +696,7 @@ def catalog_snapshot() -> dict[str, Any]:
             "tags": topics,
             "repositoryUrl": repository.get("html_url", f"https://github.com/{CATALOG_OWNER}/{slug}"),
             "updatedAt": repository.get("updated_at"),
+            "branch": branch,
             "visuals": {
                 "icon": f"{asset_base}/product_logo.png",
                 "splash": f"{asset_base}/splash.png",
@@ -674,7 +780,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return jsonify({"error": "El catálogo no está disponible"}), 503
         if not package:
             return jsonify({"error": "Aplicación no encontrada"}), 404
-        return render_template("package.html", package=package, catalog_owner=CATALOG_OWNER, visitor_country=request.headers.get("CF-IPCountry", ""))
+        return render_template("package.html", package={**package, **package_metadata(slug, package.get("branch", "main"))}, catalog_owner=CATALOG_OWNER, visitor_country=request.headers.get("CF-IPCountry", ""))
 
     @app.get("/auth/github/login")
     def github_oauth_login() -> Response:
@@ -711,6 +817,12 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         link_id = session.pop("github_oauth_link", "")
         return redirect(url_for("license_link_page", link_id=link_id) if link_id else url_for("index"))
 
+    @app.get("/profile")
+    def profile() -> Response | str:
+        if not github_login():
+            return redirect(url_for("github_oauth_login"))
+        return render_template("profile.html", github_login=github_login(), visitor_country=request.headers.get("CF-IPCountry", ""))
+
     @app.route("/link/<link_id>", methods=["GET", "POST"])
     def license_link_page(link_id: str) -> Response | str:
         if not github_login():
@@ -734,7 +846,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     @app.get("/api/v1/catalog")
     def catalog() -> Response:
         try:
-            return jsonify(catalog_snapshot())
+            snapshot = catalog_snapshot()
+            packages = [{**package, **package_metadata(package["slug"], package.get("branch", "main"))} for package in snapshot["packages"]]
+            return jsonify({**snapshot, "packages": packages})
         except Exception as error:
             return jsonify({"error": "No se pudo obtener el catálogo de GitHub", "detail": type(error).__name__}), 502
 
@@ -746,7 +860,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return jsonify({"error": "No se pudo obtener el catálogo de GitHub", "detail": type(error).__name__}), 502
         if not package:
             return jsonify({"error": "Aplicación no encontrada"}), 404
-        return jsonify({"package": package})
+        return jsonify({"package": {**package, **package_metadata(slug, package.get("branch", "main"))}})
 
     @app.get("/api/v1/devices")
     def devices() -> Response:
@@ -760,6 +874,24 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if not login:
             return jsonify({"error": "Inicia sesión con GitHub para ver tus DaneDesk"}), 401
         return jsonify({"devices": app.extensions["device_store"].list_devices_for_owner(login)})
+
+    @app.get("/api/v1/me/licenses")
+    def my_licenses() -> Response:
+        login = github_login()
+        if not login:
+            return jsonify({"error": "Inicia sesión con GitHub para ver tus licencias"}), 401
+        return jsonify({"licenses": app.extensions["device_store"].list_licenses_for_owner(login)})
+
+    @app.post("/api/v1/me/licenses")
+    def create_my_license() -> Response:
+        login = github_login()
+        if not login:
+            return jsonify({"error": "Inicia sesión con GitHub antes de crear una licencia"}), 401
+        payload = request.get_json(silent=True) or {}
+        restore_apps = payload.get("restoreApps", [])
+        if not isinstance(restore_apps, list) or any(not isinstance(item, dict) for item in restore_apps):
+            return jsonify({"error": "restoreApps debe ser una lista de aplicaciones aprobadas"}), 400
+        return jsonify(app.extensions["device_store"].create_license(restore_apps, login)), 201
 
     @app.post("/api/v1/me/devices/<device_id>/installations")
     def install_from_catalog(device_id: str) -> Response:
@@ -778,6 +910,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         package = next((item for item in catalog["packages"] if item["slug"] == slug), None)
         if not package:
             return jsonify({"error": "La aplicación no pertenece al catálogo Foundstore"}), 404
+        metadata = package_metadata(slug, package.get("branch", "main"))
+        if metadata["platformTargets"] and device.get("platform", "Danenone") not in metadata["platformTargets"]:
+            return jsonify({"error": "La aplicación no es compatible con la plataforma del dispositivo elegido", "platformTargets": metadata["platformTargets"], "devicePlatform": device.get("platform", "Danenone")}), 409
         command = app.extensions["device_store"].enqueue_command(device_id, "install_request", {"package": f"{CATALOG_OWNER}/{slug}", "version": None, "localApprovalRequired": True})
         if not command:
             return jsonify({"error": "No se pudo encolar la instalación"}), 409
@@ -810,7 +945,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         payload = request.get_json(silent=True) or {}
         license_code = str(payload.get("license", ""))
         display_name = str(payload.get("displayName", "DaneDesk")).strip()[:80] or "DaneDesk"
-        link = app.extensions["device_store"].begin_license_link(license_code, display_name)
+        requested_platform = str(payload.get("platform", "Danenone")).strip()
+        platform = "Windows" if requested_platform.lower() in {"windows", "knosthalij"} else "Danenone" if requested_platform.lower() == "danenone" else ""
+        link = app.extensions["device_store"].begin_license_link(license_code, display_name, platform)
         if not link:
             return jsonify({"error": "La licencia no es válida, fue revocada o ya está vinculada"}), 401
         return jsonify({**link, "verificationUri": url_for("license_link_page", link_id=link["linkId"], _external=True)}), 201
