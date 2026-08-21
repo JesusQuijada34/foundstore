@@ -40,6 +40,23 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(avatar.get_data(), b"png-bytes")
         self.assertEqual(self.client.get("/assets/github-avatar/no/invalid.png").status_code, 404)
 
+    def test_package_favicon_requires_a_valid_catalog_package(self) -> None:
+        package = {"slug": "camera", "author": "JesusQuijada34", "branch": "main", "packageIcon": "https://raw.example.test/camera.ico"}
+        identity = {"githubLogin": "JesusQuijada34", "githubName": "JQ", "avatarUrl": "", "githubUrl": "https://github.com/JesusQuijada34"}
+
+        class IconResponse:
+            ok = True
+            content = b"icon-bytes"
+            headers = {"Content-Type": "image/vnd.microsoft.icon"}
+
+        with patch("app.github_public_profile", return_value=identity), patch("app.catalog_snapshot", return_value={"packages": [package]}), patch("app.package_metadata", return_value={}), patch("app.requests.get", return_value=IconResponse()):
+            icon = self.client.get("/assets/package-favicon/JesusQuijada34/camera.ico")
+            missing = self.client.get("/assets/package-favicon/JesusQuijada34/missing.ico")
+        self.assertEqual(icon.status_code, 200)
+        self.assertEqual(icon.get_data(), b"icon-bytes")
+        self.assertTrue(icon.content_type.startswith("image/"))
+        self.assertEqual(missing.status_code, 404)
+
     def test_raw_github_text_uses_the_requests_client_and_reads_utf8(self) -> None:
         class TextResponse:
             ok = True

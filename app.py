@@ -908,7 +908,7 @@ def catalog_snapshot(catalog_owner: str = CATALOG_OWNER, catalog_repository: str
             "tags": topics,
             "repositoryUrl": repository.get("html_url", f"https://github.com/{catalog_owner}/{slug}"),
             "updatedAt": repository.get("updatedAt", repository.get("updated_at")),
-            "stars": int(repository.get("stars", repository.get("stargazers_count", 0)) or 0),
+            "stars": int(repository["stars"]) if isinstance(repository.get("stars"), int) else None,
             "branch": branch,
             "visuals": {
                 "icon": f"{asset_base}/product_logo.png",
@@ -1295,6 +1295,32 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 return Response(status=404)
             return Response(avatar.content, content_type=content_type, headers={"Cache-Control": "public, max-age=3600"})
         except requests.RequestException:
+            return Response(status=502)
+
+    @app.get("/assets/developer-favicon/<github_login>.png")
+    def developer_favicon(github_login: str) -> Response:
+        if not valid_github_login(github_login):
+            return Response(status=404)
+        privacy = normalize_privacy(developer_profile(app.extensions["device_store"], github_login).get("privacy"))
+        if privacy["avatar"] == "private":
+            return favicon()
+        return github_avatar(github_login)
+
+    @app.get("/assets/package-favicon/<author>/<slug>.ico")
+    def package_favicon(author: str, slug: str) -> Response:
+        if not valid_github_login(author) or not valid_repository_name(slug):
+            return Response(status=404)
+        _, snapshot = developer_catalog(author)
+        package = next((item for item in (snapshot or {}).get("packages", []) if item["slug"].lower() == slug.lower()), None)
+        if not package:
+            return Response(status=404)
+        try:
+            icon = requests.get(str(package["packageIcon"]), headers={"User-Agent": "Foundstore-Flask-Render"}, timeout=8)
+            content_type = icon.headers.get("Content-Type", "")
+            if not icon.ok or not content_type.startswith("image/") or len(icon.content) > 2_000_000:
+                return Response(status=404)
+            return Response(icon.content, content_type=content_type, headers={"Cache-Control": "public, max-age=3600"})
+        except (KeyError, requests.RequestException):
             return Response(status=502)
 
     @app.get("/api/v1/catalog")
