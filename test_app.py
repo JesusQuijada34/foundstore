@@ -237,6 +237,11 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertFalse(removed.json["following"])
         self.assertIn('id="avatarFallback"', page.get_data(as_text=True))
         self.assertIn('id="follow"', page.get_data(as_text=True))
+        self.assertIn("function updateCount()", page.get_data(as_text=True))
+        self.assertIn("followerCount=Number(data.followerCount)||0;updateCount()", page.get_data(as_text=True))
+        self.assertIn("@media(max-width:700px)", page.get_data(as_text=True))
+        self.assertIn(".hero .follow{grid-column:1/-1;width:100%;text-align:center}", page.get_data(as_text=True))
+        self.assertIn(".grid{grid-template-columns:1fr}", page.get_data(as_text=True))
 
     def test_catalog_install_rejects_platform_incompatible_device(self) -> None:
         with self.client.session_transaction() as browser_session:
