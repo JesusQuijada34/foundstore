@@ -102,6 +102,7 @@ class DeviceStore(Protocol):
     def get_protected_location(self, device_id: str) -> dict[str, float] | None: ...
     def restore_apps(self, device_id: str) -> list[dict[str, str]]: ...
     def list_devices(self) -> list[dict[str, Any]]: ...
+    def list_devices_for_owner(self, github_login: str) -> list[dict[str, Any]]: ...
     def record_event(self, device_id: str, topic: str, data: dict[str, Any]) -> dict[str, Any]: ...
     def events_after(self, device_id: str, after: str | None) -> list[dict[str, Any]]: ...
     def maintain(self) -> dict[str, int]: ...
@@ -349,6 +350,16 @@ class LocalStore:
             rows = conn.execute("SELECT id, display_name, status, location_protection, last_seen_at FROM devices ORDER BY last_seen_at DESC").fetchall()
         return [{"id": row["id"], "displayName": row["display_name"], "status": row["status"], "locationProtection": bool(row["location_protection"]), "lastSeenAt": row["last_seen_at"]} for row in rows]
 
+    def list_devices_for_owner(self, github_login: str) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT d.id, d.display_name, d.status, d.location_protection, d.last_seen_at
+                   FROM devices d JOIN device_licenses l ON l.device_id = d.id
+                   WHERE l.owner_login = ? AND l.status = 'active' ORDER BY d.last_seen_at DESC""",
+                (github_login,),
+            ).fetchall()
+        return [{"id": row["id"], "displayName": row["display_name"], "status": row["status"], "locationProtection": bool(row["location_protection"]), "lastSeenAt": row["last_seen_at"]} for row in rows]
+
     def record_event(self, device_id: str, topic: str, data: dict[str, Any]) -> dict[str, Any]:
         event = {"id": secrets.token_urlsafe(18), "topic": topic, "data": data, "createdAt": iso_now()}
         with self._connect() as conn:
@@ -505,6 +516,14 @@ class MongoStore:
 
     def list_devices(self) -> list[dict[str, Any]]:
         rows = self.db.devices.find({}, {"_id": 0, "id": 1, "displayName": 1, "status": 1, "locationProtection": 1, "lastSeenAt": 1}).sort("lastSeenAt", -1)
+        return [{**row, "lastSeenAt": row["lastSeenAt"].isoformat()} for row in rows]
+
+    def list_devices_for_owner(self, github_login: str) -> list[dict[str, Any]]:
+        licenses = list(self.db.device_licenses.find({"ownerLogin": github_login, "status": "active", "deviceId": {"$type": "string"}}, {"_id": 0, "deviceId": 1}))
+        device_ids = [row["deviceId"] for row in licenses]
+        if not device_ids:
+            return []
+        rows = self.db.devices.find({"id": {"$in": device_ids}}, {"_id": 0, "id": 1, "displayName": 1, "status": 1, "locationProtection": 1, "lastSeenAt": 1}).sort("lastSeenAt", -1)
         return [{**row, "lastSeenAt": row["lastSeenAt"].isoformat()} for row in rows]
 
     def record_event(self, device_id: str, topic: str, data: dict[str, Any]) -> dict[str, Any]:
@@ -674,6 +693,35 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if not owner_authorized(app):
             return jsonify({"error": "No autorizado"}), 401
         return jsonify({"devices": app.extensions["device_store"].list_devices()})
+
+    @app.get("/api/v1/me/devices")
+    def my_devices() -> Response:
+        login = github_login()
+        if not login:
+            return jsonify({"error": "Inicia sesión con GitHub para ver tus DaneDesk"}), 401
+        return jsonify({"devices": app.extensions["device_store"].list_devices_for_owner(login)})
+
+    @app.post("/api/v1/me/devices/<device_id>/installations")
+    def install_from_catalog(device_id: str) -> Response:
+        login = github_login()
+        if not login:
+            return jsonify({"error": "Inicia sesión con GitHub antes de solicitar una instalación"}), 401
+        device = next((item for item in app.extensions["device_store"].list_devices_for_owner(login) if item["id"] == device_id and item["status"] == "active"), None)
+        if not device:
+            return jsonify({"error": "El dispositivo elegido no pertenece a tu cuenta o no está activo"}), 403
+        payload = request.get_json(silent=True) or {}
+        slug = str(payload.get("slug", "")).strip()
+        try:
+            catalog = catalog_snapshot()
+        except Exception:
+            return jsonify({"error": "El catálogo no está disponible para validar esta solicitud"}), 503
+        package = next((item for item in catalog["packages"] if item["slug"] == slug), None)
+        if not package:
+            return jsonify({"error": "La aplicación no pertenece al catálogo Foundstore"}), 404
+        command = app.extensions["device_store"].enqueue_command(device_id, "install_request", {"package": f"{CATALOG_OWNER}/{slug}", "version": None, "localApprovalRequired": True})
+        if not command:
+            return jsonify({"error": "No se pudo encolar la instalación"}), 409
+        return jsonify({"requestId": command["id"], "deviceId": device_id, "package": {"slug": package["slug"], "name": package["name"]}, "localApprovalRequired": True}), 202
 
     @app.post("/api/v1/pairing-codes")
     def create_pairing() -> Response:

@@ -72,6 +72,23 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(revoked.status_code, 403)
         self.assertTrue(revoked.json["relinkRequired"])
 
+    def test_catalog_install_requires_session_owned_device_and_never_returns_download_url(self) -> None:
+        license_code = self.client.post("/api/v1/licenses", headers=self.owner_headers(), json={}).json["license"]
+        link = self.client.post("/api/v1/license-links", json={"license": license_code, "displayName": "DaneDesk catálogo"}).json
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "jq34"
+        self.client.post(f"/link/{link['linkId']}", data={"code": link["userCode"]})
+        device = self.client.post(f"/api/v1/license-links/{link['linkId']}/claim", headers={"X-Foundstore-Link-Token": link["linkToken"]}).json
+        self.assertEqual(self.client.get("/api/v1/me/devices").json["devices"][0]["id"], device["id"])
+        with patch("app.catalog_snapshot", return_value={"packages": [{"slug": "packagemaker", "name": "PackageMaker", "description": "Creador", "category": "Desarrollo"}]}):
+            response = self.client.post(f"/api/v1/me/devices/{device['id']}/installations", json={"slug": "packagemaker"})
+        self.assertEqual(response.status_code, 202)
+        self.assertTrue(response.json["localApprovalRequired"])
+        self.assertNotIn("downloadUrl", response.json)
+        root = self.client.get("/").get_data(as_text=True)
+        self.assertIn("Solicitar instalación", root)
+        self.assertNotIn("repositoryUrl", root)
+
     def test_command_long_poll_and_restore_require_agent_token(self) -> None:
         pairing = self.client.post("/api/v1/pairing-codes", headers=self.owner_headers(), json={"restoreApps": [{"publisher": "Influent", "slug": "packagemaker", "version": "0.1"}]}).json
         device = self.client.post("/api/v1/agent/bootstrap", json={"code": pairing["code"], "displayName": "DaneDesk"}).json

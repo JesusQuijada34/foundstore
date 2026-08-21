@@ -3,27 +3,51 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Foundstore Fluthin</title>
+    <title>Foundstore · Danenone</title>
     <style>
-      :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #08140f; color: #ecf8f1; }
-      body { min-height: 100vh; margin: 0; background: radial-gradient(circle at 15% 15%, #155f42 0, transparent 36%), radial-gradient(circle at 85% 80%, #0f4934 0, transparent 33%), #08140f; }
-      main { width: min(760px, calc(100% - 3rem)); margin: 0 auto; padding: 15vh 0 5rem; }
-      .eyebrow { color: #83e7b7; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; font-size: .75rem; }
-      h1 { font-size: clamp(2.4rem, 8vw, 5rem); letter-spacing: -.06em; margin: .4rem 0 1rem; }
-      p { color: #bad2c4; line-height: 1.65; font-size: 1.08rem; max-width: 57ch; }
-      .panel { margin-top: 2.5rem; padding: 1.25rem 1.4rem; background: rgba(11, 39, 28, .72); border: 1px solid rgba(171, 238, 201, .22); border-radius: 18px; }
-      a { color: #a9f5cb; } code { color: #e7fff0; }
+      :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background:#08140f; color:#effaf3; }
+      * { box-sizing:border-box; } body { margin:0; min-height:100vh; background:radial-gradient(circle at 8% 0%,#1b6849 0,transparent 33%),radial-gradient(circle at 92% 20%,#104735 0,transparent 28%),#08140f; }
+      main { width:min(1120px,calc(100% - 2.5rem)); margin:0 auto; padding:4.5rem 0 5rem; } .eyebrow { color:#82e8b5; letter-spacing:.12em; text-transform:uppercase; font-size:.74rem; font-weight:800; }
+      header { display:flex; gap:2rem; align-items:end; justify-content:space-between; margin-bottom:2.2rem; } h1 { font-size:clamp(2.2rem,6vw,4.5rem); letter-spacing:-.06em; margin:.35rem 0 .7rem; } p { color:#b9d3c4; line-height:1.6; } .account { max-width:360px; padding:1rem; border:1px solid rgba(183,255,212,.22); background:rgba(8,31,21,.65); border-radius:16px; }
+      button,.login { display:inline-flex; align-items:center; justify-content:center; border:0; border-radius:11px; padding:.75rem 1rem; background:#53d598; color:#032013; cursor:pointer; font-weight:800; text-decoration:none; } button:disabled { opacity:.45; cursor:not-allowed; } button:not(:disabled):active { transform:scale(.98); } select { width:100%; background:#0c271b; border:1px solid rgba(183,255,212,.25); border-radius:10px; color:#effaf3; padding:.7rem; }
+      .catalog-meta { display:flex; justify-content:space-between; gap:1rem; align-items:center; margin:2rem 0 1rem; } .catalog { display:grid; grid-template-columns:repeat(auto-fill,minmax(245px,1fr)); gap:1rem; } .card { padding:1.15rem; border:1px solid rgba(183,255,212,.18); border-radius:18px; background:rgba(9,35,24,.76); box-shadow:0 18px 50px rgba(0,0,0,.18); display:flex; flex-direction:column; gap:.7rem; } .card h2 { margin:0; font-size:1.2rem; } .tag { color:#86edba; font-size:.78rem; font-weight:700; } .install { margin-top:auto; display:grid; gap:.65rem; }
+      #notice { min-height:1.5rem; color:#a4f2c8; font-weight:650; } .error { color:#ffb7af !important; } .empty { padding:2rem; border:1px dashed rgba(183,255,212,.28); border-radius:16px; color:#b9d3c4; } @media (max-width:720px) { header { align-items:start; flex-direction:column; } main { width:min(100% - 1.5rem,1120px); padding-top:2.5rem; } }
     </style>
   </head>
   <body>
     <main>
-      <div class="eyebrow">Influent Danenone</div>
-      <h1>Foundstore Fluthin</h1>
-      <p>Catálogo y servicio de dispositivos para Danenone. Esta dirección responde directamente, sin redirecciones desde la aplicación.</p>
-      <div class="panel">
-        <strong>Rutas disponibles</strong>
-        <p><a href="/api/v1/catalog">/api/v1/catalog</a> ofrece el catálogo desde <code>{{ catalog_owner }}/catalog</code>. <a href="/healthz">/healthz</a> informa el estado del servicio y de su almacenamiento.</p>
-      </div>
+      <header>
+        <div><div class="eyebrow">Influent Danenone</div><h1>Foundstore</h1><p>Elige una aplicación y un DaneDesk propio. Foundstore encola una solicitud firmada; el dispositivo siempre exige aprobación local antes de instalar.</p></div>
+        <section class="account" id="account"><strong>Comprobando tu sesión…</strong></section>
+      </header>
+      <div class="catalog-meta"><strong>Catálogo Fluthin</strong><span id="notice" aria-live="polite"></span></div>
+      <section class="catalog" id="catalog"><div class="empty">Cargando catálogo…</div></section>
     </main>
+    <script>
+      const catalogNode = document.getElementById('catalog'), accountNode = document.getElementById('account'), notice = document.getElementById('notice');
+      let devices = [];
+      const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+      function setNotice(text, error=false) { notice.textContent = text; notice.className = error ? 'error' : ''; }
+      async function loadDevices() {
+        const response = await fetch('/api/v1/me/devices');
+        if (!response.ok) { accountNode.innerHTML = '<strong>Instala remotamente en tus dispositivos</strong><p>Inicia sesión con GitHub para elegir un DaneDesk de destino.</p><a class="login" href="/auth/github/login">Iniciar sesión con GitHub</a>'; return; }
+        const data = await response.json(); devices = data.devices || [];
+        accountNode.innerHTML = devices.length ? `<strong>${devices.length} DaneDesk disponible${devices.length === 1 ? '' : 's'}</strong><p>Las solicitudes sólo se envían a dispositivos activos de tu cuenta.</p>` : '<strong>No tienes DaneDesk activos</strong><p>Vincula un dispositivo con una licencia desde Foundstore antes de solicitar una instalación.</p>';
+      }
+      function deviceOptions() { return `<option value="">Selecciona un DaneDesk</option>${devices.map(device => `<option value="${escapeHtml(device.id)}">${escapeHtml(device.displayName)} · ${escapeHtml(device.status)}</option>`).join('')}`; }
+      async function install(slug, select) {
+        const deviceId = select.value; if (!deviceId) { setNotice('Selecciona un DaneDesk antes de instalar.', true); return; }
+        setNotice('Enviando solicitud al DaneDesk…');
+        const response = await fetch(`/api/v1/me/devices/${encodeURIComponent(deviceId)}/installations`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({slug}) });
+        const data = await response.json(); if (!response.ok) { setNotice(data.error || 'No se pudo crear la solicitud.', true); return; }
+        setNotice(`Solicitud enviada a ${select.options[select.selectedIndex].text}. El equipo pedirá aprobación local.`);
+      }
+      function renderCatalog(packages) {
+        if (!packages.length) { catalogNode.innerHTML = '<div class="empty">El catálogo no contiene aplicaciones disponibles por ahora.</div>'; return; }
+        catalogNode.innerHTML = packages.map(item => `<article class="card"><div class="tag">${escapeHtml(item.category || 'Fluthin')}</div><h2>${escapeHtml(item.name)}</h2><p>${escapeHtml(item.description || 'Aplicación disponible mediante Foundstore.')}</p><div class="install"><select aria-label="Dispositivo destino para ${escapeHtml(item.name)}">${deviceOptions()}</select><button data-slug="${escapeHtml(item.slug)}" ${devices.length ? '' : 'disabled'}>Solicitar instalación</button></div></article>`).join('');
+        catalogNode.querySelectorAll('button[data-slug]').forEach(button => button.addEventListener('click', () => install(button.dataset.slug, button.previousElementSibling)));
+      }
+      Promise.all([loadDevices(), fetch('/api/v1/catalog').then(response => response.ok ? response.json() : Promise.reject())]).then(([, catalog]) => renderCatalog(catalog.packages || [])).catch(() => { catalogNode.innerHTML = '<div class="empty">No se pudo cargar el catálogo ahora. Inténtalo de nuevo más tarde.</div>'; });
+    </script>
   </body>
 </html>
