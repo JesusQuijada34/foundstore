@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from app import catalog_references, create_app
+from app import catalog_references, create_app, raw_github_text
 
 
 class FlaskRenderAppTests(unittest.TestCase):
@@ -39,6 +39,16 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(avatar.content_type, "image/png")
         self.assertEqual(avatar.get_data(), b"png-bytes")
         self.assertEqual(self.client.get("/assets/github-avatar/no/invalid.png").status_code, 404)
+
+    def test_raw_github_text_uses_the_requests_client_and_reads_utf8(self) -> None:
+        class TextResponse:
+            ok = True
+            content = b"<details><author>JesusQuijada34</author></details>"
+
+        with patch("app.requests.get", return_value=TextResponse()) as get:
+            content = raw_github_text("JesusQuijada34", "camera", "main", "details.xml")
+        self.assertIn("JesusQuijada34", content)
+        self.assertIn("raw.githubusercontent.com", get.call_args.args[0])
 
     def test_pwa_manifest_and_service_worker_are_available_from_root_scope(self) -> None:
         manifest = self.client.get("/manifest.webmanifest")

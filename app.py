@@ -23,7 +23,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import quote, urlencode
-from urllib.request import Request, urlopen
 
 import requests
 from cryptography.fernet import Fernet, InvalidToken
@@ -146,8 +145,16 @@ def platforms_for(value: str) -> list[str]:
 
 def raw_github_text(author: str, slug: str, branch: str, path: str) -> str:
     raw_url = f"https://raw.githubusercontent.com/{author}/{slug}/{branch}/{path}"
-    with urlopen(Request(raw_url, headers={"User-Agent": "Foundstore-Flask-Render"}), timeout=8) as response:  # nosec B310: fixed GitHub raw origin
-        return response.read().decode("utf-8")
+    try:
+        response = requests.get(raw_url, headers={"User-Agent": "Foundstore-Flask-Render"}, timeout=8)
+    except requests.RequestException as error:
+        raise OSError("No se pudo leer el recurso público de GitHub") from error
+    if not response.ok or len(response.content) > 1_000_000:
+        raise OSError("El recurso público de GitHub no está disponible")
+    try:
+        return response.content.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise OSError("El recurso de GitHub no es texto UTF-8") from error
 
 
 def package_metadata(slug: str, branch: str = "main", author: str = CATALOG_OWNER, include_readme: bool = True) -> dict[str, Any]:
