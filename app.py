@@ -28,8 +28,8 @@ import requests
 from cryptography.fernet import Fernet, InvalidToken
 from flask import Flask, Response, jsonify, redirect, render_template, request, send_from_directory, session, url_for
 
-CATALOG_OWNER = os.environ.get("CATALOG_OWNER", "JesusQuijada34")
-CATALOG_REPOSITORY = os.environ.get("CATALOG_REPOSITORY", "catalog")
+CATALOG_OWNER = os.environ.get("CATALOG_OWNER") or "JesusQuijada34"
+CATALOG_REPOSITORY = os.environ.get("CATALOG_REPOSITORY") or "catalog"
 DEFAULT_LONG_POLL_SECONDS = 25
 MAX_LONG_POLL_SECONDS = 25
 PACKAGE_METADATA_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
