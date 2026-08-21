@@ -1167,6 +1167,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     if not app.config["COMMAND_SIGNING_KEY"]:
         app.config["COMMAND_SIGNING_KEY"] = app.config["SECRET_KEY"]
     app.extensions["device_store"] = build_store(app.config)
+    app.extensions["github_star_grants"] = {}
 
     def github_login() -> str | None:
         return session.get("github_login")
@@ -1186,6 +1187,22 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             result.pop("excluded", None)
         return profile_data, result
 
+    def public_catalog_package(author: str, slug: str) -> dict[str, Any] | None:
+        if not valid_github_login(author) or not valid_repository_name(slug):
+            return None
+        _, snapshot = developer_catalog(author)
+        return next((item for item in (snapshot or {}).get("packages", []) if item["slug"].lower() == slug.lower()), None)
+
+    def star_grant(author: str, slug: str) -> dict[str, Any] | None:
+        grant_id = str(session.get("github_star_grant_id") or "")
+        grant = app.extensions["github_star_grants"].get(grant_id)
+        if not grant or grant.get("expiresAt", 0) <= time.time() or grant.get("author", "").lower() != author.lower() or grant.get("slug", "").lower() != slug.lower():
+            if grant_id:
+                app.extensions["github_star_grants"].pop(grant_id, None)
+            session.pop("github_star_grant_id", None)
+            return None
+        return grant
+
     @app.get("/")
     def index() -> str:
         return render_template("index.html", catalog_owner=CATALOG_OWNER, visitor_country=request.headers.get("CF-IPCountry", ""))
@@ -1200,7 +1217,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         package = next((item for item in snapshot["packages"] if item["slug"].lower() == slug.lower()), None)
         if not package:
             return jsonify({"error": "Aplicación no encontrada"}), 404
-        return render_template("package.html", package=package, developer=profile_data, catalog_owner=CATALOG_OWNER, visitor_country=request.headers.get("CF-IPCountry", ""))
+        grant = star_grant(author, slug)
+        return render_template("package.html", package=package, developer=profile_data, catalog_owner=CATALOG_OWNER, visitor_country=request.headers.get("CF-IPCountry", ""), star_consent=bool(grant), star_confirmation=str(grant.get("confirmation", "") if grant else ""))
 
     @app.get("/auth/github/login")
     def github_oauth_login() -> Response:
@@ -1215,13 +1233,28 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         query = urlencode({"client_id": app.config["GITHUB_CLIENT_ID"], "redirect_uri": callback, "state": state, "scope": "read:user"})
         return redirect(f"https://github.com/login/oauth/authorize?{query}")
 
+    @app.get("/auth/github/stars/<author>/<slug>/consent")
+    def github_star_consent(author: str, slug: str) -> Response:
+        if not oauth_ready():
+            return jsonify({"error": "GitHub OAuth no está configurado"}), 503
+        if not public_catalog_package(author, slug):
+            return jsonify({"error": "Aplicación no encontrada en el catálogo público"}), 404
+        state = secrets.token_urlsafe(24)
+        session["github_star_oauth_state"] = state
+        session["github_star_target"] = {"author": author, "slug": slug}
+        callback = f"{app.config['PUBLIC_ORIGIN']}/auth/github/callback"
+        query = urlencode({"client_id": app.config["GITHUB_CLIENT_ID"], "redirect_uri": callback, "state": state, "scope": "read:user public_repo"})
+        return redirect(f"https://github.com/login/oauth/authorize?{query}")
+
     @app.get("/login")
     def legacy_login() -> Response:
         return redirect(url_for("github_oauth_login"))
 
     @app.get("/auth/github/callback")
     def github_oauth_callback() -> Response:
-        if not oauth_ready() or not secrets.compare_digest(str(session.pop("github_oauth_state", "")), str(request.args.get("state", ""))):
+        star_target = session.pop("github_star_target", None)
+        expected_state = session.pop("github_star_oauth_state", "") if star_target else session.pop("github_oauth_state", "")
+        if not oauth_ready() or not secrets.compare_digest(str(expected_state), str(request.args.get("state", ""))):
             return jsonify({"error": "La confirmación de GitHub no es válida"}), 400
         code = request.args.get("code", "")
         try:
@@ -1234,6 +1267,14 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if not login:
             return jsonify({"error": "GitHub no devolvió una identidad válida"}), 401
         session["github_login"] = login
+        if isinstance(star_target, dict):
+            author, slug = str(star_target.get("author", "")), str(star_target.get("slug", ""))
+            if not public_catalog_package(author, slug):
+                return jsonify({"error": "La aplicación ya no está disponible en el catálogo"}), 404
+            grant_id = secrets.token_urlsafe(24)
+            app.extensions["github_star_grants"][grant_id] = {"accessToken": access_token, "login": login, "author": author, "slug": slug, "confirmation": secrets.token_urlsafe(24), "expiresAt": time.time() + 900}
+            session["github_star_grant_id"] = grant_id
+            return redirect(url_for("package_detail", author=author, slug=slug, starConsent="granted"))
         link_id = session.pop("github_oauth_link", "")
         return redirect(url_for("license_link_page", link_id=link_id) if link_id else url_for("index"))
 
@@ -1392,6 +1433,38 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         following_count = store.developer_following_count(github_login)
         visibility = {field: own_profile or privacy[field] == "public" for field in DEFAULT_PROFILE_PRIVACY}
         return jsonify({"profile": public_profile, "catalog": public_catalog, "catalogAvailable": bool(public_catalog and public_catalog.get("packages")), "visibility": visibility, "followerCount": followers if visibility["followers"] else None, "followingCount": following_count if visibility["following"] else None, "following": bool(viewer and store.is_following_developer(str(viewer), github_login)), "isOwnProfile": own_profile})
+
+    @app.route("/api/v1/me/starred/<author>/<slug>", methods=["GET", "PUT", "DELETE"])
+    def starred_package(author: str, slug: str) -> Response:
+        if not github_login():
+            return jsonify({"error": "Inicia sesión con GitHub antes de gestionar una estrella"}), 401
+        if not public_catalog_package(author, slug):
+            return jsonify({"error": "Aplicación no encontrada en el catálogo público"}), 404
+        grant = star_grant(author, slug)
+        consent_url = url_for("github_star_consent", author=author, slug=slug)
+        if request.method == "GET" and not grant:
+            return jsonify({"state": "consent_required", "consentUrl": consent_url, "changesGitHub": True})
+        if not grant:
+            return jsonify({"error": "Se requiere consentimiento separado de GitHub para estrellas", "consentUrl": consent_url}), 403
+        headers = {"Accept": "application/vnd.github+json", "Authorization": f"Bearer {grant['accessToken']}", "X-GitHub-Api-Version": "2022-11-28"}
+        endpoint = f"https://api.github.com/user/starred/{quote(author)}/{quote(slug)}"
+        if request.method == "GET":
+            try:
+                response = requests.get(endpoint, headers=headers, timeout=10)
+            except requests.RequestException:
+                return jsonify({"error": "No se pudo consultar la estrella en GitHub"}), 502
+            if response.status_code not in {204, 404}:
+                return jsonify({"error": "GitHub no permitió consultar la estrella; vuelve a conceder permiso", "consentUrl": consent_url}), 502
+            return jsonify({"state": "granted", "starred": response.status_code == 204, "confirmation": grant["confirmation"], "changesGitHub": True})
+        if not secrets.compare_digest(str(request.headers.get("X-Foundstore-Star-Confirm", "")), str(grant["confirmation"])):
+            return jsonify({"error": "Confirma explícitamente la modificación de la estrella antes de continuar"}), 428
+        try:
+            response = requests.put(endpoint, headers=headers, timeout=10) if request.method == "PUT" else requests.delete(endpoint, headers=headers, timeout=10)
+        except requests.RequestException:
+            return jsonify({"error": "No se pudo actualizar la estrella en GitHub"}), 502
+        if response.status_code != 204:
+            return jsonify({"error": "GitHub no aceptó el cambio de estrella; vuelve a conceder permiso", "consentUrl": consent_url}), 502
+        return jsonify({"starred": request.method == "PUT", "changesGitHub": True})
 
     @app.get("/api/v1/me/following")
     def my_following() -> Response:

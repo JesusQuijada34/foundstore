@@ -57,6 +57,30 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertTrue(icon.content_type.startswith("image/"))
         self.assertEqual(missing.status_code, 404)
 
+    def test_github_star_requires_separate_consent_and_explicit_confirmation(self) -> None:
+        package = {"slug": "camera", "author": "JesusQuijada34", "branch": "main"}
+        identity = {"githubLogin": "JesusQuijada34", "githubName": "JQ", "avatarUrl": "", "githubUrl": "https://github.com/JesusQuijada34"}
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "reader"
+        with patch("app.github_public_profile", return_value=identity), patch("app.catalog_snapshot", return_value={"packages": [package]}), patch("app.package_metadata", return_value={}):
+            required = self.client.get("/api/v1/me/starred/JesusQuijada34/camera")
+            self.app.extensions["github_star_grants"]["grant-test"] = {"accessToken": "not-a-real-token", "login": "reader", "author": "JesusQuijada34", "slug": "camera", "confirmation": "confirm-test", "expiresAt": 4_102_444_800}
+            with self.client.session_transaction() as browser_session:
+                browser_session["github_star_grant_id"] = "grant-test"
+            with patch("app.requests.put") as blocked_put:
+                blocked = self.client.put("/api/v1/me/starred/JesusQuijada34/camera")
+            class StarResponse:
+                status_code = 204
+            with patch("app.requests.put", return_value=StarResponse()) as confirmed_put:
+                changed = self.client.put("/api/v1/me/starred/JesusQuijada34/camera", headers={"X-Foundstore-Star-Confirm": "confirm-test"})
+        self.assertEqual(required.status_code, 200)
+        self.assertEqual(required.json["state"], "consent_required")
+        self.assertEqual(blocked.status_code, 428)
+        blocked_put.assert_not_called()
+        confirmed_put.assert_called_once()
+        self.assertEqual(changed.status_code, 200)
+        self.assertTrue(changed.json["starred"])
+
     def test_raw_github_text_uses_the_requests_client_and_reads_utf8(self) -> None:
         class TextResponse:
             ok = True
