@@ -625,6 +625,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         SECRET_KEY=os.environ.get("NULL_HV", ""),
         GITHUB_CLIENT_ID=os.environ.get("GITHUB_OAUTH_CLIENT_ID", ""),
         GITHUB_CLIENT_SECRET=os.environ.get("GITHUB_OAUTH_CLIENT_SECRET", ""),
+        PUBLIC_ORIGIN="https://imfoundstore.onrender.com",
         ALLOW_LEGACY_PAIRING=os.environ.get("ALLOW_LEGACY_PAIRING", "").lower() == "true",
         MONGO_FALLBACK_REASON=None,
     )
@@ -656,7 +657,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         link_id = request.args.get("link", "")
         if link_id:
             session["github_oauth_link"] = link_id
-        callback = url_for("github_oauth_callback", _external=True)
+        callback = f"{app.config['PUBLIC_ORIGIN']}/auth/github/callback"
         query = urlencode({"client_id": app.config["GITHUB_CLIENT_ID"], "redirect_uri": callback, "state": state, "scope": "read:user"})
         return redirect(f"https://github.com/login/oauth/authorize?{query}")
 

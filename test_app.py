@@ -32,7 +32,7 @@ class FlaskRenderAppTests(unittest.TestCase):
         response = oauth_app.test_client().get("/auth/github/login", follow_redirects=False)
         self.assertEqual(response.status_code, 302)
         self.assertIn("https://github.com/login/oauth/authorize?", response.location)
-        self.assertIn("redirect_uri=http%3A%2F%2Flocalhost%2Fauth%2Fgithub%2Fcallback", response.location)
+        self.assertIn("redirect_uri=https%3A%2F%2Fimfoundstore.onrender.com%2Fauth%2Fgithub%2Fcallback", response.location)
         legacy = oauth_app.test_client().get("/login", follow_redirects=False)
         self.assertEqual(legacy.status_code, 302)
         self.assertTrue(legacy.location.endswith("/auth/github/login"))
