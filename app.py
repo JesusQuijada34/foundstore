@@ -1364,7 +1364,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             public_catalog = {**(snapshot or {}), "packages": []} if snapshot else snapshot
         followers = store.developer_follower_count(github_login)
         following_count = store.developer_following_count(github_login)
-        return jsonify({"profile": public_profile, "catalog": public_catalog, "catalogAvailable": bool(public_catalog and public_catalog.get("packages")), "followerCount": followers if own_profile or privacy["followers"] == "public" else None, "followingCount": following_count if own_profile or privacy["following"] == "public" else None, "following": bool(viewer and store.is_following_developer(str(viewer), github_login)), "isOwnProfile": own_profile})
+        visibility = {field: own_profile or privacy[field] == "public" for field in DEFAULT_PROFILE_PRIVACY}
+        return jsonify({"profile": public_profile, "catalog": public_catalog, "catalogAvailable": bool(public_catalog and public_catalog.get("packages")), "visibility": visibility, "followerCount": followers if visibility["followers"] else None, "followingCount": following_count if visibility["following"] else None, "following": bool(viewer and store.is_following_developer(str(viewer), github_login)), "isOwnProfile": own_profile})
 
     @app.get("/api/v1/me/following")
     def my_following() -> Response:
