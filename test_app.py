@@ -27,15 +27,32 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(favicon.status_code, 200)
         self.assertEqual(favicon.content_type, "image/svg+xml")
 
+    def test_github_avatar_proxy_returns_only_safe_image_content(self) -> None:
+        class AvatarResponse:
+            ok = True
+            content = b"png-bytes"
+            headers = {"Content-Type": "image/png"}
+
+        with patch("app.requests.get", return_value=AvatarResponse()):
+            avatar = self.client.get("/assets/github-avatar/JesusQuijada34.png")
+        self.assertEqual(avatar.status_code, 200)
+        self.assertEqual(avatar.content_type, "image/png")
+        self.assertEqual(avatar.get_data(), b"png-bytes")
+        self.assertEqual(self.client.get("/assets/github-avatar/no/invalid.png").status_code, 404)
+
     def test_pwa_manifest_and_service_worker_are_available_from_root_scope(self) -> None:
         manifest = self.client.get("/manifest.webmanifest")
         worker = self.client.get("/service-worker.js")
+        catalog = self.client.get("/").get_data(as_text=True)
         self.assertEqual(manifest.status_code, 200)
         self.assertEqual(manifest.json["display"], "standalone")
         self.assertEqual(manifest.json["start_url"], "/")
         self.assertEqual(worker.status_code, 200)
         self.assertEqual(worker.headers["Service-Worker-Allowed"], "/")
         self.assertIn("foundstore-data-v1", worker.get_data(as_text=True))
+        self.assertIn("followedDevelopers", catalog)
+        self.assertIn("/api/v1/me/following", catalog)
+        self.assertIn("data-fallback", catalog)
 
     def test_github_login_starts_authorization_with_configured_callback(self) -> None:
         oauth_app = create_app({"TESTING": True, "DATA_DIR": self.tempdir.name, "MONGODB_URI": None, "GITHUB_CLIENT_ID": "client-id", "GITHUB_CLIENT_SECRET": "client-secret", "SECRET_KEY": "test-session"})
@@ -198,6 +215,28 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(public.status_code, 200)
         self.assertEqual(public.json["profile"]["githubLogin"], "jq34")
         self.assertEqual(self.client.get("/developer/jq34").status_code, 200)
+
+    def test_authenticated_user_can_follow_and_unfollow_a_developer(self) -> None:
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "reader"
+        identity = {"githubLogin": "ExternalDev", "githubName": "External Dev", "avatarUrl": "https://github.com/ExternalDev.png?size=176", "githubUrl": "https://github.com/ExternalDev"}
+        snapshot = {"packages": [], "fetchedAt": "2026-01-01T00:00:00+00:00", "source": "GitHub API"}
+        with patch("app.github_public_profile", return_value=identity), patch("app.catalog_snapshot", return_value=snapshot):
+            before = self.client.get("/api/v1/developers/ExternalDev")
+            followed = self.client.post("/api/v1/me/following/ExternalDev")
+            listed = self.client.get("/api/v1/me/following")
+            after = self.client.get("/api/v1/developers/ExternalDev")
+            removed = self.client.delete("/api/v1/me/following/ExternalDev")
+            page = self.client.get("/developer/ExternalDev")
+        self.assertFalse(before.json["following"])
+        self.assertEqual(followed.status_code, 200)
+        self.assertTrue(followed.json["following"])
+        self.assertEqual(listed.json["developers"], ["ExternalDev"])
+        self.assertTrue(after.json["following"])
+        self.assertEqual(after.json["followerCount"], 1)
+        self.assertFalse(removed.json["following"])
+        self.assertIn('id="avatarFallback"', page.get_data(as_text=True))
+        self.assertIn('id="follow"', page.get_data(as_text=True))
 
     def test_catalog_install_rejects_platform_incompatible_device(self) -> None:
         with self.client.session_transaction() as browser_session:

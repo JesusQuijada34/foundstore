@@ -172,6 +172,11 @@ class DeviceStore(Protocol):
     def list_licenses_for_owner(self, github_login: str) -> list[dict[str, Any]]: ...
     def get_developer_profile(self, github_login: str) -> dict[str, Any] | None: ...
     def update_developer_profile(self, github_login: str, updates: dict[str, str]) -> dict[str, Any]: ...
+    def follow_developer(self, follower_login: str, developer_login: str) -> bool: ...
+    def unfollow_developer(self, follower_login: str, developer_login: str) -> bool: ...
+    def is_following_developer(self, follower_login: str, developer_login: str) -> bool: ...
+    def list_followed_developers(self, follower_login: str) -> list[str]: ...
+    def developer_follower_count(self, developer_login: str) -> int: ...
     def get_repository_scan(self, author: str, slug: str, branch: str) -> dict[str, Any] | None: ...
     def save_repository_scan(self, author: str, slug: str, branch: str, report: dict[str, Any]) -> None: ...
     def record_event(self, device_id: str, topic: str, data: dict[str, Any]) -> dict[str, Any]: ...
@@ -270,6 +275,13 @@ class LocalStore:
                   scanned_at TEXT NOT NULL,
                   PRIMARY KEY(author, slug, branch)
                 );
+                CREATE TABLE IF NOT EXISTS developer_follows (
+                  follower_login TEXT NOT NULL,
+                  developer_login TEXT NOT NULL,
+                  created_at TEXT NOT NULL,
+                  PRIMARY KEY(follower_login, developer_login)
+                );
+                CREATE INDEX IF NOT EXISTS idx_developer_follows_target ON developer_follows(developer_login);
                 CREATE INDEX IF NOT EXISTS idx_license_links_license ON license_links(license_hash);
                 CREATE INDEX IF NOT EXISTS idx_device_events_device_time
                   ON device_events(device_id, created_at);
@@ -503,6 +515,32 @@ class LocalStore:
             )
         return self.get_developer_profile(github_login) or {}
 
+    def follow_developer(self, follower_login: str, developer_login: str) -> bool:
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO developer_follows(follower_login, developer_login, created_at) VALUES (?, ?, ?)",
+                (follower_login, developer_login, iso_now()),
+            )
+        return self.is_following_developer(follower_login, developer_login)
+
+    def unfollow_developer(self, follower_login: str, developer_login: str) -> bool:
+        with self._connect() as conn:
+            conn.execute("DELETE FROM developer_follows WHERE follower_login = ? AND developer_login = ?", (follower_login, developer_login))
+        return not self.is_following_developer(follower_login, developer_login)
+
+    def is_following_developer(self, follower_login: str, developer_login: str) -> bool:
+        with self._connect() as conn:
+            return bool(conn.execute("SELECT 1 FROM developer_follows WHERE follower_login = ? AND developer_login = ?", (follower_login, developer_login)).fetchone())
+
+    def list_followed_developers(self, follower_login: str) -> list[str]:
+        with self._connect() as conn:
+            rows = conn.execute("SELECT developer_login FROM developer_follows WHERE follower_login = ? ORDER BY created_at DESC", (follower_login,)).fetchall()
+        return [str(row["developer_login"]) for row in rows]
+
+    def developer_follower_count(self, developer_login: str) -> int:
+        with self._connect() as conn:
+            return int(conn.execute("SELECT COUNT(*) AS count FROM developer_follows WHERE developer_login = ?", (developer_login,)).fetchone()["count"])
+
     def get_repository_scan(self, author: str, slug: str, branch: str) -> dict[str, Any] | None:
         with self._connect() as conn:
             row = conn.execute(
@@ -559,6 +597,8 @@ class MongoStore:
         self.db.commands.create_index("expiresAt", expireAfterSeconds=0)
         self.db.device_events.create_index([("deviceId", 1), ("createdAt", 1)])
         self.db.developer_profiles.create_index("githubLogin", unique=True)
+        self.db.developer_follows.create_index([("followerLogin", 1), ("developerLogin", 1)], unique=True)
+        self.db.developer_follows.create_index("developerLogin")
         self.db.repository_scans.create_index([("author", 1), ("slug", 1), ("branch", 1)], unique=True)
         self.db.devices.update_many({"platform": "Windows"}, {"$set": {"platform": "Knosthalij"}})
         self.db.license_links.update_many({"platform": "Windows"}, {"$set": {"platform": "Knosthalij"}})
@@ -722,6 +762,28 @@ class MongoStore:
         )
         return self.get_developer_profile(github_login) or {}
 
+    def follow_developer(self, follower_login: str, developer_login: str) -> bool:
+        self.db.developer_follows.update_one(
+            {"followerLogin": follower_login, "developerLogin": developer_login},
+            {"$setOnInsert": {"followerLogin": follower_login, "developerLogin": developer_login, "createdAt": utc_now()}},
+            upsert=True,
+        )
+        return True
+
+    def unfollow_developer(self, follower_login: str, developer_login: str) -> bool:
+        self.db.developer_follows.delete_one({"followerLogin": follower_login, "developerLogin": developer_login})
+        return True
+
+    def is_following_developer(self, follower_login: str, developer_login: str) -> bool:
+        return bool(self.db.developer_follows.find_one({"followerLogin": follower_login, "developerLogin": developer_login}, {"_id": 1}))
+
+    def list_followed_developers(self, follower_login: str) -> list[str]:
+        rows = self.db.developer_follows.find({"followerLogin": follower_login}, {"_id": 0, "developerLogin": 1}).sort("createdAt", -1)
+        return [str(row["developerLogin"]) for row in rows]
+
+    def developer_follower_count(self, developer_login: str) -> int:
+        return int(self.db.developer_follows.count_documents({"developerLogin": developer_login}))
+
     def get_repository_scan(self, author: str, slug: str, branch: str) -> dict[str, Any] | None:
         return self.db.repository_scans.find_one({"author": author, "slug": slug, "branch": branch}, {"_id": 0})
 
@@ -817,7 +879,7 @@ def valid_github_login(value: str) -> bool:
 def github_public_profile(github_login: str) -> dict[str, str]:
     """Read only GitHub's public identity fields; never keep an OAuth token."""
     if not valid_github_login(github_login):
-        return {"githubLogin": github_login, "githubName": github_login, "avatarUrl": "", "githubUrl": ""}
+        return {"githubLogin": github_login, "githubName": github_login, "avatarUrl": f"https://github.com/{quote(github_login)}.png?size=176", "githubUrl": ""}
     try:
         response = requests.get(
             f"https://api.github.com/users/{quote(github_login)}",
@@ -829,12 +891,12 @@ def github_public_profile(github_login: str) -> dict[str, str]:
             return {
                 "githubLogin": str(data.get("login") or github_login),
                 "githubName": str(data.get("name") or data.get("login") or github_login),
-                "avatarUrl": str(data.get("avatar_url") or ""),
+                "avatarUrl": str(data.get("avatar_url") or f"https://github.com/{quote(github_login)}.png?size=176"),
                 "githubUrl": str(data.get("html_url") or f"https://github.com/{github_login}"),
             }
     except requests.RequestException:
         pass
-    return {"githubLogin": github_login, "githubName": github_login, "avatarUrl": "", "githubUrl": f"https://github.com/{github_login}"}
+    return {"githubLogin": github_login, "githubName": github_login, "avatarUrl": f"https://github.com/{quote(github_login)}.png?size=176", "githubUrl": f"https://github.com/{github_login}"}
 
 
 def developer_profile(store: DeviceStore, github_login: str) -> dict[str, str]:
@@ -1058,6 +1120,19 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         icon = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='#0c3b29'/><path d='M16 20 32 11l16 9v20L32 53 16 40Z' fill='#72e2aa'/><path d='m32 11 16 9-16 10-16-10Z' fill='#c9ffe3'/></svg>"
         return Response(icon, content_type="image/svg+xml", headers={"Cache-Control": "public, max-age=86400"})
 
+    @app.get("/assets/github-avatar/<github_login>.png")
+    def github_avatar(github_login: str) -> Response:
+        if not valid_github_login(github_login):
+            return Response(status=404)
+        try:
+            avatar = requests.get(f"https://github.com/{quote(github_login)}.png?size=176", headers={"User-Agent": "Foundstore-Flask-Render"}, timeout=8)
+            content_type = avatar.headers.get("Content-Type", "")
+            if not avatar.ok or not content_type.startswith("image/") or len(avatar.content) > 2_000_000:
+                return Response(status=404)
+            return Response(avatar.content, content_type=content_type, headers={"Cache-Control": "public, max-age=3600"})
+        except requests.RequestException:
+            return Response(status=502)
+
     @app.get("/api/v1/catalog")
     def catalog() -> Response:
         try:
@@ -1110,7 +1185,27 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if not valid_github_login(github_login):
             return jsonify({"error": "Desarrollador no encontrado"}), 404
         profile_data, snapshot = developer_catalog(github_login)
-        return jsonify({"profile": profile_data, "catalog": snapshot, "catalogAvailable": bool(snapshot)})
+        viewer = session.get("github_login")
+        store = app.extensions["device_store"]
+        return jsonify({"profile": profile_data, "catalog": snapshot, "catalogAvailable": bool(snapshot), "followerCount": store.developer_follower_count(github_login), "following": bool(viewer and store.is_following_developer(str(viewer), github_login))})
+
+    @app.get("/api/v1/me/following")
+    def my_following() -> Response:
+        login = github_login()
+        if not login:
+            return jsonify({"error": "Inicia sesión con GitHub para seguir desarrolladores"}), 401
+        return jsonify({"developers": app.extensions["device_store"].list_followed_developers(login)})
+
+    @app.route("/api/v1/me/following/<developer_login>", methods=["POST", "DELETE"])
+    def following_developer(developer_login: str) -> Response:
+        login = github_login()
+        if not login:
+            return jsonify({"error": "Inicia sesión con GitHub para seguir desarrolladores"}), 401
+        if not valid_github_login(developer_login) or developer_login.lower() == login.lower():
+            return jsonify({"error": "El desarrollador elegido no es válido"}), 400
+        store = app.extensions["device_store"]
+        following = store.follow_developer(login, developer_login) if request.method == "POST" else not store.unfollow_developer(login, developer_login)
+        return jsonify({"developer": developer_login, "following": following, "followerCount": store.developer_follower_count(developer_login)})
 
     @app.get("/api/v1/devices")
     def devices() -> Response:
