@@ -608,13 +608,13 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         # declararse explícitamente mediante DATA_DIR; el respaldo local es
         # deliberadamente efímero y se expone en /healthz como sqlite-fallback.
         DATA_DIR=os.environ.get("DATA_DIR", "./var"),
-        MONGODB_URI=os.environ.get("MONGODB_URI") or os.environ.get("MONGO_URI"),
+        MONGODB_URI=os.environ.get("MONGO_URI"),
         MONGO_DATABASE=os.environ.get("MONGO_DATABASE", "foundstore"),
         OWNER_API_TOKEN=os.environ.get("OWNER_API_TOKEN", ""),
-        COMMAND_SIGNING_KEY=os.environ.get("COMMAND_SIGNING_KEY", "development-command-signing-key"),
-        SECRET_KEY=os.environ.get("FLASK_SECRET_KEY") or os.environ.get("SECRET_KEY", ""),
-        GITHUB_CLIENT_ID=os.environ.get("GITHUB_CLIENT_ID") or os.environ.get("GITHUB_OAUTH_CLIENT_ID", ""),
-        GITHUB_CLIENT_SECRET=os.environ.get("GITHUB_CLIENT_SECRET") or os.environ.get("GITHUB_OAUTH_CLIENT_SECRET", ""),
+        COMMAND_SIGNING_KEY=os.environ.get("NULL_HV", ""),
+        SECRET_KEY=os.environ.get("NULL_HV", ""),
+        GITHUB_CLIENT_ID=os.environ.get("GITHUB_OAUTH_CLIENT_ID", ""),
+        GITHUB_CLIENT_SECRET=os.environ.get("GITHUB_OAUTH_CLIENT_SECRET", ""),
         ALLOW_LEGACY_PAIRING=os.environ.get("ALLOW_LEGACY_PAIRING", "").lower() == "true",
         MONGO_FALLBACK_REASON=None,
     )
@@ -623,6 +623,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     if not app.config["SECRET_KEY"]:
         app.config["SECRET_KEY"] = secrets.token_urlsafe(32)
         app.config["SESSION_EPHEMERAL"] = True
+    if not app.config["COMMAND_SIGNING_KEY"]:
+        app.config["COMMAND_SIGNING_KEY"] = app.config["SECRET_KEY"]
     app.extensions["device_store"] = build_store(app.config)
 
     def github_login() -> str | None:

@@ -16,7 +16,7 @@ Una instalación desde Foundstore se convierte en una orden `install_request`. E
 
 Si `MONGODB_URI` está configurada y responde, MongoDB guarda los códigos de pairing, dispositivos y órdenes de corta vigencia. Si no hay URI o MongoDB no está disponible, Flask usa SQLite en `DATA_DIR`, que por defecto es `./var`. La ruta no presupone un volumen en `/var/data`: sólo se debe definir `DATA_DIR` para una ubicación persistente cuando el proveedor haya montado y autorizado explícitamente ese volumen. En Render Free, el respaldo SQLite es efímero y no debe tratarse como almacenamiento durable.
 
-La rama acepta los nombres actuales `MONGODB_URI`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` y `FLASK_SECRET_KEY`. Durante la transición también reconoce `MONGO_URI`, `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET` y `SECRET_KEY`; las instalaciones nuevas deben utilizar los nombres actuales.
+La rama utiliza exclusivamente las variables del panel actual: `MONGO_URI`, `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET` y `NULL_HV`. `MONGO_URI` proporciona la base MongoDB persistente, GitHub OAuth usa las dos variables `GITHUB_OAUTH_*`, y `NULL_HV` es el secreto interno estable usado para firmar la sesión Flask y las órdenes del agente. No añadas variables alternativas para estos valores.
 
 La GitHub OAuth App debe registrar exactamente este callback:
 

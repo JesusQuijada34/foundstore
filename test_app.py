@@ -35,12 +35,13 @@ class FlaskRenderAppTests(unittest.TestCase):
             finally:
                 os.chdir(previous)
 
-    def test_legacy_secret_names_are_accepted_during_render_migration(self) -> None:
-        with patch.dict(os.environ, {"GITHUB_OAUTH_CLIENT_ID": "legacy-id", "GITHUB_OAUTH_CLIENT_SECRET": "legacy-secret", "SECRET_KEY": "legacy-session-key", "MONGO_URI": ""}, clear=False):
+    def test_panel_secret_names_are_used_for_render_configuration(self) -> None:
+        with patch.dict(os.environ, {"GITHUB_OAUTH_CLIENT_ID": "panel-id", "GITHUB_OAUTH_CLIENT_SECRET": "panel-secret", "NULL_HV": "panel-internal-secret", "MONGO_URI": ""}, clear=False):
             migrated = create_app({"TESTING": True, "DATA_DIR": self.tempdir.name, "MONGODB_URI": None, "OWNER_API_TOKEN": "owner-test-token"})
-        self.assertEqual(migrated.config["GITHUB_CLIENT_ID"], "legacy-id")
-        self.assertEqual(migrated.config["GITHUB_CLIENT_SECRET"], "legacy-secret")
-        self.assertEqual(migrated.config["SECRET_KEY"], "legacy-session-key")
+        self.assertEqual(migrated.config["GITHUB_CLIENT_ID"], "panel-id")
+        self.assertEqual(migrated.config["GITHUB_CLIENT_SECRET"], "panel-secret")
+        self.assertEqual(migrated.config["SECRET_KEY"], "panel-internal-secret")
+        self.assertEqual(migrated.config["COMMAND_SIGNING_KEY"], "panel-internal-secret")
 
     def test_pairing_is_single_use_and_returns_no_token_in_uri(self) -> None:
         self.app.config["ALLOW_LEGACY_PAIRING"] = True
