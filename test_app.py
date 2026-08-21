@@ -27,6 +27,16 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(favicon.status_code, 200)
         self.assertEqual(favicon.content_type, "image/svg+xml")
 
+    def test_pwa_manifest_and_service_worker_are_available_from_root_scope(self) -> None:
+        manifest = self.client.get("/manifest.webmanifest")
+        worker = self.client.get("/service-worker.js")
+        self.assertEqual(manifest.status_code, 200)
+        self.assertEqual(manifest.json["display"], "standalone")
+        self.assertEqual(manifest.json["start_url"], "/")
+        self.assertEqual(worker.status_code, 200)
+        self.assertEqual(worker.headers["Service-Worker-Allowed"], "/")
+        self.assertIn("foundstore-data-v1", worker.get_data(as_text=True))
+
     def test_github_login_starts_authorization_with_configured_callback(self) -> None:
         oauth_app = create_app({"TESTING": True, "DATA_DIR": self.tempdir.name, "MONGODB_URI": None, "GITHUB_CLIENT_ID": "client-id", "GITHUB_CLIENT_SECRET": "client-secret", "SECRET_KEY": "test-session"})
         response = oauth_app.test_client().get("/auth/github/login", follow_redirects=False)
@@ -125,7 +135,18 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(api.json["package"]["platformTargets"], ["Danenone", "Knosthalij"])
         self.assertEqual(api.json["package"]["publisher"], "Influent")
         self.assertIn("README oficial", page.get_data(as_text=True))
+        self.assertIn('id="splash"', page.get_data(as_text=True))
+        self.assertIn("/developer/", page.get_data(as_text=True))
         self.assertEqual(missing.status_code, 404)
+
+    def test_static_repository_scan_is_exposed_without_executing_a_package(self) -> None:
+        package = {"slug": "packagemaker", "name": "PackageMaker", "author": "JesusQuijada34", "branch": "main"}
+        report = {"status": "review_required", "highestSeverity": "medium", "findings": [{"path": "updater.py", "severity": "medium"}], "method": "static_public_text_only"}
+        with patch("app.catalog_snapshot", return_value={"packages": [package]}), patch("app.static_repository_scan", return_value=report) as scan:
+            response = self.client.get("/api/v1/catalog/packagemaker/security")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json["scan"]["method"], "static_public_text_only")
+        scan.assert_called_once()
 
     def test_profile_keeps_owner_license_and_links_a_knosthalij_device(self) -> None:
         with self.client.session_transaction() as browser_session:
@@ -147,6 +168,23 @@ class FlaskRenderAppTests(unittest.TestCase):
         claimed = self.client.post(f"/api/v1/license-links/{link['linkId']}/claim", headers={"X-Foundstore-Link-Token": link["linkToken"]})
         self.assertEqual(claimed.status_code, 201)
         self.assertEqual(claimed.json["platform"], "Knosthalij")
+
+    def test_github_profile_can_be_edited_and_exposes_a_public_developer_page(self) -> None:
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "jq34"
+        github_identity = {"githubLogin": "jq34", "githubName": "JQ 34", "avatarUrl": "https://example.test/avatar.png", "githubUrl": "https://github.com/jq34"}
+        empty_catalog = {"packages": [], "fetchedAt": "2026-01-01T00:00:00+00:00", "source": "GitHub API"}
+        with patch("app.github_public_profile", return_value=github_identity), patch("app.catalog_snapshot", return_value=empty_catalog):
+            initial = self.client.get("/api/v1/me/profile")
+            updated = self.client.patch("/api/v1/me/profile", json={"displayName": "JQ Studio", "bio": "Paquetes Fluthin", "website": "https://example.test", "catalogRepository": "catalog"})
+            public = self.client.get("/api/v1/developers/jq34")
+        self.assertEqual(initial.status_code, 200)
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.json["profile"]["displayName"], "JQ Studio")
+        self.assertEqual(updated.json["profile"]["catalogRepository"], "catalog")
+        self.assertEqual(public.status_code, 200)
+        self.assertEqual(public.json["profile"]["githubLogin"], "jq34")
+        self.assertEqual(self.client.get("/developer/jq34").status_code, 200)
 
     def test_catalog_install_rejects_platform_incompatible_device(self) -> None:
         with self.client.session_transaction() as browser_session:
