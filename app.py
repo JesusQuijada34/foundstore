@@ -123,6 +123,8 @@ def package_metadata(slug: str, branch: str = "main") -> dict[str, Any]:
             element = root.find(key)
             if element is not None and element.text:
                 metadata[key] = element.text.strip()
+        if str(metadata.get("publisher", "")).lower() == "influent":
+            metadata["publisher"] = "Influent"
         metadata["platformTargets"] = platforms_for(str(metadata.get("platform", "")))
     except (ET.ParseError, OSError, ValueError):
         pass

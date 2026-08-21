@@ -112,7 +112,7 @@ class FlaskRenderAppTests(unittest.TestCase):
 
     def test_public_package_detail_and_catalog_item_hide_download_urls(self) -> None:
         package = {"slug": "packagemaker", "name": "PackageMaker", "author": "JesusQuijada34", "description": "Creador de paquetes Fluthin", "category": "Desarrollo", "tags": [], "visuals": {"icon": "https://example.test/icon.png", "splash": "https://example.test/splash.png", "portrait": "https://example.test/portrait.png"}}
-        with patch("app.catalog_snapshot", return_value={"packages": [package]}), patch("app.package_metadata", return_value={"platform": "AlphaCube", "platformTargets": ["Danenone", "Windows"], "readme": "# README oficial", "version": "v1"}):
+        with patch("app.catalog_snapshot", return_value={"packages": [package]}), patch("app.package_metadata", return_value={"platform": "AlphaCube", "platformTargets": ["Danenone", "Windows"], "readme": "# README oficial", "version": "v1", "publisher": "Influent"}):
             page = self.client.get("/JesusQuijada34/packagemaker")
             api = self.client.get("/api/v1/catalog/packagemaker")
             missing = self.client.get("/JesusQuijada34/no-existe")
@@ -123,6 +123,7 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(api.json["package"]["slug"], "packagemaker")
         self.assertEqual(api.json["package"]["visuals"]["portrait"], "https://example.test/portrait.png")
         self.assertEqual(api.json["package"]["platformTargets"], ["Danenone", "Windows"])
+        self.assertEqual(api.json["package"]["publisher"], "Influent")
         self.assertIn("README oficial", page.get_data(as_text=True))
         self.assertEqual(missing.status_code, 404)
 
