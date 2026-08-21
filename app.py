@@ -580,7 +580,23 @@ def catalog_snapshot() -> dict[str, Any]:
         repository = repositories.get(slug.lower(), {})
         description = repository.get("description")
         topics = repository.get("topics", [])
-        packages.append({"slug": slug, "name": title_for(slug), "author": CATALOG_OWNER, "description": description, "category": category_for(slug, description, topics), "tags": topics, "repositoryUrl": repository.get("html_url", f"https://github.com/{CATALOG_OWNER}/{slug}"), "updatedAt": repository.get("updated_at")})
+        branch = repository.get("default_branch", "main")
+        asset_base = f"https://raw.githubusercontent.com/{CATALOG_OWNER}/{slug}/{branch}/assets"
+        packages.append({
+            "slug": slug,
+            "name": title_for(slug),
+            "author": CATALOG_OWNER,
+            "description": description,
+            "category": category_for(slug, description, topics),
+            "tags": topics,
+            "repositoryUrl": repository.get("html_url", f"https://github.com/{CATALOG_OWNER}/{slug}"),
+            "updatedAt": repository.get("updated_at"),
+            "visuals": {
+                "icon": f"{asset_base}/product_logo.png",
+                "splash": f"{asset_base}/splash.png",
+                "portrait": f"{asset_base}/splash_setup.png",
+            },
+        })
     packages.sort(key=lambda item: item["name"].lower())
     return {"packages": packages, "fetchedAt": iso_now(), "source": "GitHub API"}
 

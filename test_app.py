@@ -111,7 +111,7 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertNotIn("repositoryUrl", root)
 
     def test_public_package_detail_and_catalog_item_hide_download_urls(self) -> None:
-        package = {"slug": "packagemaker", "name": "PackageMaker", "author": "JesusQuijada34", "description": "Creador de paquetes Fluthin", "category": "Desarrollo", "tags": []}
+        package = {"slug": "packagemaker", "name": "PackageMaker", "author": "JesusQuijada34", "description": "Creador de paquetes Fluthin", "category": "Desarrollo", "tags": [], "visuals": {"icon": "https://example.test/icon.png", "splash": "https://example.test/splash.png", "portrait": "https://example.test/portrait.png"}}
         with patch("app.catalog_snapshot", return_value={"packages": [package]}):
             page = self.client.get("/JesusQuijada34/packagemaker")
             api = self.client.get("/api/v1/catalog/packagemaker")
@@ -121,6 +121,7 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertNotIn("downloadUrl", page.get_data(as_text=True))
         self.assertEqual(api.status_code, 200)
         self.assertEqual(api.json["package"]["slug"], "packagemaker")
+        self.assertEqual(api.json["package"]["visuals"]["portrait"], "https://example.test/portrait.png")
         self.assertEqual(missing.status_code, 404)
 
     def test_command_long_poll_and_restore_require_agent_token(self) -> None:
