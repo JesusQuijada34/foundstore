@@ -12,12 +12,14 @@ services:
     envVars:
       - key: MONGO_DATABASE
         value: foundstore
-      - key: MONGODB_URI
+      - key: MONGO_URI
         sync: false
-      - key: OWNER_API_TOKEN
-        generateValue: true
-      - key: COMMAND_SIGNING_KEY
-        generateValue: true
+      - key: GITHUB_OAUTH_CLIENT_ID
+        sync: false
+      - key: GITHUB_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: NULL_HV
+        sync: false
   - type: cron
     runtime: python
     name: foundstore-maintenance
@@ -28,5 +30,5 @@ services:
     envVars:
       - key: MONGO_DATABASE
         value: foundstore
-      - key: MONGODB_URI
+      - key: MONGO_URI
         sync: false
