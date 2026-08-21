@@ -155,11 +155,11 @@ def package_metadata(slug: str, branch: str = "main", author: str = CATALOG_OWNE
     cached = PACKAGE_METADATA_CACHE.get(cache_key)
     if cached and cached[0] > time.time():
         return cached[1]
-    metadata: dict[str, Any] = {"platform": "", "platformTargets": [], "readme": "", "version": "", "publisher": "", "manifestValid": False}
+    metadata: dict[str, Any] = {"platform": "", "platformTargets": [], "readme": "", "version": "", "publisher": "", "author": "", "app": "", "manifestValid": False}
     try:
         root = ET.fromstring(raw_github_text(author, slug, branch, "details.xml"))
         metadata["manifestValid"] = bool(root.tag)
-        for key in ("platform", "version", "publisher", "name", "description"):
+        for key in ("platform", "version", "publisher", "name", "description", "author", "app"):
             element = root.find(key)
             if element is not None and element.text:
                 metadata[key] = element.text.strip()
@@ -197,12 +197,13 @@ class DeviceStore(Protocol):
     def list_devices_for_owner(self, github_login: str) -> list[dict[str, Any]]: ...
     def list_licenses_for_owner(self, github_login: str) -> list[dict[str, Any]]: ...
     def get_developer_profile(self, github_login: str) -> dict[str, Any] | None: ...
-    def update_developer_profile(self, github_login: str, updates: dict[str, str]) -> dict[str, Any]: ...
+    def update_developer_profile(self, github_login: str, updates: dict[str, Any]) -> dict[str, Any]: ...
     def follow_developer(self, follower_login: str, developer_login: str) -> bool: ...
     def unfollow_developer(self, follower_login: str, developer_login: str) -> bool: ...
     def is_following_developer(self, follower_login: str, developer_login: str) -> bool: ...
     def list_followed_developers(self, follower_login: str) -> list[str]: ...
     def developer_follower_count(self, developer_login: str) -> int: ...
+    def developer_following_count(self, developer_login: str) -> int: ...
     def get_repository_scan(self, author: str, slug: str, branch: str) -> dict[str, Any] | None: ...
     def save_repository_scan(self, author: str, slug: str, branch: str, report: dict[str, Any]) -> None: ...
     def record_event(self, device_id: str, topic: str, data: dict[str, Any]) -> dict[str, Any]: ...
@@ -291,6 +292,7 @@ class LocalStore:
                   bio TEXT,
                   website TEXT,
                   catalog_repository TEXT NOT NULL DEFAULT 'catalog',
+                  privacy_json TEXT NOT NULL DEFAULT '{}',
                   updated_at TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS repository_scans (
@@ -317,6 +319,7 @@ class LocalStore:
                 "ALTER TABLE devices ADD COLUMN platform TEXT NOT NULL DEFAULT 'Danenone'",
                 "ALTER TABLE device_licenses ADD COLUMN license_ciphertext TEXT",
                 "ALTER TABLE license_links ADD COLUMN platform TEXT NOT NULL DEFAULT 'Danenone'",
+                "ALTER TABLE developer_profiles ADD COLUMN privacy_json TEXT NOT NULL DEFAULT '{}'",
             ):
                 try:
                     conn.execute(migration)
@@ -525,19 +528,28 @@ class LocalStore:
     def get_developer_profile(self, github_login: str) -> dict[str, Any] | None:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT github_login, display_name, bio, website, catalog_repository, updated_at FROM developer_profiles WHERE github_login = ?",
+                "SELECT github_login, display_name, bio, website, catalog_repository, privacy_json, updated_at FROM developer_profiles WHERE github_login = ?",
                 (github_login,),
             ).fetchone()
-        return dict(row) if row else None
+        if not row:
+            return None
+        profile = dict(row)
+        try:
+            profile["privacy"] = json.loads(profile.pop("privacy_json") or "{}")
+        except json.JSONDecodeError:
+            profile["privacy"] = {}
+        return profile
 
-    def update_developer_profile(self, github_login: str, updates: dict[str, str]) -> dict[str, Any]:
+    def update_developer_profile(self, github_login: str, updates: dict[str, Any]) -> dict[str, Any]:
+        existing = self.get_developer_profile(github_login) or {}
+        privacy = updates.get("privacy", existing.get("privacy", {}))
         with self._connect() as conn:
             conn.execute(
-                """INSERT INTO developer_profiles(github_login, display_name, bio, website, catalog_repository, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?)
+                """INSERT INTO developer_profiles(github_login, display_name, bio, website, catalog_repository, privacy_json, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(github_login) DO UPDATE SET display_name = excluded.display_name, bio = excluded.bio,
-                     website = excluded.website, catalog_repository = excluded.catalog_repository, updated_at = excluded.updated_at""",
-                (github_login, updates.get("displayName", ""), updates.get("bio", ""), updates.get("website", ""), updates.get("catalogRepository", "catalog"), iso_now()),
+                     website = excluded.website, catalog_repository = excluded.catalog_repository, privacy_json = excluded.privacy_json, updated_at = excluded.updated_at""",
+                (github_login, updates.get("displayName", existing.get("display_name", "")), updates.get("bio", existing.get("bio", "")), updates.get("website", existing.get("website", "")), existing.get("catalog_repository", "catalog"), json.dumps(privacy), iso_now()),
             )
         return self.get_developer_profile(github_login) or {}
 
@@ -566,6 +578,10 @@ class LocalStore:
     def developer_follower_count(self, developer_login: str) -> int:
         with self._connect() as conn:
             return int(conn.execute("SELECT COUNT(*) AS count FROM developer_follows WHERE developer_login = ?", (developer_login,)).fetchone()["count"])
+
+    def developer_following_count(self, developer_login: str) -> int:
+        with self._connect() as conn:
+            return int(conn.execute("SELECT COUNT(*) AS count FROM developer_follows WHERE follower_login = ?", (developer_login,)).fetchone()["count"])
 
     def get_repository_scan(self, author: str, slug: str, branch: str) -> dict[str, Any] | None:
         with self._connect() as conn:
@@ -780,10 +796,11 @@ class MongoStore:
     def get_developer_profile(self, github_login: str) -> dict[str, Any] | None:
         return self.db.developer_profiles.find_one({"githubLogin": github_login}, {"_id": 0})
 
-    def update_developer_profile(self, github_login: str, updates: dict[str, str]) -> dict[str, Any]:
+    def update_developer_profile(self, github_login: str, updates: dict[str, Any]) -> dict[str, Any]:
+        existing = self.get_developer_profile(github_login) or {}
         self.db.developer_profiles.update_one(
             {"githubLogin": github_login},
-            {"$set": {"githubLogin": github_login, "displayName": updates.get("displayName", ""), "bio": updates.get("bio", ""), "website": updates.get("website", ""), "catalogRepository": updates.get("catalogRepository", "catalog"), "updatedAt": utc_now()}},
+            {"$set": {"githubLogin": github_login, "displayName": updates.get("displayName", existing.get("displayName", "")), "bio": updates.get("bio", existing.get("bio", "")), "website": updates.get("website", existing.get("website", "")), "catalogRepository": existing.get("catalogRepository", "catalog"), "privacy": updates.get("privacy", existing.get("privacy", {})), "updatedAt": utc_now()}},
             upsert=True,
         )
         return self.get_developer_profile(github_login) or {}
@@ -809,6 +826,9 @@ class MongoStore:
 
     def developer_follower_count(self, developer_login: str) -> int:
         return int(self.db.developer_follows.count_documents({"developerLogin": developer_login}))
+
+    def developer_following_count(self, developer_login: str) -> int:
+        return int(self.db.developer_follows.count_documents({"followerLogin": developer_login}))
 
     def get_repository_scan(self, author: str, slug: str, branch: str) -> dict[str, Any] | None:
         return self.db.repository_scans.find_one({"author": author, "slug": slug, "branch": branch}, {"_id": 0})
@@ -854,41 +874,22 @@ def catalog_snapshot(catalog_owner: str = CATALOG_OWNER, catalog_repository: str
     cached = CATALOG_SNAPSHOT_CACHE.get(cache_key)
     if cached and cached[0] > time.time():
         return cached[1]
-    headers = {"Accept": "application/vnd.github+json", "User-Agent": "Foundstore-Flask-Render"}
+    discovered = github_public_repositories(catalog_owner)
+    references = [(catalog_owner, str(item["name"])) for item in discovered if valid_repository_name(str(item.get("name") or ""))]
+    repositories = {(catalog_owner.lower(), str(item["name"]).lower()): item for item in discovered}
 
-    def github(path: str) -> Any:
-        with urlopen(Request(f"https://api.github.com{path}", headers=headers), timeout=10) as response:  # nosec B310: fixed GitHub API origin
-            return json.load(response)
-
-    try:
-        catalog_file = github(f"/repos/{quote(catalog_owner)}/{quote(catalog_repository)}/contents/repo.list?ref=main")
-        source_text = base64.b64decode(catalog_file["content"]).decode("utf-8")
-    except Exception:
-        raw_url = f"https://raw.githubusercontent.com/{catalog_owner}/{catalog_repository}/main/repo.list"
-        with urlopen(Request(raw_url, headers={"User-Agent": "Foundstore-Flask-Render"}), timeout=10) as response:  # nosec B310: fixed GitHub raw origin
-            source_text = response.read().decode("utf-8")
-    references = catalog_references(source_text, catalog_owner)
-    owners = sorted({author.lower(): author for author, _ in references}.values(), key=str.lower)
-    repositories: dict[tuple[str, str], dict[str, Any]] = {}
-    for author in owners:
-        try:
-            for item in github(f"/users/{quote(author)}/repos?per_page=100&sort=updated&type=owner"):
-                name = str(item.get("name", ""))
-                if valid_repository_name(name):
-                    repositories[(author.lower(), name.lower())] = item
-        except Exception:
-            continue
-    def build_package(reference: tuple[str, str]) -> dict[str, Any] | None:
+    def build_package(reference: tuple[str, str]) -> tuple[dict[str, Any] | None, dict[str, Any]]:
         author, slug = reference
         repository = repositories.get((author.lower(), slug.lower()))
         if not repository:
-            return None
+            return None, {"repository": f"{author}/{slug}", "reasons": ["El repositorio no existe o no es público."]}
         description = repository.get("description")
         topics = repository.get("topics", [])
-        branch = repository.get("default_branch", "main")
-        metadata = package_metadata(slug, branch, author)
-        if not metadata.get("manifestValid"):
-            return None
+        branch = repository.get("defaultBranch", repository.get("default_branch", "main"))
+        audit = packagemaker_repository_audit(author, slug, str(branch))
+        if not audit["valid"]:
+            return None, audit
+        metadata = audit["metadata"]
         asset_base = f"https://raw.githubusercontent.com/{author}/{slug}/{branch}/assets"
         package = {
             "slug": slug,
@@ -898,22 +899,26 @@ def catalog_snapshot(catalog_owner: str = CATALOG_OWNER, catalog_repository: str
             "category": category_for(slug, description, topics),
             "tags": topics,
             "repositoryUrl": repository.get("html_url", f"https://github.com/{catalog_owner}/{slug}"),
-            "updatedAt": repository.get("updated_at"),
+            "updatedAt": repository.get("updatedAt", repository.get("updated_at")),
+            "stars": int(repository.get("stars", repository.get("stargazers_count", 0)) or 0),
             "branch": branch,
             "visuals": {
                 "icon": f"{asset_base}/product_logo.png",
                 "splash": f"{asset_base}/splash.png",
                 "portrait": f"{asset_base}/splash_setup.png",
             },
+            "packageIcon": f"https://raw.githubusercontent.com/{author}/{slug}/{branch}/app/app-icon.ico",
         }
         package["revision"] = package_revision(package)
-        return package
+        return package, audit
 
     with ThreadPoolExecutor(max_workers=max(1, min(8, len(references)))) as executor:
-        packages = [package for package in executor.map(build_package, references) if package]
+        results = list(executor.map(build_package, references))
+    packages = [package for package, _ in results if package]
+    excluded = [audit for package, audit in results if not package]
     packages.sort(key=lambda item: item["name"].lower())
     catalog_version = hashlib.sha256("|".join(f"{item['author']}/{item['slug']}:{item['revision']}" for item in packages).encode("utf-8")).hexdigest()[:20]
-    snapshot = {"packages": packages, "catalogVersion": catalog_version, "fetchedAt": iso_now(), "source": "GitHub API"}
+    snapshot = {"packages": packages, "catalogVersion": catalog_version, "fetchedAt": iso_now(), "source": "GitHub public repositories", "excluded": excluded}
     CATALOG_SNAPSHOT_CACHE[cache_key] = (time.time() + 300, snapshot)
     return snapshot
 
@@ -945,7 +950,7 @@ def github_public_profile(github_login: str) -> dict[str, str]:
     return {"githubLogin": github_login, "githubName": github_login, "avatarUrl": f"https://github.com/{quote(github_login)}.png?size=176", "githubUrl": f"https://github.com/{github_login}"}
 
 
-def github_public_repositories(github_login: str) -> list[dict[str, str]]:
+def github_public_repositories(github_login: str) -> list[dict[str, Any]]:
     """Discover only public repositories. Private repositories require a separate OAuth consent."""
     if not valid_github_login(github_login):
         return []
@@ -966,7 +971,7 @@ def github_public_repositories(github_login: str) -> list[dict[str, str]]:
             for item in page_items:
                 name = str(item.get("name") or "")
                 if valid_repository_name(name):
-                    repositories.append({"name": name, "url": str(item.get("html_url") or f"https://github.com/{github_login}/{name}"), "description": str(item.get("description") or ""), "updatedAt": str(item.get("updated_at") or "")})
+                    repositories.append({"name": name, "url": str(item.get("html_url") or f"https://github.com/{github_login}/{name}"), "description": str(item.get("description") or ""), "updatedAt": str(item.get("updated_at") or ""), "defaultBranch": str(item.get("default_branch") or "main"), "topics": item.get("topics") if isinstance(item.get("topics"), list) else [], "stars": int(item.get("stargazers_count") or 0)})
             if len(page_items) < 100:
                 break
         except requests.RequestException:
@@ -974,13 +979,52 @@ def github_public_repositories(github_login: str) -> list[dict[str, str]]:
     return repositories
 
 
-def developer_profile(store: DeviceStore, github_login: str) -> dict[str, str]:
+PACKAGEMAKER_REQUIRED_FILES = ("app/app-icon.ico", "assets/product_logo.png", "assets/splash.png", "assets/splash_setup.png")
+
+
+def github_file_exists(author: str, slug: str, branch: str, path: str) -> bool:
+    url = f"https://raw.githubusercontent.com/{quote(author)}/{quote(slug)}/{quote(branch)}/{path}"
+    try:
+        response = requests.head(url, headers={"User-Agent": "Foundstore-Flask-Render"}, timeout=8, allow_redirects=True)
+        return response.ok and int(response.headers.get("Content-Length", "0") or 0) <= 8_000_000
+    except (ValueError, requests.RequestException):
+        return False
+
+
+def packagemaker_repository_audit(author: str, slug: str, branch: str) -> dict[str, Any]:
+    """Read public metadata and resource headers only; never execute repository content."""
+    metadata = package_metadata(slug, branch, author)
+    reasons: list[str] = []
+    if not metadata.get("manifestValid"):
+        reasons.append("Falta un details.xml XML válido.")
+    if not metadata.get("author"):
+        reasons.append("details.xml no declara author.")
+    elif str(metadata["author"]).casefold() != author.casefold():
+        reasons.append("El author de details.xml no coincide con el usuario propietario de GitHub.")
+    if not metadata.get("app"):
+        reasons.append("details.xml no declara app.")
+    for required_path in PACKAGEMAKER_REQUIRED_FILES:
+        if not github_file_exists(author, slug, branch, required_path):
+            reasons.append(f"Falta el recurso obligatorio {required_path}.")
+    return {"repository": f"{author}/{slug}", "valid": not reasons, "reasons": reasons, "metadata": metadata}
+
+
+DEFAULT_PROFILE_PRIVACY = {"avatar": "public", "bio": "public", "repositories": "public", "followers": "public", "following": "public"}
+
+
+def normalize_privacy(value: Any) -> dict[str, str]:
+    supplied = value if isinstance(value, dict) else {}
+    return {field: "private" if supplied.get(field) == "private" else "public" for field in DEFAULT_PROFILE_PRIVACY}
+
+
+def developer_profile(store: DeviceStore, github_login: str) -> dict[str, Any]:
     saved = store.get_developer_profile(github_login) or {}
     profile = github_public_profile(github_login)
     profile["displayName"] = str(saved.get("displayName") or saved.get("display_name") or profile["githubName"])
     profile["bio"] = str(saved.get("bio") or "")
     profile["website"] = str(saved.get("website") or "")
     profile["catalogRepository"] = str(saved.get("catalogRepository") or saved.get("catalog_repository") or "catalog")
+    profile["privacy"] = normalize_privacy(saved.get("privacy"))
     return profile
 
 
@@ -1088,14 +1132,17 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     def oauth_ready() -> bool:
         return bool(app.config["GITHUB_CLIENT_ID"] and app.config["GITHUB_CLIENT_SECRET"])
 
-    def developer_catalog(github_login: str) -> tuple[dict[str, str], dict[str, Any] | None]:
+    def developer_catalog(github_login: str, include_diagnostics: bool = False) -> tuple[dict[str, str], dict[str, Any] | None]:
         profile_data = developer_profile(app.extensions["device_store"], github_login)
         try:
-            snapshot = catalog_snapshot(github_login, profile_data["catalogRepository"])
+            snapshot = catalog_snapshot(github_login)
         except Exception:
             return profile_data, None
         packages = [{**package, **package_metadata(package["slug"], package.get("branch", "main"), package["author"])} for package in snapshot["packages"]]
-        return profile_data, {**snapshot, "packages": packages}
+        result = {**snapshot, "packages": packages}
+        if not include_diagnostics:
+            result.pop("excluded", None)
+        return profile_data, result
 
     @app.get("/")
     def index() -> str:
@@ -1213,7 +1260,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         try:
             snapshot = catalog_snapshot()
             packages = [{**package, **package_metadata(package["slug"], package.get("branch", "main"), package["author"])} for package in snapshot["packages"]]
-            return jsonify({**snapshot, "packages": packages})
+            return jsonify({key: value for key, value in {**snapshot, "packages": packages}.items() if key != "excluded"})
         except Exception as error:
             return jsonify({"error": "No se pudo obtener el catálogo de GitHub", "detail": type(error).__name__}), 502
 
@@ -1263,7 +1310,19 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         viewer = session.get("github_login")
         store = app.extensions["device_store"]
         own_profile = bool(viewer and str(viewer).lower() == github_login.lower())
-        return jsonify({"profile": profile_data, "catalog": snapshot, "catalogAvailable": bool(snapshot), "followerCount": store.developer_follower_count(github_login), "following": bool(viewer and store.is_following_developer(str(viewer), github_login)), "isOwnProfile": own_profile})
+        privacy = normalize_privacy(profile_data.get("privacy"))
+        public_profile = dict(profile_data)
+        public_profile.pop("privacy", None)
+        if not own_profile and privacy["avatar"] == "private":
+            public_profile["avatarUrl"] = ""
+        if not own_profile and privacy["bio"] == "private":
+            public_profile["bio"] = ""
+        public_catalog = snapshot
+        if not own_profile and privacy["repositories"] == "private":
+            public_catalog = {**(snapshot or {}), "packages": []} if snapshot else snapshot
+        followers = store.developer_follower_count(github_login)
+        following_count = store.developer_following_count(github_login)
+        return jsonify({"profile": public_profile, "catalog": public_catalog, "catalogAvailable": bool(public_catalog and public_catalog.get("packages")), "followerCount": followers if own_profile or privacy["followers"] == "public" else None, "followingCount": following_count if own_profile or privacy["following"] == "public" else None, "following": bool(viewer and store.is_following_developer(str(viewer), github_login)), "isOwnProfile": own_profile})
 
     @app.get("/api/v1/me/following")
     def my_following() -> Response:
@@ -1321,13 +1380,11 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             display_name = str(payload.get("displayName", "")).strip()[:80]
             bio = str(payload.get("bio", "")).strip()[:500]
             website = str(payload.get("website", "")).strip()[:240]
-            repository = str(payload.get("catalogRepository", "catalog")).strip()
+            privacy = normalize_privacy(payload.get("privacy"))
             if website and not re.fullmatch(r"https://[^\s<>{}|\\^`\[\]]+", website):
                 return jsonify({"error": "El sitio web debe usar HTTPS"}), 400
-            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}", repository):
-                return jsonify({"error": "El repositorio de catálogo no es válido"}), 400
-            store.update_developer_profile(login, {"displayName": display_name, "bio": bio, "website": website, "catalogRepository": repository})
-        profile_data, snapshot = developer_catalog(login)
+            store.update_developer_profile(login, {"displayName": display_name, "bio": bio, "website": website, "privacy": privacy})
+        profile_data, snapshot = developer_catalog(login, include_diagnostics=True)
         return jsonify({"profile": profile_data, "catalog": snapshot, "catalogAvailable": bool(snapshot)})
 
     @app.post("/api/v1/me/licenses")

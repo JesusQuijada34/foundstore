@@ -182,6 +182,20 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(changed.json["packages"][0]["slug"], "camera")
         self.assertEqual(changed.json["catalogVersion"], "version-2")
 
+    def test_public_catalog_is_visible_with_or_without_a_github_session(self) -> None:
+        package = {"slug": "camera", "name": "Camera", "author": "JesusQuijada34", "branch": "main", "revision": "published-revision"}
+        snapshot = {"packages": [package], "catalogVersion": "public-version", "fetchedAt": "2026-01-01T00:00:00+00:00", "source": "GitHub public repositories", "excluded": [{"repository": "owner/incomplete", "reasons": ["Recurso requerido ausente"]}]}
+        with patch("app.catalog_snapshot", return_value=snapshot), patch("app.package_metadata", return_value={"platformTargets": ["Danenone"]}):
+            anonymous = self.client.get("/api/v1/catalog")
+            with self.client.session_transaction() as browser_session:
+                browser_session["github_login"] = "JesusQuijada34"
+            authenticated = self.client.get("/api/v1/catalog")
+        self.assertEqual(anonymous.status_code, 200)
+        self.assertEqual(authenticated.status_code, 200)
+        self.assertEqual(anonymous.json["packages"], authenticated.json["packages"])
+        self.assertEqual(anonymous.json["packages"][0]["slug"], "camera")
+        self.assertNotIn("excluded", anonymous.json)
+
     def test_profile_keeps_owner_license_and_links_a_knosthalij_device(self) -> None:
         with self.client.session_transaction() as browser_session:
             browser_session["github_login"] = "jq34"
@@ -237,8 +251,26 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertTrue(profile.json["isOwnProfile"])
         self.assertIn('id="ownerStatus"', page.get_data(as_text=True))
         own_profile = self.client.get("/profile").get_data(as_text=True)
-        self.assertIn("Repositorios públicos de GitHub", own_profile)
-        self.assertIn("/api/v1/me/repositories", own_profile)
+        self.assertIn("Inventario Packagemaker", own_profile)
+        self.assertIn("validRepositories", own_profile)
+        self.assertNotIn('id="catalogRepository"', own_profile)
+
+    def test_profile_privacy_is_public_by_default_and_filters_third_party_view(self) -> None:
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "owner"
+        identity = {"githubLogin": "owner", "githubName": "Owner", "avatarUrl": "https://example.test/avatar.png", "githubUrl": "https://github.com/owner"}
+        snapshot = {"packages": [{"slug": "valid-app", "author": "owner", "branch": "main"}], "fetchedAt": "2026-01-01T00:00:00+00:00", "catalogVersion": "test"}
+        with patch("app.github_public_profile", return_value=identity), patch("app.catalog_snapshot", return_value=snapshot), patch("app.package_metadata", return_value={}):
+            owner = self.client.patch("/api/v1/me/profile", json={"displayName": "Owner", "bio": "Visible sólo al dueño", "website": "https://example.test", "privacy": {"avatar": "private", "bio": "private", "repositories": "private", "followers": "private", "following": "private"}})
+            outsider = self.app.test_client()
+            public = outsider.get("/api/v1/developers/owner")
+        self.assertEqual(owner.status_code, 200)
+        self.assertEqual(public.status_code, 200)
+        self.assertEqual(public.json["profile"]["avatarUrl"], "")
+        self.assertEqual(public.json["profile"]["bio"], "")
+        self.assertEqual(public.json["catalog"]["packages"], [])
+        self.assertIsNone(public.json["followerCount"])
+        self.assertIsNone(public.json["followingCount"])
 
     def test_authenticated_user_can_follow_and_unfollow_a_developer(self) -> None:
         with self.client.session_transaction() as browser_session:
