@@ -29,6 +29,11 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(favicon.status_code, 200)
         self.assertEqual(favicon.content_type, "image/svg+xml")
 
+    def test_social_preview_crawler_can_read_public_metadata_without_browser_session(self) -> None:
+        response = self.client.get("/", headers={"User-Agent": "TelegramBot (like TwitterBot)"})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('property="og:title"', response.get_data(as_text=True))
+
     def test_github_avatar_proxy_returns_only_safe_image_content(self) -> None:
         class AvatarResponse:
             ok = True

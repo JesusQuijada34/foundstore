@@ -1182,8 +1182,12 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     def safe_next_path(value: str) -> str:
         return value if value.startswith("/") and not value.startswith("//") else ""
 
+    def is_social_preview_request() -> bool:
+        agent = request.headers.get("User-Agent", "").lower()
+        return any(token in agent for token in ("facebookexternalhit", "twitterbot", "linkedinbot", "discordbot", "slackbot", "telegrambot", "whatsapp"))
+
     def web_session_or_login() -> Response | None:
-        if github_login():
+        if github_login() or is_social_preview_request():
             return None
         next_path = safe_next_path(request.full_path.rstrip("?") or request.path)
         return Response(render_template("login.html", next_path=next_path), status=401)
