@@ -926,7 +926,7 @@ def catalog_snapshot(catalog_owner: str = CATALOG_OWNER, catalog_repository: str
     excluded = [audit for package, audit in results if not package]
     packages.sort(key=lambda item: item["name"].lower())
     catalog_version = hashlib.sha256("|".join(f"{item['author']}/{item['slug']}:{item['revision']}" for item in packages).encode("utf-8")).hexdigest()[:20]
-    snapshot = {"packages": packages, "catalogVersion": catalog_version, "fetchedAt": iso_now(), "source": "GitHub public repositories", "excluded": excluded}
+    snapshot = {"packages": packages, "catalogVersion": catalog_version, "fetchedAt": iso_now(), "source": "GitHub public repositories", "discoveredRepositoryCount": len(references), "excludedRepositoryCount": len(excluded), "excluded": excluded}
     CATALOG_SNAPSHOT_CACHE[cache_key] = (time.time() + 300, snapshot)
     return snapshot
 
