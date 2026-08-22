@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QApplication,
     QFrame,
     QGraphicsDropShadowEffect,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -22,6 +23,7 @@ from PyQt6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QStackedWidget,
     QToolButton,
     QVBoxLayout,
@@ -71,9 +73,13 @@ class CatalogWorker(QThread):
     loaded = pyqtSignal(list)
     failed = pyqtSignal(str)
 
+    def __init__(self, force: bool = False) -> None:
+        super().__init__()
+        self.force = force
+
     def run(self) -> None:
         try:
-            self.loaded.emit(foundstore_api.catalog())
+            self.loaded.emit(foundstore_api.catalog(force=self.force))
         except Exception as error:
             self.failed.emit(str(error))
 
@@ -191,50 +197,59 @@ class PackageResult(QFrame):
         super().__init__()
         self.setObjectName("packageResult")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFixedWidth(392)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self.setStyleSheet(
             "QFrame#packageResult{background:rgba(20,30,50,.72);border:1px solid rgba(164,187,228,.21);border-radius:12px;}"
             "QFrame#packageResult:hover{background:rgba(29,43,70,.92);border-color:rgba(119,233,178,.6);}"
         )
         soft_shadow(self, alpha=52, blur=21, y_offset=8)
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(16, 15, 16, 15)
-        layout.setSpacing(14)
-        layout.addWidget(PackageGlyph(package), 0, Qt.AlignmentFlag.AlignTop)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
+
+        header = QHBoxLayout()
+        header.setSpacing(12)
+        header.addWidget(PackageGlyph(package, 58), 0, Qt.AlignmentFlag.AlignTop)
 
         info = QVBoxLayout()
-        info.setSpacing(3)
+        info.setSpacing(2)
         category = QLabel(str(package.get("category") or package.get("platform") or "Fluthin").upper())
         category.setObjectName("resultCategory")
         title = QLabel(str(package.get("name") or package.get("app") or "Paquete Fluthin"))
         title.setObjectName("resultTitle")
-        description = QLabel(str(package.get("description") or "Paquete validado en el catálogo público de Foundstore."))
-        description.setObjectName("resultDescription")
-        description.setWordWrap(True)
         publisher = str(package.get("publisher") or "Influent")
-        meta = QLabel(f"{publisher} · {package.get('author') or 'Autor no informado'} · {package.get('version') or 'Sin versión'}")
+        meta = QLabel(f"{publisher} · {package.get('author') or 'Autor no informado'}")
         meta.setObjectName("resultMeta")
         stars = package.get("stars")
         stars_label = QLabel(f"★ {stars} estrellas GitHub" if isinstance(stars, int) else "★ Estrellas GitHub no disponibles")
         stars_label.setObjectName("resultStars")
         info.addWidget(category)
         info.addWidget(title)
-        info.addWidget(description)
         info.addWidget(meta)
         info.addWidget(stars_label)
-        layout.addLayout(info, 1)
+        header.addLayout(info, 1)
 
-        actions = QVBoxLayout()
-        actions.setSpacing(8)
-        actions.addStretch(1)
-        details = QPushButton("Ver ficha")
-        details.setObjectName("secondaryAction")
-        details.clicked.connect(lambda: show_details(package))
+        open_button = QPushButton("Abrir")
+        open_button.setObjectName("secondaryAction")
+        open_button.clicked.connect(lambda: show_details(package))
+        header.addWidget(open_button, 0, Qt.AlignmentFlag.AlignTop)
+        layout.addLayout(header)
+
+        visuals = package.get("visuals") if isinstance(package.get("visuals"), dict) else {}
+        splash_url = str(visuals.get("splash") or visuals.get("portrait") or "")
+        layout.addWidget(RemoteImage(splash_url, "Vista previa", QSize(360, 202), 10))
+
+        footer = QHBoxLayout()
+        description = QLabel(str(package.get("description") or "Paquete validado en el catálogo público de Foundstore."))
+        description.setObjectName("resultDescription")
+        description.setWordWrap(True)
+        footer.addWidget(description, 1)
         install_button = QPushButton("Instalar")
         install_button.setObjectName("primaryAction")
         install_button.clicked.connect(lambda: install(package))
-        actions.addWidget(details)
-        actions.addWidget(install_button)
-        layout.addLayout(actions, 0)
+        footer.addWidget(install_button, 0, Qt.AlignmentFlag.AlignBottom)
+        layout.addLayout(footer)
 
 
 class DetailPanel(QFrame):
@@ -271,6 +286,9 @@ class DetailPanel(QFrame):
         copy.addWidget(self.meta)
         copy.addWidget(self.stars)
         head.addLayout(copy, 1)
+        self.preview_holder = QHBoxLayout()
+        layout.addLayout(self.preview_holder)
+
         layout.addLayout(head)
 
         self.description = QLabel()
@@ -278,13 +296,15 @@ class DetailPanel(QFrame):
         self.description.setWordWrap(True)
         layout.addWidget(self.description)
 
-        self.preview_holder = QHBoxLayout()
-        layout.addLayout(self.preview_holder)
-
         note = QLabel("La instalación solicita una confirmación local. Foundstore no expone enlaces directos de descarga.")
         note.setObjectName("infoNote")
         note.setWordWrap(True)
         layout.addWidget(note)
+
+        self.install_button = QPushButton("Instalar en este DaneDesk")
+        self.install_button.setObjectName("primaryAction")
+        self.install_button.clicked.connect(self._request_install)
+        layout.addWidget(self.install_button, 0, Qt.AlignmentFlag.AlignLeft)
 
         readme_label = QLabel("README del paquete")
         readme_label.setObjectName("readmeLabel")
@@ -295,11 +315,6 @@ class DetailPanel(QFrame):
         self.readme.setMinimumHeight(148)
         self.readme.setMaximumHeight(210)
         layout.addWidget(self.readme)
-
-        self.install_button = QPushButton("Instalar en este DaneDesk")
-        self.install_button.setObjectName("primaryAction")
-        self.install_button.clicked.connect(self._request_install)
-        layout.addWidget(self.install_button, 0, Qt.AlignmentFlag.AlignLeft)
 
     def set_package(self, package: dict[str, Any]) -> None:
         self.package = package
@@ -314,7 +329,7 @@ class DetailPanel(QFrame):
                 item.widget().deleteLater()
         visuals = package.get("visuals") if isinstance(package.get("visuals"), dict) else {}
         splash_url = str(visuals.get("splash") or visuals.get("portrait") or "")
-        self.preview_holder.addWidget(RemoteImage(splash_url, "Vista previa", QSize(480, 270), 12))
+        self.preview_holder.addWidget(RemoteImage(splash_url, "Vista previa", QSize(560, 315), 12))
         self.preview_holder.addStretch(1)
         self.category.setText(str(package.get("category") or package.get("platform") or "Fluthin").upper())
         self.title.setText(str(package.get("name") or package.get("app") or "Paquete Fluthin"))
@@ -346,7 +361,11 @@ class StoreWindow(QMainWindow):
         self.setMinimumSize(880, 620)
         self._apply_leviathan()
         self._build_ui()
-        QTimer.singleShot(120, self.refresh_catalog)
+        self.cache_timer = QTimer(self)
+        self.cache_timer.setInterval(60_000)
+        self.cache_timer.timeout.connect(self.refresh_if_cache_expired)
+        self.cache_timer.start()
+        QTimer.singleShot(120, self.initialize_catalog)
 
     def _apply_leviathan(self) -> None:
         if WipeWindow is not None:
@@ -464,16 +483,25 @@ class StoreWindow(QMainWindow):
         self.search.textChanged.connect(self.filter_packages)
         refresh = QPushButton("Actualizar")
         refresh.setObjectName("secondaryAction")
-        refresh.clicked.connect(self.refresh_catalog)
+        refresh.clicked.connect(lambda: self.refresh_catalog(force=True))
         tools.addWidget(self.search, 1)
         tools.addWidget(refresh)
         layout.addLayout(tools)
-        self.catalog_list = QListWidget()
-        self.catalog_list.setObjectName("catalogList")
-        self.catalog_list.setFrameShape(QFrame.Shape.NoFrame)
-        self.catalog_list.setSpacing(12)
-        self.catalog_list.setVerticalScrollMode(QListWidget.ScrollMode.ScrollPerPixel)
-        layout.addWidget(self.catalog_list, 1)
+        self.catalog_scroll = QScrollArea()
+        self.catalog_scroll.setObjectName("catalogScroll")
+        self.catalog_scroll.setWidgetResizable(True)
+        self.catalog_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.catalog_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.catalog_grid_host = QWidget()
+        self.catalog_grid_host.setObjectName("catalogGridHost")
+        self.catalog_grid_host.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self.catalog_grid = QGridLayout(self.catalog_grid_host)
+        self.catalog_grid.setContentsMargins(0, 0, 0, 0)
+        self.catalog_grid.setHorizontalSpacing(16)
+        self.catalog_grid.setVerticalSpacing(16)
+        self.catalog_grid.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        self.catalog_scroll.setWidget(self.catalog_grid_host)
+        layout.addWidget(self.catalog_scroll, 1)
         return page
 
     def _library_page(self) -> QWidget:
@@ -521,13 +549,30 @@ class StoreWindow(QMainWindow):
         if index == 1:
             self.refresh_library()
 
-    def refresh_catalog(self) -> None:
+    def initialize_catalog(self) -> None:
+        cached = foundstore_api.cached_catalog()
+        if cached is None:
+            self.refresh_catalog()
+            return
+        self.packages, is_fresh = cached
+        self.catalog_status.setText(
+            f"{len(self.packages)} paquetes en caché" if is_fresh else f"{len(self.packages)} paquetes; actualizando…"
+        )
+        self.filter_packages(self.search.text())
+        if not is_fresh:
+            self.refresh_catalog()
+
+    def refresh_if_cache_expired(self) -> None:
+        cached = foundstore_api.cached_catalog()
+        if cached is None or not cached[1]:
+            self.refresh_catalog()
+
+    def refresh_catalog(self, force: bool = False) -> None:
         if self.catalog_worker and self.catalog_worker.isRunning():
             return
         self.catalog_status.setText("Actualizando API…")
-        self.catalog_list.clear()
         self._add_empty_row("Consultando API pública…", "La ventana sigue disponible mientras Foundstore obtiene paquetes, recursos y estrellas verificadas.")
-        self.catalog_worker = CatalogWorker()
+        self.catalog_worker = CatalogWorker(force=force)
         self.catalog_worker.loaded.connect(self._catalog_loaded)
         self.catalog_worker.failed.connect(self._catalog_failed)
         self.catalog_worker.start()
@@ -540,7 +585,6 @@ class StoreWindow(QMainWindow):
 
     def _catalog_failed(self, message: str) -> None:
         self.catalog_status.setText("API no disponible")
-        self.catalog_list.clear()
         self._add_empty_row("No se pudo consultar la API pública", message)
         self.catalog_worker = None
 
@@ -550,18 +594,23 @@ class StoreWindow(QMainWindow):
             package for package in self.packages
             if not term or term in " ".join(str(package.get(key) or "") for key in ("name", "app", "author", "description", "platform", "category")).casefold()
         ]
-        self.catalog_list.clear()
+        self._clear_catalog_grid()
         if not visible:
             self._add_empty_row("No hay resultados", "Prueba otra búsqueda o actualiza la API pública.")
             return
-        for package in visible:
+        columns = 2 if self.catalog_scroll.viewport().width() >= 840 else 1
+        for index, package in enumerate(visible):
             widget = PackageResult(package, self.show_detail, self.install_package)
-            item = QListWidgetItem()
-            item.setSizeHint(QSize(0, 132))
-            self.catalog_list.addItem(item)
-            self.catalog_list.setItemWidget(item, widget)
+            self.catalog_grid.addWidget(widget, index // columns, index % columns)
+
+    def _clear_catalog_grid(self) -> None:
+        while self.catalog_grid.count():
+            item = self.catalog_grid.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
 
     def _add_empty_row(self, title: str, detail: str) -> None:
+        self._clear_catalog_grid()
         widget = QFrame()
         widget.setObjectName("emptyState")
         layout = QVBoxLayout(widget)
@@ -572,10 +621,7 @@ class StoreWindow(QMainWindow):
         copy.setWordWrap(True)
         layout.addWidget(headline)
         layout.addWidget(copy)
-        item = QListWidgetItem()
-        item.setSizeHint(QSize(0, 112))
-        self.catalog_list.addItem(item)
-        self.catalog_list.setItemWidget(item, widget)
+        self.catalog_grid.addWidget(widget, 0, 0)
 
     def show_detail(self, package: dict[str, Any]) -> None:
         self.detail.set_package(package)
@@ -640,7 +686,7 @@ class StoreWindow(QMainWindow):
             QPushButton#navButton {{background:transparent;border:1px solid transparent;border-radius:8px;color:#b7c6df;padding:10px 12px;text-align:left;font-weight:700;}} QPushButton#navButton:hover,QPushButton#navButton:checked {{background:rgba(102,133,193,.25);border-color:rgba(183,207,250,.15);color:#f5f8ff;}}
             QLabel#eyebrow,QLabel#resultCategory {{color:{ACCENT};font-size:10px;font-weight:850;letter-spacing:.12em;}} QLabel#catalogHeadline {{color:#f3f7ff;font-size:31px;font-weight:850;letter-spacing:-.05em;line-height:1.02;}} QLabel#catalogStatus {{background:rgba(21,40,61,.75);border:1px solid rgba(158,184,225,.22);border-radius:8px;color:#b9cbe8;padding:8px 10px;font-size:11px;font-weight:700;}}
             QLineEdit#search {{background:rgba(9,15,27,.66);border:1px solid rgba(165,190,232,.28);border-radius:8px;color:{INK};padding:12px 13px;font-size:13px;}} QLineEdit#search:focus {{border:2px solid {ACCENT};padding:11px 12px;}}
-            QListWidget#catalogList,QScrollArea#detailScroll {{background:transparent;outline:none;}} QListWidget#catalogList::item {{background:transparent;border:0;}} QFrame#emptyState {{background:rgba(17,27,46,.76);border:1px dashed rgba(165,190,232,.35);border-radius:10px;padding:14px;}} QLabel#emptyTitle {{color:#f1f6ff;font-size:16px;font-weight:800;}}
+            QListWidget#catalogList,QScrollArea#detailScroll,QScrollArea#catalogScroll {{background:transparent;outline:none;}} QListWidget#catalogList::item {{background:transparent;border:0;}} QWidget#catalogGridHost {{background:transparent;}} QFrame#emptyState {{background:rgba(17,27,46,.76);border:1px dashed rgba(165,190,232,.35);border-radius:10px;padding:14px;min-width:420px;}} QLabel#emptyTitle {{color:#f1f6ff;font-size:16px;font-weight:800;}}
             QLabel#resultTitle {{font-size:17px;font-weight:800;color:#f5f8ff;}} QLabel#resultDescription,QLabel#pageCopy {{color:{MUTED};font-size:12px;line-height:1.42;}} QLabel#resultMeta {{color:#bfd0e9;font-size:11px;}} QLabel#resultStars,QLabel#detailStars {{color:{ACCENT};font-size:12px;font-weight:800;}}
             QFrame#detailPanel {{min-width:0;}} QLabel#detailTitle,QLabel#pageTitle {{color:#f3f7ff;font-size:30px;font-weight:850;letter-spacing:-.045em;}} QLabel#detailMeta {{color:#b7c7e0;font-size:13px;line-height:1.45;}} QLabel#detailDescription {{color:#d4dff1;font-size:15px;line-height:1.55;}} QLabel#readmeLabel {{color:#dce8fb;font-size:13px;font-weight:850;}} QPlainTextEdit#readme {{background:rgba(7,13,24,.62);border:1px solid rgba(155,180,223,.24);border-radius:10px;color:#c9d6ea;padding:10px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;}} QLabel#infoNote {{background:rgba(25,91,70,.24);border:1px solid rgba(116,237,178,.24);border-radius:10px;color:#b8f2d3;padding:13px;font-size:12px;line-height:1.48;}}
             QPushButton#primaryAction {{background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #77e9b2,stop:1 #2eb477);border:1px solid rgba(224,255,240,.55);border-radius:8px;color:#082218;padding:9px 13px;font-size:12px;font-weight:850;}} QPushButton#primaryAction:hover {{background:#9df4c8;}} QPushButton#secondaryAction,QPushButton#backAction {{background:rgba(28,40,65,.7);border:1px solid rgba(170,195,235,.28);border-radius:8px;color:#dbe7fa;padding:9px 12px;font-size:12px;font-weight:750;}} QPushButton#secondaryAction:hover,QPushButton#backAction:hover {{background:rgba(61,83,126,.8);border-color:rgba(173,241,205,.55);}} QPushButton:disabled {{color:#7c8aa3;background:rgba(35,45,65,.55);border-color:rgba(130,147,175,.2);}}
