@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 import requests
-from PyQt6.QtCore import QRect, QSize, Qt, QThread, QTimer, QUrl, pyqtSignal
-from PyQt6.QtGui import QColor, QDesktopServices, QIcon, QPixmap
+from PyQt6.QtCore import QRect, QRectF, QSize, Qt, QThread, QTimer, QUrl, pyqtSignal
+from PyQt6.QtGui import QColor, QDesktopServices, QIcon, QPainter, QPainterPath, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
     QFrame,
@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QScrollArea,
     QStackedWidget,
     QToolButton,
     QVBoxLayout,
@@ -40,6 +41,7 @@ ROOT = Path(__file__).resolve().parent
 ACCENT = "#77e9b2"
 INK = "#edf3ff"
 MUTED = "#9daac2"
+IMAGE_BYTES_CACHE: dict[str, bytes] = {}
 
 
 def package_reference(package: dict[str, Any]) -> str:
@@ -101,9 +103,14 @@ class ImageWorker(QThread):
     def run(self) -> None:
         if not self.url:
             return
+        cached = IMAGE_BYTES_CACHE.get(self.url)
+        if cached:
+            self.loaded.emit(cached)
+            return
         try:
             response = requests.get(self.url, headers={"User-Agent": "Foundstore-Qt6/1.1"}, timeout=15)
             if response.ok and len(response.content) <= 8_000_000:
+                IMAGE_BYTES_CACHE[self.url] = response.content
                 self.loaded.emit(response.content)
         except requests.RequestException:
             return
@@ -113,16 +120,19 @@ class RemoteImage(QLabel):
     def __init__(self, url: str, fallback: str, size: QSize, radius: int) -> None:
         super().__init__(fallback)
         self._source: QPixmap | None = None
+        self._radius = radius
         self.setFixedSize(size)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setStyleSheet(
             f"background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #7a83ef,stop:1 #17243d);"
             f"border:1px solid rgba(225,239,255,.3);border-radius:{radius}px;color:white;font-size:24px;font-weight:850;"
         )
-        self.worker = ImageWorker(url)
-        self.worker.loaded.connect(self._set_image)
-        self.worker.finished.connect(self.worker.deleteLater)
-        self.worker.start()
+        self.worker: ImageWorker | None = None
+        if url:
+            self.worker = ImageWorker(url)
+            self.worker.loaded.connect(self._set_image)
+            self.worker.finished.connect(self.worker.deleteLater)
+            self.worker.start()
 
     def _set_image(self, raw: bytes) -> None:
         pixmap = QPixmap()
@@ -132,12 +142,26 @@ class RemoteImage(QLabel):
             self._update_pixmap()
 
     def _update_pixmap(self) -> None:
-        if self._source is not None:
-            self.setPixmap(
-                self._source.scaled(
-                    self.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation
-                )
-            )
+        self.update()
+
+    def paintEvent(self, event: Any) -> None:
+        if self._source is None:
+            super().paintEvent(event)
+            return
+        target = self.rect()
+        source = self._source.scaled(target.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+        x = (target.width() - source.width()) // 2
+        y = (target.height() - source.height()) // 2
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        clip = QPainterPath()
+        clip.addRoundedRect(QRectF(target.adjusted(0, 0, -1, -1)), self._radius, self._radius)
+        painter.setClipPath(clip)
+        painter.drawPixmap(x, y, source)
+        painter.setClipping(False)
+        painter.setPen(QColor(235, 244, 255, 84))
+        painter.drawRoundedRect(target.adjusted(0, 0, -1, -1), self._radius, self._radius)
+        painter.end()
 
 
 class PackageGlyph(RemoteImage):
@@ -145,7 +169,7 @@ class PackageGlyph(RemoteImage):
         visuals = package.get("visuals") if isinstance(package.get("visuals"), dict) else {}
         icon_url = str(visuals.get("icon") or package.get("packageIcon") or "")
         fallback = str(package.get("name") or package.get("app") or "F")[:1].upper()
-        super().__init__(icon_url, fallback, QSize(size, size), 18)
+        super().__init__(icon_url, fallback, QSize(size, size), 14)
         soft_shadow(self, alpha=78, blur=18, y_offset=7)
 
 
@@ -168,7 +192,7 @@ class PackageResult(QFrame):
         self.setObjectName("packageResult")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setStyleSheet(
-            "QFrame#packageResult{background:rgba(20,30,50,.72);border:1px solid rgba(164,187,228,.21);border-radius:18px;}"
+            "QFrame#packageResult{background:rgba(20,30,50,.72);border:1px solid rgba(164,187,228,.21);border-radius:12px;}"
             "QFrame#packageResult:hover{background:rgba(29,43,70,.92);border-color:rgba(119,233,178,.6);}"
         )
         soft_shadow(self, alpha=52, blur=21, y_offset=8)
@@ -219,7 +243,7 @@ class DetailPanel(QFrame):
         self._install = install
         self.package: dict[str, Any] | None = None
         self.setObjectName("detailPanel")
-        self.setStyleSheet("QFrame#detailPanel{background:rgba(17,26,44,.92);border:1px solid rgba(167,190,230,.22);border-radius:22px;}")
+        self.setStyleSheet("QFrame#detailPanel{background:rgba(17,26,44,.92);border:1px solid rgba(167,190,230,.22);border-radius:14px;}")
         soft_shadow(self, alpha=65, blur=30, y_offset=12)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(28, 26, 28, 28)
@@ -290,7 +314,7 @@ class DetailPanel(QFrame):
                 item.widget().deleteLater()
         visuals = package.get("visuals") if isinstance(package.get("visuals"), dict) else {}
         splash_url = str(visuals.get("splash") or visuals.get("portrait") or "")
-        self.preview_holder.addWidget(RemoteImage(splash_url, "Vista previa", QSize(440, 168), 16))
+        self.preview_holder.addWidget(RemoteImage(splash_url, "Vista previa", QSize(480, 270), 12))
         self.preview_holder.addStretch(1)
         self.category.setText(str(package.get("category") or package.get("platform") or "Fluthin").upper())
         self.title.setText(str(package.get("name") or package.get("app") or "Paquete Fluthin"))
@@ -348,7 +372,13 @@ class StoreWindow(QMainWindow):
         self.pages.addWidget(self._library_page())
         self.pages.addWidget(self._settings_page())
         self.detail = DetailPanel(lambda: self.pages.setCurrentIndex(0), self.install_package)
-        self.pages.addWidget(self.detail)
+        self.detail_scroll = QScrollArea()
+        self.detail_scroll.setObjectName("detailScroll")
+        self.detail_scroll.setWidgetResizable(True)
+        self.detail_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.detail_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.detail_scroll.setWidget(self.detail)
+        self.pages.addWidget(self.detail_scroll)
         content.addWidget(self.pages, 1)
         outer.addLayout(content, 1)
 
@@ -549,7 +579,7 @@ class StoreWindow(QMainWindow):
 
     def show_detail(self, package: dict[str, Any]) -> None:
         self.detail.set_package(package)
-        self.pages.setCurrentWidget(self.detail)
+        self.pages.setCurrentWidget(self.detail_scroll)
         for button in self.nav_buttons:
             button.setChecked(False)
         slug = str(package.get("slug") or package.get("app") or "")
@@ -606,14 +636,14 @@ class StoreWindow(QMainWindow):
         return f"""
             QWidget#root {{background:linear-gradient(135deg,#101c31 0%,#11192a 55%,#0a101c 100%);color:{INK};font-family:Inter,Segoe UI,Arial,sans-serif;}}
             QLabel#windowTitle {{font-size:13px;font-weight:750;color:#dbe6fb;}} QLabel#windowStatus {{font-size:11px;font-weight:700;color:{ACCENT};}}
-            QFrame#sidebar {{background:rgba(12,20,34,.74);border:1px solid rgba(158,183,226,.16);border-radius:20px;}} QLabel#brandTitle {{font-size:19px;font-weight:850;letter-spacing:-.04em;color:#f0f5ff;}} QLabel#sidebarCaption {{color:{MUTED};font-size:12px;line-height:1.45;}} QLabel#sidebarFooter {{color:#87a1c5;font-size:11px;line-height:1.5;}}
-            QPushButton#navButton {{background:transparent;border:1px solid transparent;border-radius:11px;color:#b7c6df;padding:10px 12px;text-align:left;font-weight:700;}} QPushButton#navButton:hover,QPushButton#navButton:checked {{background:rgba(102,133,193,.25);border-color:rgba(183,207,250,.15);color:#f5f8ff;}}
-            QLabel#eyebrow,QLabel#resultCategory {{color:{ACCENT};font-size:10px;font-weight:850;letter-spacing:.12em;}} QLabel#catalogHeadline {{color:#f3f7ff;font-size:31px;font-weight:850;letter-spacing:-.05em;line-height:1.02;}} QLabel#catalogStatus {{background:rgba(21,40,61,.75);border:1px solid rgba(158,184,225,.22);border-radius:11px;color:#b9cbe8;padding:8px 10px;font-size:11px;font-weight:700;}}
-            QLineEdit#search {{background:rgba(9,15,27,.66);border:1px solid rgba(165,190,232,.28);border-radius:12px;color:{INK};padding:12px 13px;font-size:13px;}} QLineEdit#search:focus {{border:2px solid {ACCENT};padding:11px 12px;}}
-            QListWidget#catalogList {{background:transparent;outline:none;}} QListWidget#catalogList::item {{background:transparent;border:0;}} QFrame#emptyState {{background:rgba(17,27,46,.76);border:1px dashed rgba(165,190,232,.35);border-radius:16px;padding:14px;}} QLabel#emptyTitle {{color:#f1f6ff;font-size:16px;font-weight:800;}}
+            QFrame#sidebar {{background:rgba(12,20,34,.74);border:1px solid rgba(158,183,226,.16);border-radius:14px;}} QLabel#brandTitle {{font-size:19px;font-weight:850;letter-spacing:-.04em;color:#f0f5ff;}} QLabel#sidebarCaption {{color:{MUTED};font-size:12px;line-height:1.45;}} QLabel#sidebarFooter {{color:#87a1c5;font-size:11px;line-height:1.5;}}
+            QPushButton#navButton {{background:transparent;border:1px solid transparent;border-radius:8px;color:#b7c6df;padding:10px 12px;text-align:left;font-weight:700;}} QPushButton#navButton:hover,QPushButton#navButton:checked {{background:rgba(102,133,193,.25);border-color:rgba(183,207,250,.15);color:#f5f8ff;}}
+            QLabel#eyebrow,QLabel#resultCategory {{color:{ACCENT};font-size:10px;font-weight:850;letter-spacing:.12em;}} QLabel#catalogHeadline {{color:#f3f7ff;font-size:31px;font-weight:850;letter-spacing:-.05em;line-height:1.02;}} QLabel#catalogStatus {{background:rgba(21,40,61,.75);border:1px solid rgba(158,184,225,.22);border-radius:8px;color:#b9cbe8;padding:8px 10px;font-size:11px;font-weight:700;}}
+            QLineEdit#search {{background:rgba(9,15,27,.66);border:1px solid rgba(165,190,232,.28);border-radius:8px;color:{INK};padding:12px 13px;font-size:13px;}} QLineEdit#search:focus {{border:2px solid {ACCENT};padding:11px 12px;}}
+            QListWidget#catalogList,QScrollArea#detailScroll {{background:transparent;outline:none;}} QListWidget#catalogList::item {{background:transparent;border:0;}} QFrame#emptyState {{background:rgba(17,27,46,.76);border:1px dashed rgba(165,190,232,.35);border-radius:10px;padding:14px;}} QLabel#emptyTitle {{color:#f1f6ff;font-size:16px;font-weight:800;}}
             QLabel#resultTitle {{font-size:17px;font-weight:800;color:#f5f8ff;}} QLabel#resultDescription,QLabel#pageCopy {{color:{MUTED};font-size:12px;line-height:1.42;}} QLabel#resultMeta {{color:#bfd0e9;font-size:11px;}} QLabel#resultStars,QLabel#detailStars {{color:{ACCENT};font-size:12px;font-weight:800;}}
-            QFrame#detailPanel {{min-width:0;}} QLabel#detailTitle,QLabel#pageTitle {{color:#f3f7ff;font-size:30px;font-weight:850;letter-spacing:-.045em;}} QLabel#detailMeta {{color:#b7c7e0;font-size:13px;line-height:1.45;}} QLabel#detailDescription {{color:#d4dff1;font-size:15px;line-height:1.55;}} QLabel#readmeLabel {{color:#dce8fb;font-size:13px;font-weight:850;}} QPlainTextEdit#readme {{background:rgba(7,13,24,.62);border:1px solid rgba(155,180,223,.24);border-radius:13px;color:#c9d6ea;padding:10px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;}} QLabel#infoNote {{background:rgba(25,91,70,.24);border:1px solid rgba(116,237,178,.24);border-radius:13px;color:#b8f2d3;padding:13px;font-size:12px;line-height:1.48;}}
-            QPushButton#primaryAction {{background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #77e9b2,stop:1 #2eb477);border:1px solid rgba(224,255,240,.55);border-radius:10px;color:#082218;padding:9px 13px;font-size:12px;font-weight:850;}} QPushButton#primaryAction:hover {{background:#9df4c8;}} QPushButton#secondaryAction,QPushButton#backAction {{background:rgba(28,40,65,.7);border:1px solid rgba(170,195,235,.28);border-radius:10px;color:#dbe7fa;padding:9px 12px;font-size:12px;font-weight:750;}} QPushButton#secondaryAction:hover,QPushButton#backAction:hover {{background:rgba(61,83,126,.8);border-color:rgba(173,241,205,.55);}} QPushButton:disabled {{color:#7c8aa3;background:rgba(35,45,65,.55);border-color:rgba(130,147,175,.2);}}
+            QFrame#detailPanel {{min-width:0;}} QLabel#detailTitle,QLabel#pageTitle {{color:#f3f7ff;font-size:30px;font-weight:850;letter-spacing:-.045em;}} QLabel#detailMeta {{color:#b7c7e0;font-size:13px;line-height:1.45;}} QLabel#detailDescription {{color:#d4dff1;font-size:15px;line-height:1.55;}} QLabel#readmeLabel {{color:#dce8fb;font-size:13px;font-weight:850;}} QPlainTextEdit#readme {{background:rgba(7,13,24,.62);border:1px solid rgba(155,180,223,.24);border-radius:10px;color:#c9d6ea;padding:10px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;}} QLabel#infoNote {{background:rgba(25,91,70,.24);border:1px solid rgba(116,237,178,.24);border-radius:10px;color:#b8f2d3;padding:13px;font-size:12px;line-height:1.48;}}
+            QPushButton#primaryAction {{background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #77e9b2,stop:1 #2eb477);border:1px solid rgba(224,255,240,.55);border-radius:8px;color:#082218;padding:9px 13px;font-size:12px;font-weight:850;}} QPushButton#primaryAction:hover {{background:#9df4c8;}} QPushButton#secondaryAction,QPushButton#backAction {{background:rgba(28,40,65,.7);border:1px solid rgba(170,195,235,.28);border-radius:8px;color:#dbe7fa;padding:9px 12px;font-size:12px;font-weight:750;}} QPushButton#secondaryAction:hover,QPushButton#backAction:hover {{background:rgba(61,83,126,.8);border-color:rgba(173,241,205,.55);}} QPushButton:disabled {{color:#7c8aa3;background:rgba(35,45,65,.55);border-color:rgba(130,147,175,.2);}}
             QPushButton:focus-visible,QLineEdit:focus-visible {{outline:2px solid {ACCENT};outline-offset:2px;}}
         """
 
