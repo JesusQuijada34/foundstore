@@ -29,3 +29,11 @@ El catálogo usa ahora fichas de 392 píxeles en una cuadrícula de dos columnas
 ## Banner unificado con la ficha
 
 Cada resultado de catálogo ahora usa el mismo orden de la ficha: portada 16:9, franja de identidad semitransparente dentro de la portada, icono de 50 píxeles, título, publisher, autor y estrellas verificadas. Una primera captura reveló que una regla de estilo del recurso remoto se propagaba a los rótulos internos; se restringió al objeto de imagen y la segunda captura confirma tipografía compacta y legible dentro del banner.
+
+## Preferencias locales
+
+Configuración expone controles para vista de inicio, tres densidades de cuadrícula, modo claro u oscuro y cinco colores de acento. La primera comprobación en modo claro confirmó la aplicación inmediata de tema y acento, pero se tomó antes de que la consulta pública terminara; la captura final de una cuadrícula personalizada debe esperar la carga del catálogo para ser válida.
+
+La captura final espera la terminación de iconos y portadas: confirma modo claro con acento océano, vista compacta y cinco columnas de fichas. La densidad mantiene portadas, iconos y estrellas sin desbordamiento; la información secundaria se reduce de forma deliberada en esta densidad y se conserva completa en los modos de tres y cuatro columnas.
+
+Los tres modos no son etiquetas decorativas: Compacto reduce márgenes, separación y sombra; Milimetrado usa espaciado intermedio y contornos más contenidos; MacOS Style conserva mayor respiración, separación y profundidad. La densidad elegida también determina la anchura de tarjeta disponible antes de resolver de forma adaptable las tres, cuatro o cinco columnas solicitadas.

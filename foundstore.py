@@ -10,6 +10,7 @@ from PyQt6.QtCore import QRect, QRectF, QSize, Qt, QThread, QTimer, QUrl, pyqtSi
 from PyQt6.QtGui import QColor, QDesktopServices, QIcon, QPainter, QPainterPath, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
+    QComboBox,
     QFrame,
     QGraphicsDropShadowEffect,
     QGridLayout,
@@ -32,6 +33,7 @@ from PyQt6.QtWidgets import (
 
 import fluthin_manager as manager
 import foundstore_api
+from foundstore_preferences import ACCENTS, FoundstorePreferences
 
 try:
     from leviathan_ui import WipeWindow
@@ -196,67 +198,80 @@ class WindowDot(QToolButton):
 class PackageBanner(QWidget):
     """Miniatura de la ficha: portada, icono y bloque de identidad dentro del mismo recurso."""
 
-    WIDTH = 360
-    HEIGHT = 202
-
-    def __init__(self, package: dict[str, Any]) -> None:
+    def __init__(self, package: dict[str, Any], width: int, view_mode: str, detail: bool = False) -> None:
         super().__init__()
-        self.setFixedSize(self.WIDTH, self.HEIGHT)
+        aspect = 0.50 if view_mode == "compact" else 0.54 if view_mode == "measured" else 9 / 16
+        height = max(96, round(width * aspect))
+        identity_height = 96 if detail else (72 if width >= 300 else 58 if width >= 220 else 50)
+        icon_size = 72 if detail else (50 if width >= 300 else 42 if width >= 220 else 34)
+        self.setFixedSize(width, height)
         visuals = package.get("visuals") if isinstance(package.get("visuals"), dict) else {}
         splash_url = str(visuals.get("splash") or visuals.get("portrait") or "")
-        self.cover = RemoteImage(splash_url, "Vista previa", QSize(self.WIDTH, self.HEIGHT), 10)
+        self.cover = RemoteImage(splash_url, "Vista previa", QSize(width, height), 10)
         self.cover.setParent(self)
         self.cover.move(0, 0)
 
         identity = QFrame(self.cover)
         identity.setObjectName("bannerIdentity")
-        identity.setGeometry(0, 128, self.WIDTH, 74)
+        identity.setGeometry(0, height - identity_height, width, identity_height)
         identity.setStyleSheet(
             "QFrame#bannerIdentity{background:rgba(10,18,33,.88);border:0;border-bottom-left-radius:10px;border-bottom-right-radius:10px;}"
         )
         layout = QHBoxLayout(identity)
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(9)
-        layout.addWidget(PackageGlyph(package, 50), 0, Qt.AlignmentFlag.AlignVCenter)
+        layout.addWidget(PackageGlyph(package, icon_size), 0, Qt.AlignmentFlag.AlignVCenter)
 
         copy = QVBoxLayout()
         copy.setSpacing(1)
         title = QLabel(str(package.get("name") or package.get("app") or "Paquete Fluthin"))
         title.setObjectName("bannerTitle")
+        title.setWordWrap(True)
         publisher = QLabel(f"{package.get('publisher') or 'Influent'} · {package.get('author') or 'Autor no informado'}")
         publisher.setObjectName("bannerMeta")
         stars = package.get("stars")
         stars_label = QLabel(f"★ {stars} estrellas GitHub" if isinstance(stars, int) else "★ Estrellas GitHub no disponibles")
         stars_label.setObjectName("bannerStars")
-        copy.addWidget(title)
-        copy.addWidget(publisher)
+        copy.addWidget(title, 1 if detail else 0)
+        if width >= 210 or detail:
+            copy.addWidget(publisher)
         copy.addWidget(stars_label)
         layout.addLayout(copy, 1)
 
 
 class PackageResult(QFrame):
-    def __init__(self, package: dict[str, Any], show_details: Callable[[dict[str, Any]], None], install: Callable[[dict[str, Any]], None]) -> None:
+    def __init__(self, package: dict[str, Any], show_details: Callable[[dict[str, Any]], None], install: Callable[[dict[str, Any]], None], width: int, view_mode: str, theme: str) -> None:
         super().__init__()
         self.setObjectName("packageResult")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFixedWidth(392)
+        self.setFixedWidth(width)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        self.setStyleSheet(
-            "QFrame#packageResult{background:rgba(20,30,50,.72);border:1px solid rgba(164,187,228,.21);border-radius:12px;}"
-            "QFrame#packageResult:hover{background:rgba(29,43,70,.92);border-color:rgba(119,233,178,.6);}"
-        )
-        soft_shadow(self, alpha=52, blur=21, y_offset=8)
+        density = {"compact": (8, 8, 14), "measured": (12, 10, 18), "macos": (16, 12, 21)}[view_mode]
+        if theme == "light":
+            self.setStyleSheet(
+                "QFrame#packageResult{background:#ffffff;border:1px solid #c7d2e2;border-radius:12px;}"
+                "QFrame#packageResult:hover{background:#f5f9ff;border-color:#4cae82;}"
+            )
+        else:
+            self.setStyleSheet(
+                "QFrame#packageResult{background:rgba(20,30,50,.72);border:1px solid rgba(164,187,228,.21);border-radius:12px;}"
+                "QFrame#packageResult:hover{background:rgba(29,43,70,.92);border-color:rgba(119,233,178,.6);}"
+            )
+        soft_shadow(self, alpha=34 if view_mode == "compact" else 46 if view_mode == "measured" else 58, blur=density[2], y_offset=6 if view_mode == "compact" else 8)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
+        layout.setContentsMargins(density[0], density[0], density[0], density[0])
+        layout.setSpacing(density[1])
 
-        layout.addWidget(PackageBanner(package))
+        layout.addWidget(PackageBanner(package, width - density[0] * 2, view_mode))
 
         footer = QHBoxLayout()
         description = QLabel(str(package.get("description") or "Paquete validado en el catálogo público de Foundstore."))
         description.setObjectName("resultDescription")
         description.setWordWrap(True)
-        footer.addWidget(description, 1)
+        if view_mode != "compact" or width >= 210:
+            footer.addWidget(description, 1)
+        else:
+            footer.addStretch(1)
         open_button = QPushButton("Abrir")
         open_button.setObjectName("secondaryAction")
         open_button.clicked.connect(lambda: show_details(package))
@@ -284,28 +299,8 @@ class DetailPanel(QFrame):
         back_button.clicked.connect(back)
         layout.addWidget(back_button, 0, Qt.AlignmentFlag.AlignLeft)
 
-        head = QHBoxLayout()
-        self.glyph_holder = QVBoxLayout()
-        head.addLayout(self.glyph_holder, 0)
-        copy = QVBoxLayout()
-        self.category = QLabel()
-        self.category.setObjectName("resultCategory")
-        self.title = QLabel()
-        self.title.setObjectName("detailTitle")
-        self.meta = QLabel()
-        self.meta.setObjectName("detailMeta")
-        self.meta.setWordWrap(True)
-        self.stars = QLabel()
-        self.stars.setObjectName("detailStars")
-        copy.addWidget(self.category)
-        copy.addWidget(self.title)
-        copy.addWidget(self.meta)
-        copy.addWidget(self.stars)
-        head.addLayout(copy, 1)
         self.preview_holder = QHBoxLayout()
         layout.addLayout(self.preview_holder)
-
-        layout.addLayout(head)
 
         self.description = QLabel()
         self.description.setObjectName("detailDescription")
@@ -332,29 +327,20 @@ class DetailPanel(QFrame):
         self.readme.setMaximumHeight(210)
         layout.addWidget(self.readme)
 
+    def apply_theme(self, theme: str) -> None:
+        if theme == "light":
+            self.setStyleSheet("QFrame#detailPanel{background:#ffffff;border:1px solid #c7d2e2;border-radius:14px;}")
+        else:
+            self.setStyleSheet("QFrame#detailPanel{background:rgba(17,26,44,.92);border:1px solid rgba(167,190,230,.22);border-radius:14px;}")
+
     def set_package(self, package: dict[str, Any]) -> None:
         self.package = package
-        while self.glyph_holder.count():
-            item = self.glyph_holder.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        self.glyph_holder.addWidget(PackageGlyph(package, 94))
         while self.preview_holder.count():
             item = self.preview_holder.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
-        visuals = package.get("visuals") if isinstance(package.get("visuals"), dict) else {}
-        splash_url = str(visuals.get("splash") or visuals.get("portrait") or "")
-        self.preview_holder.addWidget(RemoteImage(splash_url, "Vista previa", QSize(560, 315), 12))
+        self.preview_holder.addWidget(PackageBanner(package, 560, "macos", detail=True))
         self.preview_holder.addStretch(1)
-        self.category.setText(str(package.get("category") or package.get("platform") or "Fluthin").upper())
-        self.title.setText(str(package.get("name") or package.get("app") or "Paquete Fluthin"))
-        self.meta.setText(
-            f"{package.get('publisher') or 'Influent'} · {package.get('author') or 'Autor no informado'}\n"
-            f"Versión {package.get('version') or 'No informada'} · {package_reference(package)}"
-        )
-        stars = package.get("stars")
-        self.stars.setText(f"★ {stars} estrellas GitHub verificadas" if isinstance(stars, int) else "★ Estrellas GitHub no disponibles")
         self.description.setText(str(package.get("description") or "Paquete Fluthin validado en el catálogo público de Foundstore."))
         self.readme.setPlainText(str(package.get("readme") or "Cargando README desde la ficha pública de Foundstore…")[:50_000])
 
@@ -369,9 +355,11 @@ class DetailPanel(QFrame):
 class StoreWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
+        self.preferences = FoundstorePreferences.load()
         self.packages: list[dict[str, Any]] = []
         self.catalog_worker: CatalogWorker | None = None
         self.detail_worker: DetailWorker | None = None
+        self._grid_signature: tuple[int, int, str] | None = None
         self.setWindowTitle("Foundstore")
         self.resize(1220, 790)
         self.setMinimumSize(880, 620)
@@ -393,6 +381,7 @@ class StoreWindow(QMainWindow):
     def _build_ui(self) -> None:
         root = QWidget()
         root.setObjectName("root")
+        self.root = root
         root.setStyleSheet(self._stylesheet())
         self.setCentralWidget(root)
         outer = QVBoxLayout(root)
@@ -407,6 +396,7 @@ class StoreWindow(QMainWindow):
         self.pages.addWidget(self._library_page())
         self.pages.addWidget(self._settings_page())
         self.detail = DetailPanel(lambda: self.pages.setCurrentIndex(0), self.install_package)
+        self.detail.apply_theme(self.preferences.theme)
         self.detail_scroll = QScrollArea()
         self.detail_scroll.setObjectName("detailScroll")
         self.detail_scroll.setWidgetResizable(True)
@@ -548,12 +538,70 @@ class StoreWindow(QMainWindow):
         copy.setWordWrap(True)
         layout.addWidget(title)
         layout.addWidget(copy)
+
+        appearance = QLabel("Personalización")
+        appearance.setObjectName("settingsSection")
+        layout.addWidget(appearance)
+        self.view_control = self._preference_control(
+            "Vista de inicio",
+            [("Compacto", "compact"), ("Milimetrado", "measured"), ("MacOS Style", "macos")],
+            self.preferences.view_mode,
+        )
+        self.grid_control = self._preference_control(
+            "Fichas horizontales",
+            [("3 columnas", 3), ("4 columnas", 4), ("5 columnas", 5)],
+            self.preferences.grid_columns,
+        )
+        self.theme_control = self._preference_control(
+            "Modo de la aplicación",
+            [("Oscuro", "dark"), ("Claro", "light")],
+            self.preferences.theme,
+        )
+        self.accent_control = self._preference_control(
+            "Color de interfaz",
+            [("Verdypor", "verdypor"), ("Océano", "oceano"), ("Violeta", "violeta"), ("Coral", "coral"), ("Oro", "oro")],
+            self.preferences.accent,
+        )
+        for control in (self.view_control, self.grid_control, self.theme_control, self.accent_control):
+            layout.addWidget(control)
+            control.findChild(QComboBox).currentIndexChanged.connect(self.apply_preferences)
         open_web = QPushButton("Abrir Foundstore web")
         open_web.setObjectName("secondaryAction")
         open_web.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://imfoundstore.onrender.com")))
         layout.addWidget(open_web, 0, Qt.AlignmentFlag.AlignLeft)
         layout.addStretch(1)
         return page
+
+    def _preference_control(self, title: str, options: list[tuple[str, Any]], selected: Any) -> QFrame:
+        frame = QFrame()
+        frame.setObjectName("preferenceControl")
+        row = QHBoxLayout(frame)
+        row.setContentsMargins(14, 10, 14, 10)
+        label = QLabel(title)
+        label.setObjectName("preferenceLabel")
+        combo = QComboBox()
+        combo.setObjectName("preferenceCombo")
+        for text, value in options:
+            combo.addItem(text, value)
+        combo.setCurrentIndex(max(0, combo.findData(selected)))
+        row.addWidget(label, 1)
+        row.addWidget(combo)
+        return frame
+
+    def apply_preferences(self) -> None:
+        self.preferences = FoundstorePreferences(
+            theme=str(self.theme_control.findChild(QComboBox).currentData()),
+            accent=str(self.accent_control.findChild(QComboBox).currentData()),
+            view_mode=str(self.view_control.findChild(QComboBox).currentData()),
+            grid_columns=int(self.grid_control.findChild(QComboBox).currentData()),
+        )
+        self.preferences.save()
+        self.root.setStyleSheet(self._stylesheet())
+        self.detail.apply_theme(self.preferences.theme)
+        self._grid_signature = None
+        self.filter_packages(self.search.text())
+        if self.detail.package:
+            self.detail.set_package(self.detail.package)
 
     def _toggle_maximized(self) -> None:
         self.showNormal() if self.isMaximized() else self.showMaximized()
@@ -614,10 +662,23 @@ class StoreWindow(QMainWindow):
         if not visible:
             self._add_empty_row("No hay resultados", "Prueba otra búsqueda o actualiza la API pública.")
             return
-        columns = 2 if self.catalog_scroll.viewport().width() >= 840 else 1
+        available = max(1, self.catalog_scroll.viewport().width() - 2)
+        minimum = {"compact": 150, "measured": 170, "macos": 190}[self.preferences.view_mode]
+        columns = min(self.preferences.grid_columns, max(1, available // minimum))
+        card_width = max(1, (available - self.catalog_grid.horizontalSpacing() * (columns - 1)) // columns)
+        spacing = {"compact": 8, "measured": 12, "macos": 16}[self.preferences.view_mode]
+        self.catalog_grid.setHorizontalSpacing(spacing)
+        self.catalog_grid.setVerticalSpacing(spacing)
+        card_width = max(1, (available - spacing * (columns - 1)) // columns)
+        self._grid_signature = (card_width, columns, self.preferences.view_mode)
         for index, package in enumerate(visible):
-            widget = PackageResult(package, self.show_detail, self.install_package)
+            widget = PackageResult(package, self.show_detail, self.install_package, card_width, self.preferences.view_mode, self.preferences.theme)
             self.catalog_grid.addWidget(widget, index // columns, index % columns)
+
+    def resizeEvent(self, event: Any) -> None:
+        super().resizeEvent(event)
+        if self.packages:
+            QTimer.singleShot(0, lambda: self.filter_packages(self.search.text()))
 
     def _clear_catalog_grid(self) -> None:
         while self.catalog_grid.count():
@@ -693,20 +754,46 @@ class StoreWindow(QMainWindow):
         except Exception as error:
             QMessageBox.warning(self, "No se pudo instalar", str(error))
 
-    @staticmethod
-    def _stylesheet() -> str:
+    def _stylesheet(self) -> str:
+        accent = self.preferences.accent_color
+        if self.preferences.theme == "light":
+            root_background = "#eef3f8"
+            surface = "#ffffff"
+            panel = "#f7faff"
+            border = "#c8d3e0"
+            ink = "#172338"
+            muted = "#5a6880"
+            heading = "#162238"
+            button = "#eef3f9"
+            button_hover = "#dde8f6"
+            note = "#e5f6ee"
+            note_ink = "#256448"
+            code_background = "#f1f5f9"
+        else:
+            root_background = "#101c31"
+            surface = "rgba(17,26,44,.92)"
+            panel = "rgba(12,20,34,.74)"
+            border = "rgba(158,183,226,.22)"
+            ink = INK
+            muted = MUTED
+            heading = "#f3f7ff"
+            button = "rgba(28,40,65,.7)"
+            button_hover = "rgba(61,83,126,.8)"
+            note = "rgba(25,91,70,.24)"
+            note_ink = "#b8f2d3"
+            code_background = "rgba(7,13,24,.62)"
         return f"""
-            QWidget#root {{background:linear-gradient(135deg,#101c31 0%,#11192a 55%,#0a101c 100%);color:{INK};font-family:Inter,Segoe UI,Arial,sans-serif;}}
-            QLabel#windowTitle {{font-size:13px;font-weight:750;color:#dbe6fb;}} QLabel#windowStatus {{font-size:11px;font-weight:700;color:{ACCENT};}}
-            QFrame#sidebar {{background:rgba(12,20,34,.74);border:1px solid rgba(158,183,226,.16);border-radius:14px;}} QLabel#brandTitle {{font-size:19px;font-weight:850;letter-spacing:-.04em;color:#f0f5ff;}} QLabel#sidebarCaption {{color:{MUTED};font-size:12px;line-height:1.45;}} QLabel#sidebarFooter {{color:#87a1c5;font-size:11px;line-height:1.5;}}
-            QPushButton#navButton {{background:transparent;border:1px solid transparent;border-radius:8px;color:#b7c6df;padding:10px 12px;text-align:left;font-weight:700;}} QPushButton#navButton:hover,QPushButton#navButton:checked {{background:rgba(102,133,193,.25);border-color:rgba(183,207,250,.15);color:#f5f8ff;}}
-            QLabel#eyebrow,QLabel#resultCategory {{color:{ACCENT};font-size:10px;font-weight:850;letter-spacing:.12em;}} QLabel#catalogHeadline {{color:#f3f7ff;font-size:31px;font-weight:850;letter-spacing:-.05em;line-height:1.02;}} QLabel#catalogStatus {{background:rgba(21,40,61,.75);border:1px solid rgba(158,184,225,.22);border-radius:8px;color:#b9cbe8;padding:8px 10px;font-size:11px;font-weight:700;}}
-            QLineEdit#search {{background:rgba(9,15,27,.66);border:1px solid rgba(165,190,232,.28);border-radius:8px;color:{INK};padding:12px 13px;font-size:13px;}} QLineEdit#search:focus {{border:2px solid {ACCENT};padding:11px 12px;}}
-            QListWidget#catalogList,QScrollArea#detailScroll,QScrollArea#catalogScroll {{background:transparent;outline:none;}} QListWidget#catalogList::item {{background:transparent;border:0;}} QWidget#catalogGridHost {{background:transparent;}} QFrame#emptyState {{background:rgba(17,27,46,.76);border:1px dashed rgba(165,190,232,.35);border-radius:10px;padding:14px;min-width:420px;}} QLabel#emptyTitle {{color:#f1f6ff;font-size:16px;font-weight:800;}}
-            QLabel#resultTitle {{font-size:17px;font-weight:800;color:#f5f8ff;}} QLabel#resultDescription,QLabel#pageCopy {{color:{MUTED};font-size:12px;line-height:1.42;}} QLabel#resultMeta {{color:#bfd0e9;font-size:11px;}} QLabel#resultStars,QLabel#detailStars,QLabel#bannerStars {{color:{ACCENT};font-size:11px;font-weight:800;}} QLabel#bannerTitle {{color:#f4f8ff;font-size:13px;font-weight:850;}} QLabel#bannerMeta {{color:#bdcbe1;font-size:10px;}}
-            QFrame#detailPanel {{min-width:0;}} QLabel#detailTitle,QLabel#pageTitle {{color:#f3f7ff;font-size:30px;font-weight:850;letter-spacing:-.045em;}} QLabel#detailMeta {{color:#b7c7e0;font-size:13px;line-height:1.45;}} QLabel#detailDescription {{color:#d4dff1;font-size:15px;line-height:1.55;}} QLabel#readmeLabel {{color:#dce8fb;font-size:13px;font-weight:850;}} QPlainTextEdit#readme {{background:rgba(7,13,24,.62);border:1px solid rgba(155,180,223,.24);border-radius:10px;color:#c9d6ea;padding:10px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;}} QLabel#infoNote {{background:rgba(25,91,70,.24);border:1px solid rgba(116,237,178,.24);border-radius:10px;color:#b8f2d3;padding:13px;font-size:12px;line-height:1.48;}}
-            QPushButton#primaryAction {{background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #77e9b2,stop:1 #2eb477);border:1px solid rgba(224,255,240,.55);border-radius:8px;color:#082218;padding:9px 13px;font-size:12px;font-weight:850;}} QPushButton#primaryAction:hover {{background:#9df4c8;}} QPushButton#secondaryAction,QPushButton#backAction {{background:rgba(28,40,65,.7);border:1px solid rgba(170,195,235,.28);border-radius:8px;color:#dbe7fa;padding:9px 12px;font-size:12px;font-weight:750;}} QPushButton#secondaryAction:hover,QPushButton#backAction:hover {{background:rgba(61,83,126,.8);border-color:rgba(173,241,205,.55);}} QPushButton:disabled {{color:#7c8aa3;background:rgba(35,45,65,.55);border-color:rgba(130,147,175,.2);}}
-            QPushButton:focus-visible,QLineEdit:focus-visible {{outline:2px solid {ACCENT};outline-offset:2px;}}
+            QWidget#root {{background:{root_background};color:{ink};font-family:Inter,Segoe UI,Arial,sans-serif;}}
+            QLabel#windowTitle {{font-size:13px;font-weight:750;color:{heading};}} QLabel#windowStatus {{font-size:11px;font-weight:700;color:{accent};}}
+            QFrame#sidebar {{background:{panel};border:1px solid {border};border-radius:14px;}} QLabel#brandTitle {{font-size:19px;font-weight:850;letter-spacing:-.04em;color:{heading};}} QLabel#sidebarCaption,QLabel#sidebarFooter {{color:{muted};font-size:12px;line-height:1.45;}}
+            QPushButton#navButton {{background:transparent;border:1px solid transparent;border-radius:8px;color:{muted};padding:10px 12px;text-align:left;font-weight:700;}} QPushButton#navButton:hover,QPushButton#navButton:checked {{background:{button_hover};border-color:{border};color:{heading};}}
+            QLabel#eyebrow,QLabel#resultCategory {{color:{accent};font-size:10px;font-weight:850;letter-spacing:.12em;}} QLabel#catalogHeadline {{color:{heading};font-size:31px;font-weight:850;letter-spacing:-.05em;line-height:1.02;}} QLabel#catalogStatus {{background:{button};border:1px solid {border};border-radius:8px;color:{muted};padding:8px 10px;font-size:11px;font-weight:700;}}
+            QLineEdit#search,QComboBox#preferenceCombo {{background:{surface};border:1px solid {border};border-radius:8px;color:{ink};padding:10px 12px;font-size:13px;}} QLineEdit#search:focus,QComboBox#preferenceCombo:focus {{border:2px solid {accent};padding:9px 11px;}}
+            QListWidget#catalogList,QScrollArea#detailScroll,QScrollArea#catalogScroll {{background:transparent;outline:none;}} QListWidget#catalogList::item {{background:transparent;border:0;}} QWidget#catalogGridHost {{background:transparent;}} QFrame#emptyState,QFrame#preferenceControl {{background:{surface};border:1px solid {border};border-radius:10px;padding:10px;min-width:420px;}} QLabel#emptyTitle,QLabel#preferenceLabel,QLabel#settingsSection {{color:{heading};font-size:16px;font-weight:800;}}
+            QLabel#resultDescription,QLabel#pageCopy {{color:{muted};font-size:12px;line-height:1.42;}} QLabel#resultStars,QLabel#detailStars,QLabel#bannerStars {{color:{accent};font-size:11px;font-weight:800;}} QLabel#bannerTitle {{color:#f4f8ff;font-size:13px;font-weight:850;}} QLabel#bannerMeta {{color:#bdcbe1;font-size:10px;}}
+            QFrame#detailPanel {{min-width:0;}} QLabel#detailTitle,QLabel#pageTitle {{color:{heading};font-size:30px;font-weight:850;letter-spacing:-.045em;}} QLabel#detailDescription {{color:{muted};font-size:15px;line-height:1.55;}} QLabel#readmeLabel {{color:{heading};font-size:13px;font-weight:850;}} QPlainTextEdit#readme {{background:{code_background};border:1px solid {border};border-radius:10px;color:{ink};padding:10px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;}} QLabel#infoNote {{background:{note};border:1px solid {accent};border-radius:10px;color:{note_ink};padding:13px;font-size:12px;line-height:1.48;}}
+            QPushButton#primaryAction {{background:{accent};border:1px solid {accent};border-radius:8px;color:#082218;padding:9px 13px;font-size:12px;font-weight:850;}} QPushButton#primaryAction:hover {{background:{accent};border:2px solid {heading};padding:8px 12px;}} QPushButton#secondaryAction,QPushButton#backAction {{background:{button};border:1px solid {border};border-radius:8px;color:{heading};padding:9px 12px;font-size:12px;font-weight:750;}} QPushButton#secondaryAction:hover,QPushButton#backAction:hover {{background:{button_hover};border-color:{accent};}} QPushButton:disabled {{color:{muted};background:{button};border-color:{border};}}
+            QPushButton:focus-visible,QLineEdit:focus-visible,QComboBox:focus-visible {{outline:2px solid {accent};outline-offset:2px;}}
         """
 
 

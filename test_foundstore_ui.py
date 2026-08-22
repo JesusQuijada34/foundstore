@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtWidgets import QApplication
 
-from foundstore import DetailPanel, package_reference
+from foundstore import DetailPanel, PackageBanner, package_reference
 
 
 class FoundstoreUiTests(unittest.TestCase):
@@ -24,8 +24,7 @@ class FoundstoreUiTests(unittest.TestCase):
         panel = DetailPanel(lambda: None, lambda _: None)
         package = {"author": "JesusQuijada34", "app": "camera", "name": "Camera Selfie", "publisher": "Influent", "version": "v1.0", "platform": "AlphaCube", "description": "Prueba de catálogo"}
         panel.set_package(package)
-        self.assertEqual(panel.title.text(), "Camera Selfie")
-        self.assertIn("JesusQuijada34/camera", panel.meta.text())
+        self.assertIsInstance(panel.preview_holder.itemAt(0).widget(), PackageBanner)
         self.assertEqual(panel.description.text(), "Prueba de catálogo")
 
 
