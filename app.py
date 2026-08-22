@@ -34,6 +34,7 @@ DEFAULT_LONG_POLL_SECONDS = 25
 MAX_LONG_POLL_SECONDS = 25
 PACKAGE_METADATA_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 CATALOG_SNAPSHOT_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+GITHUB_STAR_CACHE: dict[str, tuple[float, int | None]] = {}
 PAIRING_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 LICENSE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
@@ -899,6 +900,9 @@ def catalog_snapshot(catalog_owner: str = CATALOG_OWNER, catalog_repository: str
             return None, audit
         metadata = audit["metadata"]
         asset_base = f"https://raw.githubusercontent.com/{author}/{slug}/{branch}/assets"
+        stars = repository.get("stars")
+        if not isinstance(stars, int):
+            stars = github_public_star_count(author, slug)
         package = {
             "slug": slug,
             "name": title_for(slug),
@@ -908,7 +912,7 @@ def catalog_snapshot(catalog_owner: str = CATALOG_OWNER, catalog_repository: str
             "tags": topics,
             "repositoryUrl": repository.get("html_url", f"https://github.com/{catalog_owner}/{slug}"),
             "updatedAt": repository.get("updatedAt", repository.get("updated_at")),
-            "stars": int(repository["stars"]) if isinstance(repository.get("stars"), int) else None,
+            "stars": stars if isinstance(stars, int) else None,
             "branch": branch,
             "visuals": {
                 "icon": f"{asset_base}/product_logo.png",
@@ -956,6 +960,30 @@ def github_public_profile(github_login: str) -> dict[str, str]:
     except requests.RequestException:
         pass
     return {"githubLogin": github_login, "githubName": github_login, "avatarUrl": f"https://github.com/{quote(github_login)}.png?size=176", "githubUrl": f"https://github.com/{github_login}"}
+
+
+def github_public_star_count(author: str, slug: str) -> int | None:
+    """Read only GitHub's visible star label when the repository API inventory is unavailable."""
+    cache_key = f"{author.lower()}/{slug.lower()}"
+    cached = GITHUB_STAR_CACHE.get(cache_key)
+    if cached and cached[0] > time.time():
+        return cached[1]
+    count: int | None = None
+    if valid_github_login(author) and valid_repository_name(slug):
+        try:
+            response = requests.get(
+                f"https://github.com/{quote(author)}/{quote(slug)}",
+                headers={"User-Agent": "Foundstore-Flask-Render"},
+                timeout=8,
+            )
+            if response.ok:
+                matched = re.search(r'aria-label="([0-9][0-9,]*) users? starred this repository"', response.text)
+                if matched:
+                    count = int(matched.group(1).replace(",", ""))
+        except (requests.RequestException, ValueError):
+            pass
+    GITHUB_STAR_CACHE[cache_key] = (time.time() + 300, count)
+    return count
 
 
 def github_public_repositories(github_login: str) -> list[dict[str, Any]]:
@@ -1008,7 +1036,7 @@ def github_public_repositories(github_login: str) -> list[dict[str, Any]]:
         page_names = [name for name in names if valid_repository_name(name) and name.lower() not in seen]
         for name in page_names:
             seen.add(name.lower())
-            repositories.append({"name": name, "url": f"https://github.com/{github_login}/{name}", "description": "", "updatedAt": "", "defaultBranch": "main", "topics": [], "stars": 0})
+            repositories.append({"name": name, "url": f"https://github.com/{github_login}/{name}", "description": "", "updatedAt": "", "defaultBranch": "main", "topics": [], "stars": None})
         if not page_names:
             break
     return repositories

@@ -1,5 +1,5 @@
-const SHELL_CACHE = "foundstore-shell-v1";
-const DATA_CACHE = "foundstore-data-v1";
+const SHELL_CACHE = "foundstore-shell-v2";
+const DATA_CACHE = "foundstore-data-v2";
 const SHELL = ["/", "/manifest.webmanifest", "/favicon.ico"];
 
 self.addEventListener("install", event => {
@@ -8,7 +8,7 @@ self.addEventListener("install", event => {
 });
 
 self.addEventListener("activate", event => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith("foundstore-") && key !== SHELL_CACHE && key !== DATA_CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim()));
 });
 
 self.addEventListener("fetch", event => {
@@ -28,9 +28,13 @@ self.addEventListener("fetch", event => {
     return;
   }
   if (url.pathname === "/" || url.pathname === "/manifest.webmanifest" || url.pathname === "/favicon.ico") {
-    event.respondWith(caches.match(request).then(cached => cached || fetch(request).then(response => {
-      if (response.ok) caches.open(SHELL_CACHE).then(cache => cache.put(request, response.clone()));
-      return response;
-    })));
+    event.respondWith(caches.open(SHELL_CACHE).then(async cache => {
+      const cached = await cache.match(request);
+      const network = fetch(request).then(response => {
+        if (response.ok) cache.put(request, response.clone());
+        return response;
+      });
+      return cached || network;
+    }));
   }
 });

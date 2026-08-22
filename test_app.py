@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from app import catalog_references, create_app, github_public_repositories, raw_github_text
+from app import catalog_references, create_app, github_public_repositories, github_public_star_count, raw_github_text
 
 
 class FlaskRenderAppTests(unittest.TestCase):
@@ -112,6 +112,16 @@ class FlaskRenderAppTests(unittest.TestCase):
         with patch("app.requests.get", side_effect=fake_get):
             repositories = github_public_repositories("JesusQuijada34")
         self.assertEqual([item["name"] for item in repositories], ["camera", "matchmeter"])
+        self.assertEqual(repositories[0]["stars"], None)
+
+    def test_public_star_count_reads_the_visible_github_label_without_defaulting_to_zero(self) -> None:
+        class RepositoryPage:
+            ok = True
+            text = '<span aria-label="2 users starred this repository"></span>'
+
+        with patch("app.requests.get", return_value=RepositoryPage()):
+            stars = github_public_star_count("JesusQuijada34", "camera")
+        self.assertEqual(stars, 2)
 
     def test_pwa_manifest_and_service_worker_are_available_from_root_scope(self) -> None:
         manifest = self.client.get("/manifest.webmanifest")
@@ -126,7 +136,7 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(worker.status_code, 200)
         self.assertEqual(worker.headers["Service-Worker-Allowed"], "/")
         self.assertEqual(components.status_code, 200)
-        self.assertIn("foundstore-data-v1", worker.get_data(as_text=True))
+        self.assertIn("foundstore-data-v2", worker.get_data(as_text=True))
         self.assertIn("followedDevelopers", catalog)
         self.assertIn("/api/v1/me/following", catalog)
         self.assertIn("foundstore-components.js", catalog)
