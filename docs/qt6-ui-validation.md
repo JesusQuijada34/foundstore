@@ -41,3 +41,5 @@ Los tres modos no son etiquetas decorativas: Compacto reduce márgenes, separaci
 ## Ficha lateral y acciones de paquete
 
 La ficha final reparte identidad, aviso y acciones de gestión a la izquierda, con el README desplazable en un panel separado a la derecha. El README mantiene selección de texto y el botón de copia traslada la selección al portapapeles. Las acciones visibles dependen del estado local comprobado: instalación disponible para paquetes ausentes; actualizar y desinstalar para paquetes instalados; y cancelar con barra indeterminada mientras una operación cooperativa está activa. La captura confirma contraste legible para el estado y la disposición lateral.
+
+La comprobación de progreso muestra que el estado `Descargando y validando el release…`, la barra indeterminada y Cancelar sustituyen las acciones de mutación sin desplazar ni recortar el banner, el aviso o el README. Esta vista representa el estado visual de una operación activa; no se ejecutó ni se declaró completada ninguna instalación durante la captura.
