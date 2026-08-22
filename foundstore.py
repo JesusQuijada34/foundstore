@@ -328,12 +328,19 @@ class PackageResult(QFrame):
         layout.setContentsMargins(density[0], density[0], density[0], density[0])
         layout.setSpacing(density[1])
 
-        layout.addWidget(PackageBanner(package, width - density[0] * 2, view_mode))
+        banner = PackageBanner(package, width - density[0] * 2, view_mode)
+        layout.addWidget(banner)
 
-        footer = QHBoxLayout()
+        footer_holder = QWidget()
+        footer_height = 42 if view_mode == "compact" else 48
+        footer_holder.setFixedHeight(footer_height)
+        footer = QHBoxLayout(footer_holder)
+        footer.setContentsMargins(0, 0, 0, 0)
+        footer.setSpacing(8)
         description = QLabel(str(package.get("description") or "Paquete validado en el catálogo público de Foundstore."))
         description.setObjectName("resultDescription")
         description.setWordWrap(True)
+        description.setMaximumHeight(32)
         if view_mode != "compact" or width >= 210:
             footer.addWidget(description, 1)
         else:
@@ -346,7 +353,8 @@ class PackageResult(QFrame):
         install_button.setObjectName("primaryAction")
         install_button.clicked.connect(lambda: install(package))
         footer.addWidget(install_button, 0, Qt.AlignmentFlag.AlignBottom)
-        layout.addLayout(footer)
+        layout.addWidget(footer_holder)
+        self.setFixedHeight(density[0] * 2 + banner.height() + density[1] + footer_height)
 
 
 class DetailPanel(QFrame):
@@ -951,13 +959,18 @@ class StoreWindow(QMainWindow):
 
     def refresh_library(self) -> None:
         self.library_list.clear()
+        text_color = QColor("#e4ecfa" if self.preferences.theme == "dark" else "#172338")
         installed = manager.installed()
         if not installed:
-            self.library_list.addItem(QListWidgetItem("Aún no hay aplicaciones instaladas desde Foundstore."))
+            empty_item = QListWidgetItem("Aún no hay aplicaciones instaladas desde Foundstore.")
+            empty_item.setForeground(text_color)
+            self.library_list.addItem(empty_item)
             return
         for record in installed:
             metadata = record.get("metadata", {})
-            self.library_list.addItem(QListWidgetItem(f"{metadata.get('name', metadata.get('app', 'Fluthin'))}\n{metadata.get('version', '')}"))
+            item = QListWidgetItem(f"{metadata.get('name', metadata.get('app', 'Fluthin'))}\n{metadata.get('version', '')}")
+            item.setForeground(text_color)
+            self.library_list.addItem(item)
 
     def install_package(self, package: dict[str, Any]) -> None:
         self.request_package_action("install", package)

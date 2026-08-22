@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtWidgets import QApplication
 
-from foundstore import DetailPanel, PackageBanner, grid_metrics, package_reference
+from foundstore import DetailPanel, PackageBanner, PackageResult, grid_metrics, package_reference
 
 
 class FoundstoreUiTests(unittest.TestCase):
@@ -34,6 +34,13 @@ class FoundstoreUiTests(unittest.TestCase):
         self.assertEqual(columns, 5)
         self.assertGreaterEqual(width, 150)
         self.assertEqual(spacing, 8)
+
+    def test_package_card_reserves_banner_and_footer_geometry(self) -> None:
+        package = {"author": "JesusQuijada34", "app": "camera", "name": "Camera", "description": "Una descripción breve."}
+        card = PackageResult(package, lambda _: None, lambda _: None, 300, "macos", "dark")
+        banner = card.findChild(PackageBanner)
+        self.assertIsNotNone(banner)
+        self.assertGreaterEqual(card.height(), banner.height() + 80)
 
     def test_detail_action_visibility_tracks_installation_state(self) -> None:
         panel = DetailPanel(lambda: None, lambda *_: None)

@@ -47,3 +47,13 @@ La comprobación de progreso muestra que el estado `Descargando y validando el r
 ## README Markdown
 
 El panel lateral sustituye el editor de texto plano por un visor Markdown de Qt. La validación con encabezado, lista, cita y bloque de consola confirma la jerarquía visual y la selección para copiar. Los enlaces del README se limitan a `https` y `http`; los demás esquemas se bloquean. La captura integrada aplica el estilo raíz completo de Foundstore y confirma contraste suficiente bajo el tema oscuro, sin desplazar las acciones ni la cabecera de identidad.
+
+## Recorrido de pantallas
+
+La captura de ficha usa datos reales de Camera Selfie: conserva portada e icono, acciones separadas y README Markdown desplazable con encabezados y código monoespaciado. La primera captura del catálogo cargó las nueve entradas verificadas, pero se tomó mientras algunas imágenes remotas aún conservaban la reserva visual de carga; antes de usarla como evidencia final se debe esperar a que terminen los trabajadores de imagen y comprobar que los metadatos no se solapen sobre esa reserva.
+
+La vista de progreso mantiene el banner y el README inmóviles mientras muestra el mensaje de validación, la barra indeterminada y Cancelar. La biblioteca vacía conserva la navegación, pero el texto de ausencia de aplicaciones necesita un color explícito de mayor contraste en tema oscuro antes de considerarse una captura final de entrega.
+
+La pantalla de configuración expone Vista de inicio, Fichas horizontales, modo oscuro o claro y color de interfaz con los valores persistidos. Tras fijar la altura de las tarjetas, la nueva captura de catálogo completa las portadas e iconos remotos y mantiene el banner, metadatos, descripción y acciones en regiones separadas; ya no hay superposición durante la reserva de carga.
+
+La biblioteca vacía ahora usa una tinta explícita de alto contraste según el tema activo. La captura final confirma que el mensaje se distingue de la superficie oscura sin cambiar la navegación ni ejecutar instalaciones.
