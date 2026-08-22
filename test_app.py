@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from app import catalog_references, create_app, github_public_repositories, github_public_star_count, raw_github_text
+from app import catalog_references, create_app, github_public_repositories, github_public_star_count, package_revision, raw_github_text
 
 
 class FlaskRenderAppTests(unittest.TestCase):
@@ -123,6 +123,10 @@ class FlaskRenderAppTests(unittest.TestCase):
             stars = github_public_star_count("JesusQuijada34", "camera")
         self.assertEqual(stars, 2)
 
+    def test_catalog_revision_changes_when_verified_github_stars_change(self) -> None:
+        package = {"author": "JesusQuijada34", "slug": "camera", "branch": "main", "updatedAt": "2026-08-22", "stars": 2}
+        self.assertNotEqual(package_revision(package), package_revision({**package, "stars": 3}))
+
     def test_pwa_manifest_and_service_worker_are_available_from_root_scope(self) -> None:
         manifest = self.client.get("/manifest.webmanifest")
         worker = self.client.get("/service-worker.js")
@@ -141,6 +145,7 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(mark.status_code, 200)
         self.assertIn("foundstore-mark.svg", login)
         self.assertIn("foundstore-data-v2", worker.get_data(as_text=True))
+        self.assertIn('request.cache === "no-store"', worker.get_data(as_text=True))
         self.assertIn("followedDevelopers", catalog)
         self.assertIn("/api/v1/me/following", catalog)
         self.assertIn("foundstore-components.js", catalog)

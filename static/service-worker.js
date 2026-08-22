@@ -16,6 +16,7 @@ self.addEventListener("fetch", event => {
   if (request.method !== "GET") return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+  if (request.cache === "no-store") return;
   if (url.pathname === "/api/v1/catalog") {
     event.respondWith(caches.open(DATA_CACHE).then(async cache => {
       const cached = await cache.match(request);

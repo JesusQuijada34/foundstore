@@ -120,7 +120,7 @@ def catalog_references(source_text: str, default_owner: str) -> list[tuple[str, 
 
 
 def package_revision(package: dict[str, Any]) -> str:
-    stable = {key: package.get(key) for key in ("author", "slug", "branch", "updatedAt", "description", "repositoryUrl")}
+    stable = {key: package.get(key) for key in ("author", "slug", "branch", "updatedAt", "description", "repositoryUrl", "stars")}
     return hashlib.sha256(json.dumps(stable, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()[:20]
 
 
