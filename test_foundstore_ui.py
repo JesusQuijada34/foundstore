@@ -47,6 +47,15 @@ class FoundstoreUiTests(unittest.TestCase):
         self.assertFalse(panel.cancel_button.isHidden())
         self.assertFalse(panel.progress.isHidden())
 
+    def test_detail_copies_selected_readme_text(self) -> None:
+        panel = DetailPanel(lambda: None, lambda *_: None)
+        panel.readme.setPlainText("flut install JesusQuijada34/camera")
+        cursor = panel.readme.textCursor()
+        cursor.select(cursor.SelectionType.Document)
+        panel.readme.setTextCursor(cursor)
+        panel.copy_selected_code()
+        self.assertEqual(QApplication.clipboard().text(), "flut install JesusQuijada34/camera")
+
 
 if __name__ == "__main__":
     unittest.main()
