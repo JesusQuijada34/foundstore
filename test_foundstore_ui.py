@@ -35,6 +35,18 @@ class FoundstoreUiTests(unittest.TestCase):
         self.assertGreaterEqual(width, 150)
         self.assertEqual(spacing, 8)
 
+    def test_detail_action_visibility_tracks_installation_state(self) -> None:
+        panel = DetailPanel(lambda: None, lambda *_: None)
+        panel.set_action_state(False, False)
+        self.assertFalse(panel.install_button.isHidden())
+        self.assertTrue(panel.update_button.isHidden())
+        panel.set_action_state(True, True)
+        self.assertFalse(panel.update_button.isHidden())
+        self.assertFalse(panel.uninstall_button.isHidden())
+        panel.set_action_state(True, True, busy=True, status="Actualizando…")
+        self.assertFalse(panel.cancel_button.isHidden())
+        self.assertFalse(panel.progress.isHidden())
+
 
 if __name__ == "__main__":
     unittest.main()

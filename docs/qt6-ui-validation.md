@@ -37,3 +37,7 @@ Configuración expone controles para vista de inicio, tres densidades de cuadrí
 La captura final espera la terminación de iconos y portadas: confirma modo claro con acento océano, vista compacta y cinco columnas de fichas. La densidad mantiene portadas, iconos y estrellas sin desbordamiento; la información secundaria se reduce de forma deliberada en esta densidad y se conserva completa en los modos de tres y cuatro columnas.
 
 Los tres modos no son etiquetas decorativas: Compacto reduce márgenes, separación y sombra; Milimetrado usa espaciado intermedio y contornos más contenidos; MacOS Style conserva mayor respiración, separación y profundidad. La densidad elegida también determina la anchura de tarjeta disponible antes de resolver de forma adaptable las tres, cuatro o cinco columnas solicitadas.
+
+## Ficha lateral y acciones de paquete
+
+La ficha final reparte identidad, aviso y acciones de gestión a la izquierda, con el README desplazable en un panel separado a la derecha. El README mantiene selección de texto y el botón de copia traslada la selección al portapapeles. Las acciones visibles dependen del estado local comprobado: instalación disponible para paquetes ausentes; actualizar y desinstalar para paquetes instalados; y cancelar con barra indeterminada mientras una operación cooperativa está activa. La captura confirma contraste legible para el estado y la disposición lateral.

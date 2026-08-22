@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from threading import Event
 from typing import Any, Callable
 
 import requests
@@ -22,6 +23,7 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPlainTextEdit,
+    QProgressBar,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -106,6 +108,61 @@ class DetailWorker(QThread):
     def run(self) -> None:
         try:
             self.loaded.emit(foundstore_api.package_detail(self.slug))
+        except Exception as error:
+            self.failed.emit(str(error))
+
+
+class PackageStateWorker(QThread):
+    loaded = pyqtSignal(object, object)
+    failed = pyqtSignal(str)
+
+    def __init__(self, reference: str) -> None:
+        super().__init__()
+        self.reference = reference
+
+    def run(self) -> None:
+        try:
+            installed = manager.installed_record(self.reference)
+            update = manager.update_available(self.reference) if installed else None
+            self.loaded.emit(installed, update)
+        except Exception as error:
+            self.failed.emit(str(error))
+
+
+class PackageActionWorker(QThread):
+    stage = pyqtSignal(str)
+    completed = pyqtSignal(str)
+    cancelled = pyqtSignal()
+    failed = pyqtSignal(str)
+
+    def __init__(self, action: str, reference: str) -> None:
+        super().__init__()
+        self.action = action
+        self.reference = reference
+        self.cancel_event = Event()
+
+    def cancel(self) -> None:
+        self.cancel_event.set()
+
+    def run(self) -> None:
+        try:
+            if self.action == "install":
+                self.stage.emit("Descargando y validando el release…")
+                manager.install(self.reference, cancel_event=self.cancel_event)
+            elif self.action == "update":
+                self.stage.emit("Buscando e instalando el release nuevo…")
+                manager.upgrade(self.reference, cancel_event=self.cancel_event)
+            elif self.action == "uninstall":
+                self.stage.emit("Retirando los archivos instalados…")
+                manager.uninstall(self.reference)
+            else:
+                raise ValueError("Acción de paquete no reconocida")
+            if self.cancel_event.is_set():
+                self.cancelled.emit()
+            else:
+                self.completed.emit(self.action)
+        except manager.InstallationCancelled:
+            self.cancelled.emit()
         except Exception as error:
             self.failed.emit(str(error))
 
@@ -293,9 +350,9 @@ class PackageResult(QFrame):
 
 
 class DetailPanel(QFrame):
-    def __init__(self, back: Callable[[], None], install: Callable[[dict[str, Any]], None]) -> None:
+    def __init__(self, back: Callable[[], None], action: Callable[[str, dict[str, Any]], None]) -> None:
         super().__init__()
-        self._install = install
+        self._action = action
         self.package: dict[str, Any] | None = None
         self.setObjectName("detailPanel")
         self.setStyleSheet("QFrame#detailPanel{background:rgba(17,26,44,.92);border:1px solid rgba(167,190,230,.22);border-radius:14px;}")
@@ -308,33 +365,83 @@ class DetailPanel(QFrame):
         back_button.clicked.connect(back)
         layout.addWidget(back_button, 0, Qt.AlignmentFlag.AlignLeft)
 
+        body = QHBoxLayout()
+        body.setSpacing(18)
+        left = QWidget()
+        left_layout = QVBoxLayout(left)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(12)
         self.preview_holder = QHBoxLayout()
-        layout.addLayout(self.preview_holder)
-
+        left_layout.addLayout(self.preview_holder)
         self.description = QLabel()
         self.description.setObjectName("detailDescription")
         self.description.setWordWrap(True)
-        layout.addWidget(self.description)
+        left_layout.addWidget(self.description)
 
         note = QLabel("La instalación solicita una confirmación local. Foundstore no expone enlaces directos de descarga.")
         note.setObjectName("infoNote")
         note.setWordWrap(True)
-        layout.addWidget(note)
+        left_layout.addWidget(note)
 
-        self.install_button = QPushButton("Instalar en este DaneDesk")
+        self.action_status = QLabel("Comprobando estado local…")
+        self.action_status.setObjectName("actionStatus")
+        left_layout.addWidget(self.action_status)
+        self.progress = QProgressBar()
+        self.progress.setObjectName("installProgress")
+        self.progress.setTextVisible(False)
+        self.progress.setRange(0, 1)
+        self.progress.hide()
+        left_layout.addWidget(self.progress)
+
+        actions = QHBoxLayout()
+        actions.setSpacing(8)
+        self.install_button = QPushButton("Instalar")
         self.install_button.setObjectName("primaryAction")
-        self.install_button.clicked.connect(self._request_install)
-        layout.addWidget(self.install_button, 0, Qt.AlignmentFlag.AlignLeft)
+        self.install_button.clicked.connect(lambda: self._request_action("install"))
+        self.update_button = QPushButton("Actualizar")
+        self.update_button.setObjectName("primaryAction")
+        self.update_button.clicked.connect(lambda: self._request_action("update"))
+        self.uninstall_button = QPushButton("Desinstalar")
+        self.uninstall_button.setObjectName("secondaryAction")
+        self.uninstall_button.clicked.connect(lambda: self._request_action("uninstall"))
+        self.share_button = QPushButton("Compartir")
+        self.share_button.setObjectName("secondaryAction")
+        self.share_button.clicked.connect(lambda: self._request_action("share"))
+        self.cancel_button = QPushButton("Cancelar")
+        self.cancel_button.setObjectName("secondaryAction")
+        self.cancel_button.clicked.connect(lambda: self._request_action("cancel"))
+        for button in (self.install_button, self.update_button, self.uninstall_button, self.share_button, self.cancel_button):
+            actions.addWidget(button)
+        actions.addStretch(1)
+        left_layout.addLayout(actions)
 
+        right = QFrame()
+        right.setObjectName("readmePanel")
+        right.setMinimumWidth(360)
+        right_layout = QVBoxLayout(right)
+        right_layout.setContentsMargins(16, 16, 16, 16)
+        right_layout.setSpacing(10)
+        readme_head = QHBoxLayout()
         readme_label = QLabel("README del paquete")
         readme_label.setObjectName("readmeLabel")
-        layout.addWidget(readme_label)
+        self.copy_code_button = QPushButton("Copiar código")
+        self.copy_code_button.setObjectName("secondaryAction")
+        self.copy_code_button.clicked.connect(self.copy_selected_code)
+        readme_head.addWidget(readme_label)
+        readme_head.addStretch(1)
+        readme_head.addWidget(self.copy_code_button)
+        right_layout.addLayout(readme_head)
+
         self.readme = QPlainTextEdit()
         self.readme.setObjectName("readme")
         self.readme.setReadOnly(True)
-        self.readme.setMinimumHeight(148)
-        self.readme.setMaximumHeight(210)
-        layout.addWidget(self.readme)
+        self.readme.setMinimumWidth(360)
+        self.readme.setMinimumHeight(380)
+        right_layout.addWidget(self.readme, 1)
+        body.addWidget(left, 1)
+        body.addWidget(right, 1)
+        layout.addLayout(body)
+        self.set_action_state(False, False)
 
     def apply_theme(self, theme: str) -> None:
         if theme == "light":
@@ -348,7 +455,7 @@ class DetailPanel(QFrame):
             item = self.preview_holder.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
-        self.preview_holder.addWidget(PackageBanner(package, 560, "macos", detail=True))
+        self.preview_holder.addWidget(PackageBanner(package, 500, "macos", detail=True))
         self.preview_holder.addStretch(1)
         self.description.setText(str(package.get("description") or "Paquete Fluthin validado en el catálogo público de Foundstore."))
         self.readme.setPlainText(str(package.get("readme") or "Cargando README desde la ficha pública de Foundstore…")[:50_000])
@@ -356,9 +463,27 @@ class DetailPanel(QFrame):
     def set_detail_error(self, message: str) -> None:
         self.readme.setPlainText(f"No se pudo cargar el README público.\n\n{message}")
 
-    def _request_install(self) -> None:
+    def set_action_state(self, installed: bool, update_available: bool, busy: bool = False, status: str = "") -> None:
+        self.install_button.setVisible(not installed and not busy)
+        self.update_button.setVisible(installed and update_available and not busy)
+        self.uninstall_button.setVisible(installed and not busy)
+        self.share_button.setVisible(not busy)
+        self.cancel_button.setVisible(busy)
+        self.progress.setVisible(busy)
+        self.progress.setRange(0, 0 if busy else 1)
+        self.action_status.setText(status or ("Instalado; hay una actualización disponible" if installed and update_available else "Instalado en este DaneDesk" if installed else "Disponible para instalar"))
+
+    def copy_selected_code(self) -> None:
+        selected = self.readme.textCursor().selectedText()
+        if not selected:
+            self.action_status.setText("Selecciona un bloque de código o texto para copiarlo")
+            return
+        QApplication.clipboard().setText(selected.replace("\u2029", "\n"))
+        self.action_status.setText("Código copiado al portapapeles")
+
+    def _request_action(self, action: str) -> None:
         if self.package:
-            self._install(self.package)
+            self._action(action, self.package)
 
 
 class StoreWindow(QMainWindow):
@@ -368,6 +493,8 @@ class StoreWindow(QMainWindow):
         self.packages: list[dict[str, Any]] = []
         self.catalog_worker: CatalogWorker | None = None
         self.detail_worker: DetailWorker | None = None
+        self.package_state_worker: PackageStateWorker | None = None
+        self.package_action_worker: PackageActionWorker | None = None
         self._grid_signature: tuple[int, int, str] | None = None
         self.setWindowTitle("Foundstore")
         self.resize(1220, 790)
@@ -404,7 +531,7 @@ class StoreWindow(QMainWindow):
         self.pages.addWidget(self._catalog_page())
         self.pages.addWidget(self._library_page())
         self.pages.addWidget(self._settings_page())
-        self.detail = DetailPanel(lambda: self.pages.setCurrentIndex(0), self.install_package)
+        self.detail = DetailPanel(lambda: self.pages.setCurrentIndex(0), self.request_package_action)
         self.detail.apply_theme(self.preferences.theme)
         self.detail_scroll = QScrollArea()
         self.detail_scroll.setObjectName("detailScroll")
@@ -707,6 +834,7 @@ class StoreWindow(QMainWindow):
 
     def show_detail(self, package: dict[str, Any]) -> None:
         self.detail.set_package(package)
+        self.refresh_package_state(package)
         self.pages.setCurrentWidget(self.detail_scroll)
         for button in self.nav_buttons:
             button.setChecked(False)
@@ -726,6 +854,76 @@ class StoreWindow(QMainWindow):
         self.detail.set_detail_error(message)
         self.detail_worker = None
 
+    def refresh_package_state(self, package: dict[str, Any]) -> None:
+        reference = package_reference(package)
+        if not reference or (self.package_state_worker and self.package_state_worker.isRunning()):
+            return
+        self.detail.set_action_state(False, False, status="Comprobando instalación y actualizaciones…")
+        self.package_state_worker = PackageStateWorker(reference)
+        self.package_state_worker.loaded.connect(self._package_state_loaded)
+        self.package_state_worker.failed.connect(self._package_state_failed)
+        self.package_state_worker.start()
+
+    def _package_state_loaded(self, installed: object, update: object) -> None:
+        self.detail.set_action_state(installed is not None, update is not None)
+        self.package_state_worker = None
+
+    def _package_state_failed(self, message: str) -> None:
+        self.detail.set_action_state(False, False, status="No se pudo comprobar el estado local")
+        self.package_state_worker = None
+
+    def request_package_action(self, action: str, package: dict[str, Any]) -> None:
+        reference = package_reference(package)
+        if not reference:
+            self.detail.set_action_state(False, False, status="El paquete no contiene una referencia válida")
+            return
+        if action == "share":
+            author, app = reference.split("/", 1)
+            QApplication.clipboard().setText(f"https://imfoundstore.onrender.com/{author}/{app}/")
+            self.detail.set_action_state(False, False, status="Enlace de ficha copiado al portapapeles")
+            return
+        if action == "cancel":
+            if self.package_action_worker and self.package_action_worker.isRunning():
+                self.package_action_worker.cancel()
+                self.detail.set_action_state(False, False, True, "Cancelando la operación…")
+            return
+        if self.package_action_worker and self.package_action_worker.isRunning():
+            return
+        labels = {"install": "instalar", "update": "actualizar", "uninstall": "desinstalar"}
+        answer = QMessageBox.question(
+            self,
+            "Confirmar acción",
+            f"¿Deseas {labels[action]} {package.get('name') or package.get('app')}?\n\n"
+            "Foundstore validará los artefactos compatibles y no ejecutará código del paquete durante esta operación.",
+            QMessageBox.StandardButton.Cancel | QMessageBox.StandardButton.Yes,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        self.detail.set_action_state(False, False, True, f"Preparando para {labels[action]}…")
+        self.package_action_worker = PackageActionWorker(action, reference)
+        self.package_action_worker.stage.connect(lambda message: self.detail.set_action_state(False, False, True, message))
+        self.package_action_worker.completed.connect(lambda completed: self._package_action_completed(completed, package))
+        self.package_action_worker.cancelled.connect(lambda: self._package_action_cancelled(package))
+        self.package_action_worker.failed.connect(lambda message: self._package_action_failed(message, package))
+        self.package_action_worker.start()
+
+    def _package_action_completed(self, action: str, package: dict[str, Any]) -> None:
+        self.package_action_worker = None
+        self.refresh_library()
+        self.refresh_package_state(package)
+        self.detail.action_status.setText({"install": "Instalación completada", "update": "Actualización completada", "uninstall": "Paquete desinstalado"}[action])
+
+    def _package_action_cancelled(self, package: dict[str, Any]) -> None:
+        self.package_action_worker = None
+        self.refresh_package_state(package)
+        self.detail.action_status.setText("Operación cancelada")
+
+    def _package_action_failed(self, message: str, package: dict[str, Any]) -> None:
+        self.package_action_worker = None
+        self.refresh_package_state(package)
+        self.detail.action_status.setText(f"No se pudo completar la operación: {message}")
+
     def refresh_library(self) -> None:
         self.library_list.clear()
         installed = manager.installed()
@@ -737,27 +935,7 @@ class StoreWindow(QMainWindow):
             self.library_list.addItem(QListWidgetItem(f"{metadata.get('name', metadata.get('app', 'Fluthin'))}\n{metadata.get('version', '')}"))
 
     def install_package(self, package: dict[str, Any]) -> None:
-        reference = package_reference(package)
-        if not reference:
-            QMessageBox.warning(self, "Foundstore", "El paquete no contiene una referencia válida para instalar.")
-            return
-        answer = QMessageBox.question(
-            self,
-            "Confirmar instalación",
-            f"¿Instalar {package.get('name') or package.get('app')} desde el catálogo público?\n\n"
-            "Foundstore verificará el release compatible con esta plataforma antes de modificar el equipo.",
-            QMessageBox.StandardButton.Cancel | QMessageBox.StandardButton.Yes,
-            QMessageBox.StandardButton.Cancel,
-        )
-        if answer != QMessageBox.StandardButton.Yes:
-            return
-        try:
-            result = manager.install(reference)
-            metadata = result["metadata"]
-            QMessageBox.information(self, "Instalación completada", f"Se instaló {metadata['name']}\n{metadata['version']}")
-            self.refresh_library()
-        except Exception as error:
-            QMessageBox.warning(self, "No se pudo instalar", str(error))
+        self.request_package_action("install", package)
 
     def _stylesheet(self) -> str:
         accent = self.preferences.accent_color
@@ -796,7 +974,9 @@ class StoreWindow(QMainWindow):
             QLineEdit#search,QComboBox#preferenceCombo {{background:{surface};border:1px solid {border};border-radius:8px;color:{ink};padding:10px 12px;font-size:13px;}} QLineEdit#search:focus,QComboBox#preferenceCombo:focus {{border:2px solid {accent};padding:9px 11px;}}
             QListWidget#catalogList,QScrollArea#detailScroll,QScrollArea#catalogScroll {{background:transparent;outline:none;}} QListWidget#catalogList::item {{background:transparent;border:0;}} QWidget#catalogGridHost {{background:transparent;}} QFrame#emptyState,QFrame#preferenceControl {{background:{surface};border:1px solid {border};border-radius:10px;padding:10px;min-width:420px;}} QLabel#emptyTitle,QLabel#preferenceLabel,QLabel#settingsSection {{color:{heading};font-size:16px;font-weight:800;}}
             QLabel#resultDescription,QLabel#pageCopy {{color:{muted};font-size:12px;line-height:1.42;}} QLabel#resultStars,QLabel#detailStars,QLabel#bannerStars {{color:{accent};font-size:11px;font-weight:800;}} QLabel#bannerTitle {{color:#f4f8ff;font-size:13px;font-weight:850;}} QLabel#bannerMeta {{color:#bdcbe1;font-size:10px;}}
+            QLabel#actionStatus {{color:{muted};font-size:12px;font-weight:700;}}
             QFrame#detailPanel {{min-width:0;}} QLabel#detailTitle,QLabel#pageTitle {{color:{heading};font-size:30px;font-weight:850;letter-spacing:-.045em;}} QLabel#detailDescription {{color:{muted};font-size:15px;line-height:1.55;}} QLabel#readmeLabel {{color:{heading};font-size:13px;font-weight:850;}} QPlainTextEdit#readme {{background:{code_background};border:1px solid {border};border-radius:10px;color:{ink};padding:10px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;}} QLabel#infoNote {{background:{note};border:1px solid {accent};border-radius:10px;color:{note_ink};padding:13px;font-size:12px;line-height:1.48;}}
+            QFrame#readmePanel {{background:{button};border:1px solid {border};border-radius:12px;}} QProgressBar#installProgress {{background:{button};border:1px solid {border};border-radius:4px;min-height:6px;max-height:6px;}} QProgressBar#installProgress::chunk {{background:{accent};border-radius:3px;}}
             QPushButton#primaryAction {{background:{accent};border:1px solid {accent};border-radius:8px;color:#082218;padding:9px 13px;font-size:12px;font-weight:850;}} QPushButton#primaryAction:hover {{background:{accent};border:2px solid {heading};padding:8px 12px;}} QPushButton#secondaryAction,QPushButton#backAction {{background:{button};border:1px solid {border};border-radius:8px;color:{heading};padding:9px 12px;font-size:12px;font-weight:750;}} QPushButton#secondaryAction:hover,QPushButton#backAction:hover {{background:{button_hover};border-color:{accent};}} QPushButton:disabled {{color:{muted};background:{button};border-color:{border};}}
             QPushButton:focus-visible,QLineEdit:focus-visible,QComboBox:focus-visible {{outline:2px solid {accent};outline-offset:2px;}}
         """

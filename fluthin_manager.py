@@ -12,6 +12,7 @@ import urllib.parse
 import zipfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from threading import Event
 from typing import Any
 
 import requests
@@ -19,6 +20,10 @@ import requests
 CATALOG_URL = "https://raw.githubusercontent.com/JesusQuijada34/catalog/main/repo.list"
 GITHUB_API = "https://api.github.com"
 RAW_BASE = "https://raw.githubusercontent.com"
+
+
+class InstallationCancelled(RuntimeError):
+    pass
 
 
 def _state_dir() -> Path:
@@ -210,6 +215,32 @@ def installed() -> list[dict[str, Any]]:
     return _installed_records()
 
 
+def installed_record(reference: str) -> dict[str, Any] | None:
+    author, package = parse_reference(reference)
+    return next(
+        (
+            record
+            for record in installed()
+            if record["metadata"]["author"].casefold() == author.casefold()
+            and record["metadata"]["app"].casefold() == package.casefold()
+        ),
+        None,
+    )
+
+
+def update_available(reference: str) -> dict[str, Any] | None:
+    author, package = parse_reference(reference)
+    record = installed_record(reference)
+    if record is None:
+        return None
+    release = latest_release(author, package)
+    available = str(release.get("tag_name") or "").strip()
+    current = str(record["manifest"].get("release") or record["metadata"]["version"])
+    if not available or available == current:
+        return None
+    return {"reference": reference, "current": current, "available": available, "name": record["metadata"]["name"]}
+
+
 def _notify(payload: dict[str, Any]) -> None:
     path = _state_dir() / "notifications.json"
     current = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
@@ -253,7 +284,9 @@ def _register_desktop(install_dir: Path, metadata: dict[str, str], executable: P
     )
 
 
-def install(reference: str, version: str | None = None, local_file: str | None = None) -> dict[str, Any]:
+def install(reference: str, version: str | None = None, local_file: str | None = None, cancel_event: Event | None = None) -> dict[str, Any]:
+    if cancel_event and cancel_event.is_set():
+        raise InstallationCancelled("La instalación fue cancelada antes de iniciar")
     author, package = parse_reference(reference)
     release = latest_release(author, package, version=version) if not local_file else None
     temp_dir = Path(tempfile.mkdtemp(prefix="flut-install-"))
@@ -270,6 +303,8 @@ def install(reference: str, version: str | None = None, local_file: str | None =
             artifact = temp_dir / asset["name"]
             with _request(asset_url, stream=True) as response, artifact.open("wb") as output:
                 for chunk in response.iter_content(chunk_size=1024 * 1024):
+                    if cancel_event and cancel_event.is_set():
+                        raise InstallationCancelled("La instalación fue cancelada durante la descarga")
                     if chunk:
                         output.write(chunk)
             metadata = _validate_zip(artifact)
@@ -283,7 +318,10 @@ def install(reference: str, version: str | None = None, local_file: str | None =
         staging = Path(tempfile.mkdtemp(prefix="flut-stage-", dir=str(destination.parent)))
         try:
             with zipfile.ZipFile(artifact) as archive:
-                archive.extractall(staging)
+                for member in archive.infolist():
+                    if cancel_event and cancel_event.is_set():
+                        raise InstallationCancelled("La instalación fue cancelada durante la extracción")
+                    archive.extract(member, staging)
             details = parse_details((staging / "details.xml").read_bytes())
             if details["app"] != metadata["app"] or details["publisher"] != metadata["publisher"]:
                 raise ValueError("El metadata del paquete cambió durante la extracción")
@@ -355,24 +393,21 @@ def uninstall(reference: str) -> int:
 def check_updates(notify: bool = True) -> list[dict[str, Any]]:
     updates = []
     for record in installed():
-        metadata = record["metadata"]
         reference = record["manifest"].get("reference")
         if not reference:
             continue
-        author, package = parse_reference(reference)
         try:
-            remote = repository_details(author, package)
+            update = update_available(reference)
         except (OSError, ValueError, requests.RequestException):
             continue
-        if _version_key(remote["version"]) > _version_key(metadata["version"]):
-            update = {"reference": reference, "current": metadata["version"], "available": remote["version"], "name": remote["name"]}
+        if update:
             updates.append(update)
             if notify:
                 _notify({"type": "update_available", **update})
     return updates
 
 
-def upgrade(reference: str | None = None) -> list[dict[str, Any]]:
+def upgrade(reference: str | None = None, cancel_event: Event | None = None) -> list[dict[str, Any]]:
     targets = installed()
     if reference:
         author, package = parse_reference(reference)
@@ -384,7 +419,7 @@ def upgrade(reference: str | None = None) -> list[dict[str, Any]]:
             continue
         updates = [item for item in check_updates(notify=False) if item["reference"].lower() == ref.lower()]
         if updates:
-            results.append(install(ref))
+            results.append(install(ref, cancel_event=cancel_event))
     return results
 
 
