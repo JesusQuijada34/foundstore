@@ -22,12 +22,12 @@ from PyQt6.QtWidgets import (
     QListWidgetItem,
     QMainWindow,
     QMessageBox,
-    QPlainTextEdit,
     QProgressBar,
     QPushButton,
     QScrollArea,
     QSizePolicy,
     QStackedWidget,
+    QTextBrowser,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -432,9 +432,11 @@ class DetailPanel(QFrame):
         readme_head.addWidget(self.copy_code_button)
         right_layout.addLayout(readme_head)
 
-        self.readme = QPlainTextEdit()
+        self.readme = QTextBrowser()
         self.readme.setObjectName("readme")
         self.readme.setReadOnly(True)
+        self.readme.setOpenLinks(False)
+        self.readme.anchorClicked.connect(self.open_readme_link)
         self.readme.setMinimumWidth(360)
         self.readme.setMinimumHeight(380)
         right_layout.addWidget(self.readme, 1)
@@ -446,8 +448,25 @@ class DetailPanel(QFrame):
     def apply_theme(self, theme: str) -> None:
         if theme == "light":
             self.setStyleSheet("QFrame#detailPanel{background:#ffffff;border:1px solid #c7d2e2;border-radius:14px;}")
+            self.readme.document().setDefaultStyleSheet(self.readme_stylesheet("#172338", "#5a6880", "#f1f5f9", "#c8d3e0", "#2d7a59"))
         else:
             self.setStyleSheet("QFrame#detailPanel{background:rgba(17,26,44,.92);border:1px solid rgba(167,190,230,.22);border-radius:14px;}")
+            self.readme.document().setDefaultStyleSheet(self.readme_stylesheet(INK, MUTED, "rgba(7,13,24,.62)", "rgba(158,183,226,.22)", ACCENT))
+
+    @staticmethod
+    def readme_stylesheet(ink: str, muted: str, code_background: str, border: str, accent: str) -> str:
+        return f"""
+            body {{ color: {ink}; font-family: Inter, Segoe UI, Arial, sans-serif; font-size: 12px; line-height: 1.5; }}
+            h1 {{ color: {ink}; font-size: 22px; font-weight: 800; margin: 0 0 12px 0; }}
+            h2 {{ color: {ink}; font-size: 17px; font-weight: 800; margin: 18px 0 8px 0; }}
+            h3 {{ color: {ink}; font-size: 14px; font-weight: 800; margin: 15px 0 6px 0; }}
+            p, li {{ color: {ink}; }}
+            a {{ color: {accent}; font-weight: 700; text-decoration: none; }}
+            blockquote {{ color: {muted}; border-left: 3px solid {accent}; margin: 8px 0; padding-left: 10px; }}
+            pre {{ background-color: {code_background}; border: 1px solid {border}; border-radius: 6px; padding: 8px; white-space: pre-wrap; }}
+            code {{ font-family: ui-monospace, Menlo, Consolas, monospace; }}
+            hr {{ border: 0; border-top: 1px solid {border}; }}
+        """
 
     def set_package(self, package: dict[str, Any]) -> None:
         self.package = package
@@ -458,10 +477,10 @@ class DetailPanel(QFrame):
         self.preview_holder.addWidget(PackageBanner(package, 500, "macos", detail=True))
         self.preview_holder.addStretch(1)
         self.description.setText(str(package.get("description") or "Paquete Fluthin validado en el catálogo público de Foundstore."))
-        self.readme.setPlainText(str(package.get("readme") or "Cargando README desde la ficha pública de Foundstore…")[:50_000])
+        self.readme.setMarkdown(str(package.get("readme") or "Cargando README desde la ficha pública de Foundstore…")[:50_000])
 
     def set_detail_error(self, message: str) -> None:
-        self.readme.setPlainText(f"No se pudo cargar el README público.\n\n{message}")
+        self.readme.setMarkdown(f"## No se pudo cargar el README público\n\n    {message}")
 
     def set_action_state(self, installed: bool, update_available: bool, busy: bool = False, status: str = "") -> None:
         self.install_button.setVisible(not installed and not busy)
@@ -480,6 +499,12 @@ class DetailPanel(QFrame):
             return
         QApplication.clipboard().setText(selected.replace("\u2029", "\n"))
         self.action_status.setText("Código copiado al portapapeles")
+
+    def open_readme_link(self, url: QUrl) -> None:
+        if url.scheme().lower() in {"http", "https"}:
+            QDesktopServices.openUrl(url)
+            return
+        self.action_status.setText("Foundstore bloqueó un enlace README no seguro")
 
     def _request_action(self, action: str) -> None:
         if self.package:
@@ -975,7 +1000,7 @@ class StoreWindow(QMainWindow):
             QListWidget#catalogList,QScrollArea#detailScroll,QScrollArea#catalogScroll {{background:transparent;outline:none;}} QListWidget#catalogList::item {{background:transparent;border:0;}} QWidget#catalogGridHost {{background:transparent;}} QFrame#emptyState,QFrame#preferenceControl {{background:{surface};border:1px solid {border};border-radius:10px;padding:10px;min-width:420px;}} QLabel#emptyTitle,QLabel#preferenceLabel,QLabel#settingsSection {{color:{heading};font-size:16px;font-weight:800;}}
             QLabel#resultDescription,QLabel#pageCopy {{color:{muted};font-size:12px;line-height:1.42;}} QLabel#resultStars,QLabel#detailStars,QLabel#bannerStars {{color:{accent};font-size:11px;font-weight:800;}} QLabel#bannerTitle {{color:#f4f8ff;font-size:13px;font-weight:850;}} QLabel#bannerMeta {{color:#bdcbe1;font-size:10px;}}
             QLabel#actionStatus {{color:{muted};font-size:12px;font-weight:700;}}
-            QFrame#detailPanel {{min-width:0;}} QLabel#detailTitle,QLabel#pageTitle {{color:{heading};font-size:30px;font-weight:850;letter-spacing:-.045em;}} QLabel#detailDescription {{color:{muted};font-size:15px;line-height:1.55;}} QLabel#readmeLabel {{color:{heading};font-size:13px;font-weight:850;}} QPlainTextEdit#readme {{background:{code_background};border:1px solid {border};border-radius:10px;color:{ink};padding:10px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;}} QLabel#infoNote {{background:{note};border:1px solid {accent};border-radius:10px;color:{note_ink};padding:13px;font-size:12px;line-height:1.48;}}
+            QFrame#detailPanel {{min-width:0;}} QLabel#detailTitle,QLabel#pageTitle {{color:{heading};font-size:30px;font-weight:850;letter-spacing:-.045em;}} QLabel#detailDescription {{color:{muted};font-size:15px;line-height:1.55;}} QLabel#readmeLabel {{color:{heading};font-size:13px;font-weight:850;}} QTextBrowser#readme {{background:{code_background};border:1px solid {border};border-radius:10px;color:{ink};padding:10px;font-family:Inter,Segoe UI,Arial,sans-serif;font-size:12px;}} QLabel#infoNote {{background:{note};border:1px solid {accent};border-radius:10px;color:{note_ink};padding:13px;font-size:12px;line-height:1.48;}}
             QFrame#readmePanel {{background:{button};border:1px solid {border};border-radius:12px;}} QProgressBar#installProgress {{background:{button};border:1px solid {border};border-radius:4px;min-height:6px;max-height:6px;}} QProgressBar#installProgress::chunk {{background:{accent};border-radius:3px;}}
             QPushButton#primaryAction {{background:{accent};border:1px solid {accent};border-radius:8px;color:#082218;padding:9px 13px;font-size:12px;font-weight:850;}} QPushButton#primaryAction:hover {{background:{accent};border:2px solid {heading};padding:8px 12px;}} QPushButton#secondaryAction,QPushButton#backAction {{background:{button};border:1px solid {border};border-radius:8px;color:{heading};padding:9px 12px;font-size:12px;font-weight:750;}} QPushButton#secondaryAction:hover,QPushButton#backAction:hover {{background:{button_hover};border-color:{accent};}} QPushButton:disabled {{color:{muted};background:{button};border-color:{border};}}
             QPushButton:focus-visible,QLineEdit:focus-visible,QComboBox:focus-visible {{outline:2px solid {accent};outline-offset:2px;}}

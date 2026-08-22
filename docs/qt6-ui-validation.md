@@ -43,3 +43,7 @@ Los tres modos no son etiquetas decorativas: Compacto reduce márgenes, separaci
 La ficha final reparte identidad, aviso y acciones de gestión a la izquierda, con el README desplazable en un panel separado a la derecha. El README mantiene selección de texto y el botón de copia traslada la selección al portapapeles. Las acciones visibles dependen del estado local comprobado: instalación disponible para paquetes ausentes; actualizar y desinstalar para paquetes instalados; y cancelar con barra indeterminada mientras una operación cooperativa está activa. La captura confirma contraste legible para el estado y la disposición lateral.
 
 La comprobación de progreso muestra que el estado `Descargando y validando el release…`, la barra indeterminada y Cancelar sustituyen las acciones de mutación sin desplazar ni recortar el banner, el aviso o el README. Esta vista representa el estado visual de una operación activa; no se ejecutó ni se declaró completada ninguna instalación durante la captura.
+
+## README Markdown
+
+El panel lateral sustituye el editor de texto plano por un visor Markdown de Qt. La validación con encabezado, lista, cita y bloque de consola confirma la jerarquía visual y la selección para copiar. Los enlaces del README se limitan a `https` y `http`; los demás esquemas se bloquean. La captura integrada aplica el estilo raíz completo de Foundstore y confirma contraste suficiente bajo el tema oscuro, sin desplazar las acciones ni la cabecera de identidad.

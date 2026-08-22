@@ -56,6 +56,22 @@ class FoundstoreUiTests(unittest.TestCase):
         panel.copy_selected_code()
         self.assertEqual(QApplication.clipboard().text(), "flut install JesusQuijada34/camera")
 
+    def test_detail_renders_markdown_readme(self) -> None:
+        panel = DetailPanel(lambda: None, lambda *_: None)
+        panel.set_package(
+            {
+                "name": "Camera",
+                "author": "JesusQuijada34",
+                "app": "camera",
+                "description": "Cámara para pruebas.",
+                "readme": "# Cámara\n\nUsa `flut install`.\n\n```bash\nflut install JesusQuijada34/camera\n```",
+            }
+        )
+        rendered = panel.readme.document().toHtml().lower()
+        self.assertIn("cámara", rendered)
+        self.assertIn("flut install jesusquijada34/camera", rendered)
+        self.assertIn("font-size:", rendered)
+
 
 if __name__ == "__main__":
     unittest.main()
