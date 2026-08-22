@@ -1,7 +1,13 @@
-# Foundstore v1.1-26.08-22.31
+# Foundstore v1.2-26.08-22.20
 
-Release de **Foundstore Fluthin Store** para `Danenone`, con publisher `Influent`, author `JesusQuijada34` y plataforma de proyecto `AlphaCube` compilada para el asset Linux/Danenone.
+Release de **Foundstore Fluthin Store** para `Danenone`, con publisher `Influent`, author `JesusQuijada34` y plataforma de proyecto `AlphaCube`. Esta publicación se compila como asset Linux/Danenone para su incorporación controlada en la imagen de Danenone.
 
-Incluye el catálogo GitHub, búsqueda de paquetes, instalación y actualización mediante `flut`, registro FreeDesktop, integración de autostart y soporte para paquetes Fluthin con varios binarios. El launcher prioriza el ejecutable cuyo nombre coincide con el app id y evita elegir por error los auxiliares `flut` o `fluthin_manager`.
+## Novedades
 
-El artefacto fue compilado con PackageMaker después de corregir la acumulación de binarios multi-script y las colisiones con carpetas estructurales como `app` y `config`. Fue validado como ZIP seguro, con `details.xml`, icono y binarios requeridos. El workflow CI se conserva localmente hasta disponer del permiso GitHub `workflow`; esto no afecta al código ni al asset publicado.
+Foundstore incluye ahora una aplicación Qt6 con catálogo desde la API pública, caché local de 15 minutos y recursos remotos con geometría reservada. Las tarjetas usan banner 16:9, icono e identidad consistente; la ficha muestra el README Markdown a la derecha con selección y copia de código.
+
+La configuración persiste el tema claro u oscuro, cinco acentos, los modos Compacto, Milimetrado y MacOS Style, además de cuadrículas de tres, cuatro o cinco columnas. Las acciones de paquete conservan confirmación local, validación de release y cancelación cooperativa; Actualizar sólo aparece cuando existe un tag de release más reciente.
+
+## Validación
+
+El paquete se valida antes de publicar como ZIP `.iflapp` con `details.xml`, recursos y binarios esperados. La suite de aplicación cubre catálogo, caché, preferencias, renderizado Markdown, acciones y geometría de tarjetas. El release sólo debe contener el artefacto Danenone validado y usar este texto como cuerpo exacto.
