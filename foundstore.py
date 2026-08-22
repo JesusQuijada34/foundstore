@@ -127,11 +127,12 @@ class RemoteImage(QLabel):
         super().__init__(fallback)
         self._source: QPixmap | None = None
         self._radius = radius
+        self.setObjectName("remoteImage")
         self.setFixedSize(size)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setStyleSheet(
-            f"background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #7a83ef,stop:1 #17243d);"
-            f"border:1px solid rgba(225,239,255,.3);border-radius:{radius}px;color:white;font-size:24px;font-weight:850;"
+            f"QLabel#remoteImage{{background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #7a83ef,stop:1 #17243d);"
+            f"border:1px solid rgba(225,239,255,.3);border-radius:{radius}px;color:white;font-size:24px;font-weight:850;}}"
         )
         self.worker: ImageWorker | None = None
         if url:
@@ -192,6 +193,47 @@ class WindowDot(QToolButton):
         self.clicked.connect(callback)
 
 
+class PackageBanner(QWidget):
+    """Miniatura de la ficha: portada, icono y bloque de identidad dentro del mismo recurso."""
+
+    WIDTH = 360
+    HEIGHT = 202
+
+    def __init__(self, package: dict[str, Any]) -> None:
+        super().__init__()
+        self.setFixedSize(self.WIDTH, self.HEIGHT)
+        visuals = package.get("visuals") if isinstance(package.get("visuals"), dict) else {}
+        splash_url = str(visuals.get("splash") or visuals.get("portrait") or "")
+        self.cover = RemoteImage(splash_url, "Vista previa", QSize(self.WIDTH, self.HEIGHT), 10)
+        self.cover.setParent(self)
+        self.cover.move(0, 0)
+
+        identity = QFrame(self.cover)
+        identity.setObjectName("bannerIdentity")
+        identity.setGeometry(0, 128, self.WIDTH, 74)
+        identity.setStyleSheet(
+            "QFrame#bannerIdentity{background:rgba(10,18,33,.88);border:0;border-bottom-left-radius:10px;border-bottom-right-radius:10px;}"
+        )
+        layout = QHBoxLayout(identity)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(9)
+        layout.addWidget(PackageGlyph(package, 50), 0, Qt.AlignmentFlag.AlignVCenter)
+
+        copy = QVBoxLayout()
+        copy.setSpacing(1)
+        title = QLabel(str(package.get("name") or package.get("app") or "Paquete Fluthin"))
+        title.setObjectName("bannerTitle")
+        publisher = QLabel(f"{package.get('publisher') or 'Influent'} · {package.get('author') or 'Autor no informado'}")
+        publisher.setObjectName("bannerMeta")
+        stars = package.get("stars")
+        stars_label = QLabel(f"★ {stars} estrellas GitHub" if isinstance(stars, int) else "★ Estrellas GitHub no disponibles")
+        stars_label.setObjectName("bannerStars")
+        copy.addWidget(title)
+        copy.addWidget(publisher)
+        copy.addWidget(stars_label)
+        layout.addLayout(copy, 1)
+
+
 class PackageResult(QFrame):
     def __init__(self, package: dict[str, Any], show_details: Callable[[dict[str, Any]], None], install: Callable[[dict[str, Any]], None]) -> None:
         super().__init__()
@@ -208,43 +250,17 @@ class PackageResult(QFrame):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(12)
 
-        header = QHBoxLayout()
-        header.setSpacing(12)
-        header.addWidget(PackageGlyph(package, 58), 0, Qt.AlignmentFlag.AlignTop)
-
-        info = QVBoxLayout()
-        info.setSpacing(2)
-        category = QLabel(str(package.get("category") or package.get("platform") or "Fluthin").upper())
-        category.setObjectName("resultCategory")
-        title = QLabel(str(package.get("name") or package.get("app") or "Paquete Fluthin"))
-        title.setObjectName("resultTitle")
-        publisher = str(package.get("publisher") or "Influent")
-        meta = QLabel(f"{publisher} · {package.get('author') or 'Autor no informado'}")
-        meta.setObjectName("resultMeta")
-        stars = package.get("stars")
-        stars_label = QLabel(f"★ {stars} estrellas GitHub" if isinstance(stars, int) else "★ Estrellas GitHub no disponibles")
-        stars_label.setObjectName("resultStars")
-        info.addWidget(category)
-        info.addWidget(title)
-        info.addWidget(meta)
-        info.addWidget(stars_label)
-        header.addLayout(info, 1)
-
-        open_button = QPushButton("Abrir")
-        open_button.setObjectName("secondaryAction")
-        open_button.clicked.connect(lambda: show_details(package))
-        header.addWidget(open_button, 0, Qt.AlignmentFlag.AlignTop)
-        layout.addLayout(header)
-
-        visuals = package.get("visuals") if isinstance(package.get("visuals"), dict) else {}
-        splash_url = str(visuals.get("splash") or visuals.get("portrait") or "")
-        layout.addWidget(RemoteImage(splash_url, "Vista previa", QSize(360, 202), 10))
+        layout.addWidget(PackageBanner(package))
 
         footer = QHBoxLayout()
         description = QLabel(str(package.get("description") or "Paquete validado en el catálogo público de Foundstore."))
         description.setObjectName("resultDescription")
         description.setWordWrap(True)
         footer.addWidget(description, 1)
+        open_button = QPushButton("Abrir")
+        open_button.setObjectName("secondaryAction")
+        open_button.clicked.connect(lambda: show_details(package))
+        footer.addWidget(open_button, 0, Qt.AlignmentFlag.AlignBottom)
         install_button = QPushButton("Instalar")
         install_button.setObjectName("primaryAction")
         install_button.clicked.connect(lambda: install(package))
@@ -687,7 +703,7 @@ class StoreWindow(QMainWindow):
             QLabel#eyebrow,QLabel#resultCategory {{color:{ACCENT};font-size:10px;font-weight:850;letter-spacing:.12em;}} QLabel#catalogHeadline {{color:#f3f7ff;font-size:31px;font-weight:850;letter-spacing:-.05em;line-height:1.02;}} QLabel#catalogStatus {{background:rgba(21,40,61,.75);border:1px solid rgba(158,184,225,.22);border-radius:8px;color:#b9cbe8;padding:8px 10px;font-size:11px;font-weight:700;}}
             QLineEdit#search {{background:rgba(9,15,27,.66);border:1px solid rgba(165,190,232,.28);border-radius:8px;color:{INK};padding:12px 13px;font-size:13px;}} QLineEdit#search:focus {{border:2px solid {ACCENT};padding:11px 12px;}}
             QListWidget#catalogList,QScrollArea#detailScroll,QScrollArea#catalogScroll {{background:transparent;outline:none;}} QListWidget#catalogList::item {{background:transparent;border:0;}} QWidget#catalogGridHost {{background:transparent;}} QFrame#emptyState {{background:rgba(17,27,46,.76);border:1px dashed rgba(165,190,232,.35);border-radius:10px;padding:14px;min-width:420px;}} QLabel#emptyTitle {{color:#f1f6ff;font-size:16px;font-weight:800;}}
-            QLabel#resultTitle {{font-size:17px;font-weight:800;color:#f5f8ff;}} QLabel#resultDescription,QLabel#pageCopy {{color:{MUTED};font-size:12px;line-height:1.42;}} QLabel#resultMeta {{color:#bfd0e9;font-size:11px;}} QLabel#resultStars,QLabel#detailStars {{color:{ACCENT};font-size:12px;font-weight:800;}}
+            QLabel#resultTitle {{font-size:17px;font-weight:800;color:#f5f8ff;}} QLabel#resultDescription,QLabel#pageCopy {{color:{MUTED};font-size:12px;line-height:1.42;}} QLabel#resultMeta {{color:#bfd0e9;font-size:11px;}} QLabel#resultStars,QLabel#detailStars,QLabel#bannerStars {{color:{ACCENT};font-size:11px;font-weight:800;}} QLabel#bannerTitle {{color:#f4f8ff;font-size:13px;font-weight:850;}} QLabel#bannerMeta {{color:#bdcbe1;font-size:10px;}}
             QFrame#detailPanel {{min-width:0;}} QLabel#detailTitle,QLabel#pageTitle {{color:#f3f7ff;font-size:30px;font-weight:850;letter-spacing:-.045em;}} QLabel#detailMeta {{color:#b7c7e0;font-size:13px;line-height:1.45;}} QLabel#detailDescription {{color:#d4dff1;font-size:15px;line-height:1.55;}} QLabel#readmeLabel {{color:#dce8fb;font-size:13px;font-weight:850;}} QPlainTextEdit#readme {{background:rgba(7,13,24,.62);border:1px solid rgba(155,180,223,.24);border-radius:10px;color:#c9d6ea;padding:10px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;}} QLabel#infoNote {{background:rgba(25,91,70,.24);border:1px solid rgba(116,237,178,.24);border-radius:10px;color:#b8f2d3;padding:13px;font-size:12px;line-height:1.48;}}
             QPushButton#primaryAction {{background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #77e9b2,stop:1 #2eb477);border:1px solid rgba(224,255,240,.55);border-radius:8px;color:#082218;padding:9px 13px;font-size:12px;font-weight:850;}} QPushButton#primaryAction:hover {{background:#9df4c8;}} QPushButton#secondaryAction,QPushButton#backAction {{background:rgba(28,40,65,.7);border:1px solid rgba(170,195,235,.28);border-radius:8px;color:#dbe7fa;padding:9px 12px;font-size:12px;font-weight:750;}} QPushButton#secondaryAction:hover,QPushButton#backAction:hover {{background:rgba(61,83,126,.8);border-color:rgba(173,241,205,.55);}} QPushButton:disabled {{color:#7c8aa3;background:rgba(35,45,65,.55);border-color:rgba(130,147,175,.2);}}
             QPushButton:focus-visible,QLineEdit:focus-visible {{outline:2px solid {ACCENT};outline-offset:2px;}}

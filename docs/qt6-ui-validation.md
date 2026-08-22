@@ -25,3 +25,7 @@ La ficha de detalle posterior conserva la misma cuadrícula: icono de 94 píxele
 ## Resultados de tienda y caché de 15 minutos
 
 El catálogo usa ahora fichas de 392 píxeles en una cuadrícula de dos columnas en pantallas amplias y una columna cuando no hay espacio. Cada ficha conserva una cabecera de aplicación, estrellas verificadas, una previsualización 16:9 y acciones alineadas, sin barra de desplazamiento horizontal. El cliente conserva catálogo y fichas en `XDG_CACHE_HOME/influent-danenone/foundstore`, reutiliza datos durante 15 minutos y, mientras la aplicación está abierta, comprueba cada minuto si el TTL venció para iniciar una actualización asíncrona. Una actualización manual siempre evita la caché.
+
+## Banner unificado con la ficha
+
+Cada resultado de catálogo ahora usa el mismo orden de la ficha: portada 16:9, franja de identidad semitransparente dentro de la portada, icono de 50 píxeles, título, publisher, autor y estrellas verificadas. Una primera captura reveló que una regla de estilo del recurso remoto se propagaba a los rótulos internos; se restringió al objeto de imagen y la segunda captura confirma tipografía compacta y legible dentro del banner.
