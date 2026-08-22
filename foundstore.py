@@ -71,6 +71,15 @@ def soft_shadow(widget: QWidget, alpha: int = 68, blur: int = 26, y_offset: int 
     widget.setGraphicsEffect(shadow)
 
 
+def grid_metrics(available: int, view_mode: str, requested_columns: int) -> tuple[int, int, int]:
+    """Devuelve columnas efectivas, anchura de ficha y separación sin permitir desbordamiento."""
+    minimum = {"compact": 150, "measured": 170, "macos": 190}[view_mode]
+    spacing = {"compact": 8, "measured": 12, "macos": 16}[view_mode]
+    columns = min(requested_columns, max(1, max(1, available) // minimum))
+    width = max(1, (max(1, available) - spacing * (columns - 1)) // columns)
+    return columns, width, spacing
+
+
 class CatalogWorker(QThread):
     loaded = pyqtSignal(list)
     failed = pyqtSignal(str)
@@ -663,13 +672,9 @@ class StoreWindow(QMainWindow):
             self._add_empty_row("No hay resultados", "Prueba otra búsqueda o actualiza la API pública.")
             return
         available = max(1, self.catalog_scroll.viewport().width() - 2)
-        minimum = {"compact": 150, "measured": 170, "macos": 190}[self.preferences.view_mode]
-        columns = min(self.preferences.grid_columns, max(1, available // minimum))
-        card_width = max(1, (available - self.catalog_grid.horizontalSpacing() * (columns - 1)) // columns)
-        spacing = {"compact": 8, "measured": 12, "macos": 16}[self.preferences.view_mode]
+        columns, card_width, spacing = grid_metrics(available, self.preferences.view_mode, self.preferences.grid_columns)
         self.catalog_grid.setHorizontalSpacing(spacing)
         self.catalog_grid.setVerticalSpacing(spacing)
-        card_width = max(1, (available - spacing * (columns - 1)) // columns)
         self._grid_signature = (card_width, columns, self.preferences.view_mode)
         for index, package in enumerate(visible):
             widget = PackageResult(package, self.show_detail, self.install_package, card_width, self.preferences.view_mode, self.preferences.theme)
