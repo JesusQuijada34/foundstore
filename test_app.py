@@ -127,6 +127,8 @@ class FlaskRenderAppTests(unittest.TestCase):
         manifest = self.client.get("/manifest.webmanifest")
         worker = self.client.get("/service-worker.js")
         components = self.client.get("/static/js/foundstore-components.js")
+        mark = self.client.get("/static/foundstore-mark.svg")
+        login = self.client.get("/").get_data(as_text=True)
         with self.client.session_transaction() as browser_session:
             browser_session["github_login"] = "reader"
         catalog = self.client.get("/").get_data(as_text=True)
@@ -136,11 +138,14 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(worker.status_code, 200)
         self.assertEqual(worker.headers["Service-Worker-Allowed"], "/")
         self.assertEqual(components.status_code, 200)
+        self.assertEqual(mark.status_code, 200)
+        self.assertIn("foundstore-mark.svg", login)
         self.assertIn("foundstore-data-v2", worker.get_data(as_text=True))
         self.assertIn("followedDevelopers", catalog)
         self.assertIn("/api/v1/me/following", catalog)
         self.assertIn("foundstore-components.js", catalog)
         self.assertIn("data-fallback", components.get_data(as_text=True))
+        self.assertIn("foundstore-package-main", components.get_data(as_text=True))
 
     def test_github_login_starts_authorization_with_configured_callback(self) -> None:
         oauth_app = create_app({"TESTING": True, "DATA_DIR": self.tempdir.name, "MONGODB_URI": None, "GITHUB_CLIENT_ID": "client-id", "GITHUB_CLIENT_SECRET": "client-secret", "SECRET_KEY": "test-session"})
