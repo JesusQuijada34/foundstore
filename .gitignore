@@ -10,3 +10,5 @@ data/ondev_accounts.list
 data/catalog.json
 static/img/
 !static/img/.gitkeep
+artifacts/
+attached_assets/
