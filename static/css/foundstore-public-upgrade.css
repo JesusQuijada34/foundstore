@@ -7,6 +7,7 @@
   --foundstore-signal-soft:rgba(25,229,155,.13);
   --foundstore-border:rgba(210,255,233,.14);
 }
+html{overflow-x:hidden}
 
 body.foundstore-public-login,
 body.foundstore-public-catalog,
