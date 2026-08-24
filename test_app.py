@@ -149,6 +149,9 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertIn("followedDevelopers", catalog)
         self.assertIn("/api/v1/me/following", catalog)
         self.assertIn("foundstore-components.js", catalog)
+        self.assertIn("foundstore-public-upgrade.css", login)
+        self.assertIn("foundstore-public-upgrade.css", catalog)
+        self.assertIn('id="main-content"', catalog)
         self.assertIn("data-fallback", components.get_data(as_text=True))
         self.assertIn("foundstore-package-main", components.get_data(as_text=True))
 
