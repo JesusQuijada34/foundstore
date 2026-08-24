@@ -18,6 +18,7 @@ body.foundstore-public-landing{
     radial-gradient(circle at 10% 91%,rgba(18,113,75,.15),transparent 28rem),
     #081610;
 }
+body.foundstore-public-landing{overflow-x:hidden}
 
 body.foundstore-public-login::before,
 body.foundstore-public-login::after,
