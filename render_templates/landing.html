@@ -1,0 +1,45 @@
+<!doctype html>
+{% from "_foundstore_brand.html" import foundstore_brand %}
+<html lang="es">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Foundstore · Catálogo Fluthin para Danenone</title>
+  <meta name="description" content="Foundstore organiza paquetes Fluthin para Danenone y Knosthalij. Inicia sesión para explorar, guardar y solicitar instalaciones para tus DaneDesk.">
+  <meta property="og:title" content="Foundstore · Descubre el ecosistema Fluthin">
+  <meta property="og:description" content="Un catálogo con contexto para explorar paquetes Fluthin y enviar solicitudes autorizadas a tus DaneDesk.">
+  <meta property="og:type" content="website"><meta property="og:url" content="https://imfoundstore.onrender.com/"><meta property="og:image" content="https://3000-i5g3cl1vlppg0grz4dtbt-a6ddeb21.us4.manus.computer/manus-storage/foundstore-discovery-mark-solid_515e468d.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-components.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-public-upgrade.css') }}">
+</head>
+<body class="foundstore-public-landing">
+  <a class="foundstore-skip-link" href="#landing-main">Saltar al contenido</a>
+  <header class="landing-nav" aria-label="Navegación principal">
+    {{ foundstore_brand('landing-brand') }}
+    <nav class="landing-nav-links" aria-label="Secciones de Foundstore"><a href="#como-funciona">Cómo funciona</a><a href="#confianza">Confianza</a></nav>
+    <a class="landing-nav-cta" href="/auth/github/login?next=/">Entrar con GitHub <span aria-hidden="true">↗</span></a>
+  </header>
+  <main id="landing-main">
+    <section class="landing-hero" aria-labelledby="landing-title">
+      <div class="landing-copy">
+        <p class="landing-eyebrow"><span class="landing-pulse" aria-hidden="true"></span> ECOSISTEMA FLUTHIN</p>
+        <h1 id="landing-title">Encuentra software que <em>encaja</em> con tu DaneDesk.</h1>
+        <p class="landing-intro">Un catálogo con contexto para descubrir paquetes Fluthin, revisar su compatibilidad y enviar instalaciones a tus dispositivos vinculados.</p>
+        <div class="landing-actions"><a class="landing-primary" href="/auth/github/login?next=/">Explorar con GitHub <span aria-hidden="true">→</span></a><a class="landing-secondary" href="#como-funciona">Ver cómo funciona</a></div>
+        <ul class="landing-proof" aria-label="Características principales"><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 7 3v5c0 4.7-2.8 8.8-7 10-4.2-1.2-7-5.3-7-10V6l7-3Z"/><path d="m9 12 2 2 4-4"/></svg> Metadatos verificables</li><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M12 4l8 8-8 8"/></svg> Instalación autorizada</li></ul>
+      </div>
+      <div class="landing-orbit" aria-label="Vista previa conceptual del catálogo">
+        <div class="orbit-grid" aria-hidden="true"></div>
+        <div class="orbit-halo orbit-halo-one" aria-hidden="true"></div><div class="orbit-halo orbit-halo-two" aria-hidden="true"></div>
+        <div class="orbit-card orbit-card-main"><span class="orbit-label">.iflapp</span><img src="https://3000-i5g3cl1vlppg0grz4dtbt-a6ddeb21.us4.manus.computer/manus-storage/foundstore-discovery-mark-solid_515e468d.png" alt=""><strong>Encontrado</strong><small>Paquete listo para revisar</small></div>
+        <div class="orbit-card orbit-card-side"><span class="orbit-dot" aria-hidden="true"></span><strong>Danenone</strong><small>Destino vinculado</small></div>
+      </div>
+    </section>
+    <section class="landing-stats" aria-label="Principios de Foundstore"><div><span>01</span><strong>Paquetes con contexto</strong><p>Compatibilidad, origen y versiones antes de pedir una instalación.</p></div><div><span>02</span><strong>Decisiones en tu dispositivo</strong><p>La tienda solicita; DaneDesk conserva la aprobación local.</p></div><div><span>03</span><strong>Un acceso, tus dispositivos</strong><p>Vincula Danenone o Knosthalij con tu cuenta GitHub.</p></div></section>
+    <section class="landing-how" id="como-funciona" aria-labelledby="how-title"><div class="landing-section-heading"><p class="landing-eyebrow">UN RECORRIDO CLARO</p><h2 id="how-title">Descubrir no debería ser <em>adivinar.</em></h2><p>Foundstore separa explorar, comprobar y solicitar para que siempre sepas qué ocurrirá antes de tocar tu sistema.</p></div><ol class="landing-steps"><li><span>01</span><div><h3>Conecta tu cuenta</h3><p>GitHub identifica tu perfil y mantiene el catálogo web separado de las APIs de tus agentes.</p></div></li><li><span>02</span><div><h3>Revisa el paquete</h3><p>Consulta plataforma, autor, versión y documentación del Fluthin antes de continuar.</p></div></li><li><span>03</span><div><h3>Aprueba la acción</h3><p>El dispositivo vinculado recibe una solicitud y confirma la instalación de forma local.</p></div></li></ol></section>
+    <section class="landing-trust" id="confianza" aria-labelledby="trust-title"><div><p class="landing-eyebrow">DISEÑADO PARA EL CONTROL</p><h2 id="trust-title">Tu catálogo no es una carpeta de enlaces.</h2><p>El diseño público explica el servicio sin revelar perfiles, fichas privadas ni dispositivos. Al entrar, accedes a la experiencia completa de Foundstore.</p><a class="landing-secondary" href="/auth/github/login?next=/">Abrir Foundstore <span aria-hidden="true">→</span></a></div><div class="trust-terminal" aria-label="Resumen de seguridad"><div class="terminal-bar"><span></span><span></span><span></span><b>foundstore / resumen</b></div><p><i>✓</i> Manifiesto Fluthin reconocido</p><p><i>✓</i> Compatibilidad visible antes de solicitar</p><p><i>✓</i> Aprobación local requerida</p><div class="terminal-line"><span>estado</span><strong>listo para explorar</strong></div></div></section>
+    <section class="landing-final"><p class="landing-eyebrow">EMPIEZA CON UNA CUENTA</p><h2>Tu próximo paquete merece<br>un lugar <em>claro.</em></h2><p>Entra para explorar el catálogo, gestionar tu perfil y conectar un DaneDesk.</p><a class="landing-primary" href="/auth/github/login?next=/">Continuar con GitHub <span aria-hidden="true">→</span></a></section>
+  </main>
+  <footer class="landing-footer"><span>Foundstore · Ecosistema Fluthin</span><span>Danenone · Knosthalij</span></footer>
+</body>
+</html>

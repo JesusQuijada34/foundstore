@@ -1250,9 +1250,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.get("/")
     def index() -> Response | str:
-        blocked = web_session_or_login()
-        if blocked:
-            return blocked
+        if not github_login():
+            return render_template("landing.html")
         return render_template("index.html", catalog_owner=CATALOG_OWNER, visitor_country=request.headers.get("CF-IPCountry", ""))
 
     @app.get("/<author>/<slug>")

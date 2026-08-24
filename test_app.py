@@ -18,10 +18,13 @@ class FlaskRenderAppTests(unittest.TestCase):
     def owner_headers(self) -> dict[str, str]:
         return {"X-Foundstore-Owner-Token": "owner-test-token"}
 
-    def test_web_root_requires_session_but_health_remains_public(self) -> None:
+    def test_web_root_shows_public_landing_but_health_remains_public(self) -> None:
         root = self.client.get("/")
-        self.assertEqual(root.status_code, 401)
-        self.assertIn("Continuar con GitHub", root.get_data(as_text=True))
+        self.assertEqual(root.status_code, 200)
+        landing = root.get_data(as_text=True)
+        self.assertIn("Encuentra software que", landing)
+        self.assertIn("Explorar con GitHub", landing)
+        self.assertNotIn("repositoryUrl", landing)
         health = self.client.get("/healthz")
         self.assertEqual(health.status_code, 200)
         self.assertEqual(health.json["storage"], "sqlite-fallback")
@@ -152,6 +155,7 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertIn("foundstore-public-upgrade.css", login)
         self.assertIn("foundstore-public-upgrade.css", catalog)
         self.assertIn("foundstore-discovery-mark-solid_515e468d.png", login)
+        self.assertIn("Explorar con GitHub", login)
         self.assertIn('id="main-content"', catalog)
         public_styles = self.client.get("/static/css/foundstore-public-upgrade.css")
         self.assertEqual(public_styles.status_code, 200)
