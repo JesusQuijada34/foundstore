@@ -1,0 +1,19 @@
+(function attachFoundstoreAccount(window){
+  const esc=value=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+  const icon=path=>`<svg viewBox="0 0 24 24" aria-hidden="true">${path}</svg>`;
+  const glyphs={profile:icon('<circle cx="12" cy="8" r="3.2"/><path d="M5 21c.8-4.2 3.1-6.3 7-6.3s6.2 2.1 7 6.3"/>'),settings:icon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.8 1.8 0 0 0 .35 1.98l.06.06-2.12 2.12-.06-.06a1.8 1.8 0 0 0-1.98-.35 1.8 1.8 0 0 0-1.1 1.65v.1h-3v-.1A1.8 1.8 0 0 0 10.5 18.75a1.8 1.8 0 0 0-1.98.35l-.06.06-2.12-2.12.06-.06A1.8 1.8 0 0 0 6.75 15a1.8 1.8 0 0 0-1.65-1.1H5v-3h.1A1.8 1.8 0 0 0 6.75 9.8a1.8 1.8 0 0 0-.35-1.98l-.06-.06 2.12-2.12.06.06a1.8 1.8 0 0 0 1.98.35A1.8 1.8 0 0 0 11.6 4.4v-.1h3v.1a1.8 1.8 0 0 0 1.1 1.65 1.8 1.8 0 0 0 1.98-.35l.06-.06 2.12 2.12-.06.06a1.8 1.8 0 0 0-.35 1.98 1.8 1.8 0 0 0 1.65 1.1h.1v3h-.1A1.8 1.8 0 0 0 19.4 15Z"/>'),key:icon('<path d="M14.5 9a4.5 4.5 0 1 1-4.2-3H3v3h2v2h2v2h3.3A4.5 4.5 0 0 1 14.5 9Z"/><circle cx="14.5" cy="9" r=".5"/>'),devices:icon('<rect x="4" y="3" width="16" height="12" rx="2"/><path d="M8 21h8M12 15v6"/>'),logout:icon('<path d="M10 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5"/><path d="m14 16 4-4-4-4M18 12H8"/>')};
+  function close(node){node.classList.remove('open');const trigger=node.querySelector('button');if(trigger)trigger.setAttribute('aria-expanded','false')}
+  async function mount(node,{deviceCount=0}={}){
+    if(!node)return;
+    let profile={};
+    try{const response=await fetch('/api/v1/me/profile',{cache:'no-store'});if(response.ok)profile=(await response.json()).profile||{}}catch(_){}
+    const name=profile.displayName||profile.githubName||profile.githubLogin||'Cuenta Foundstore',handle=profile.githubLogin?`@${profile.githubLogin}`:'Cuenta vinculada',initial=esc(name.slice(0,1).toUpperCase()||'?'),avatar=profile.avatarUrl?`<img src="${esc(profile.avatarUrl)}" alt="">`:initial;
+    node.className='account foundstore-account';
+    node.innerHTML=`<button class="foundstore-account-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="foundstore-account-menu"><span class="foundstore-account-avatar">${avatar}</span><span class="foundstore-account-copy"><b>${esc(name)}</b><span>${esc(handle)}</span></span><svg class="foundstore-account-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button><div class="foundstore-account-panel" id="foundstore-account-menu" role="menu"><div class="foundstore-account-summary"><strong>${esc(name)}</strong>${deviceCount?`${deviceCount} dispositivo${deviceCount===1?'':'s'} vinculado${deviceCount===1?'':'s'}`:'Aún no hay dispositivos vinculados'}</div><a class="foundstore-account-link" role="menuitem" href="/developer/${encodeURIComponent(profile.githubLogin||'')}">${glyphs.profile}Ver perfil público</a><a class="foundstore-account-link" role="menuitem" href="/settings">${glyphs.settings}Configuración</a><a class="foundstore-account-link" role="menuitem" href="/profile#licenses">${glyphs.key}Licencias</a><a class="foundstore-account-link" role="menuitem" href="/profile#devices">${glyphs.devices}Dispositivos</a><a class="foundstore-account-link danger" role="menuitem" href="/logout">${glyphs.logout}Cerrar sesión</a></div>`;
+    const trigger=node.querySelector('.foundstore-account-trigger');
+    trigger.addEventListener('click',()=>{const open=!node.classList.contains('open');document.querySelectorAll('.foundstore-account.open').forEach(close);node.classList.toggle('open',open);trigger.setAttribute('aria-expanded',String(open))});
+    node.addEventListener('keydown',event=>{if(event.key==='Escape'){close(node);trigger.focus()}});
+    document.addEventListener('click',event=>{if(!node.contains(event.target))close(node)},{once:false});
+  }
+  window.FoundstoreAccount={mount};
+}(window));

@@ -1365,6 +1365,13 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return blocked
         return render_template("profile.html", github_login=github_login(), visitor_country=request.headers.get("CF-IPCountry", ""))
 
+    @app.get("/settings")
+    def settings_page() -> Response | str:
+        blocked = web_session_or_login()
+        if blocked:
+            return blocked
+        return render_template("settings.html", github_login=github_login(), visitor_country=request.headers.get("CF-IPCountry", ""))
+
     @app.get("/developer/<github_login>")
     def developer_page(github_login: str) -> Response | str:
         blocked = web_session_or_login()
@@ -1595,6 +1602,39 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return jsonify({"error": "Inicia sesión con GitHub para ver tus licencias"}), 401
         return jsonify({"licenses": app.extensions["device_store"].list_licenses_for_owner(login)})
 
+    @app.get("/api/v1/me/onboarding")
+    def my_onboarding() -> Response:
+        login = github_login()
+        if not login:
+            return jsonify({"error": "Inicia sesión con GitHub para preparar un dispositivo"}), 401
+        return jsonify({
+            "githubAuthenticated": True,
+            "account": login,
+            "serialEndpoint": "/api/v1/me/access-serials",
+            "licenseLinkEndpoint": "/api/v1/license-links",
+            "bootstrapGuide": f"{app.config['PUBLIC_ORIGIN'].rstrip('/')}/api/v1/agent/bootstrap-guide",
+            "supportedPlatforms": ["Danenone", "Knosthalij"],
+            "localApprovalRequired": True,
+        })
+
+    @app.post("/api/v1/me/access-serials")
+    def create_access_serial() -> Response:
+        login = github_login()
+        if not login:
+            return jsonify({"error": "Inicia sesión con GitHub antes de crear un serial"}), 401
+        payload = request.get_json(silent=True) or {}
+        platform = canonical_platform(str(payload.get("platform", "Danenone")))
+        if platform not in {"Danenone", "Knosthalij"}:
+            return jsonify({"error": "La plataforma debe ser Danenone o Knosthalij"}), 400
+        created = app.extensions["device_store"].create_license([], login)
+        return jsonify({
+            "serial": created["license"],
+            "kind": "license_link",
+            "platform": platform,
+            "requiresGitHubApproval": True,
+            "localApprovalRequired": True,
+        }), 201
+
     @app.route("/api/v1/me/profile", methods=["GET", "PATCH"])
     def my_profile() -> Response:
         login = github_login()
@@ -1623,6 +1663,22 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if not isinstance(restore_apps, list) or any(not isinstance(item, dict) for item in restore_apps):
             return jsonify({"error": "restoreApps debe ser una lista de aplicaciones aprobadas"}), 400
         return jsonify(app.extensions["device_store"].create_license(restore_apps, login)), 201
+
+    @app.get("/api/v1/agent/bootstrap-guide")
+    def agent_bootstrap_guide() -> Response:
+        platform = canonical_platform(str(request.args.get("platform", "Danenone")))
+        if platform not in {"Danenone", "Knosthalij"}:
+            return jsonify({"error": "La plataforma debe ser Danenone o Knosthalij"}), 400
+        guide_url = f"{app.config['PUBLIC_ORIGIN'].rstrip('/')}/api/v1/agent/bootstrap-guide?platform={quote(platform)}"
+        return jsonify({
+            "platform": platform,
+            "mode": "web_first",
+            "curl": f"curl -fsSL {guide_url}",
+            "nextStep": "Crea un serial desde tu sesión Foundstore, vincúlalo con GitHub y ejecútalo localmente con Foundstore Agent.",
+            "requiresGitHubApproval": True,
+            "localApprovalRequired": True,
+            "note": "La guía no descarga paquetes, no emite tokens y no instala software de catálogo automáticamente.",
+        })
 
     @app.post("/api/v1/me/devices/<device_id>/installations")
     def install_from_catalog(device_id: str) -> Response:

@@ -163,18 +163,26 @@ class FlaskRenderAppTests(unittest.TestCase):
         public_styles = self.client.get("/static/css/foundstore-public-upgrade.css")
         motion_styles = self.client.get("/static/css/foundstore-motion.css")
         motion_script = self.client.get("/static/js/foundstore-motion.js")
+        account_styles = self.client.get("/static/css/foundstore-account.css")
+        account_script = self.client.get("/static/js/foundstore-account.js")
         self.assertEqual(public_styles.status_code, 200)
         self.assertEqual(motion_styles.status_code, 200)
         self.assertEqual(motion_script.status_code, 200)
+        self.assertEqual(account_styles.status_code, 200)
+        self.assertEqual(account_script.status_code, 200)
         self.assertIn("foundstore-ambient-drift", public_styles.get_data(as_text=True))
         self.assertIn("prefers-reduced-motion", public_styles.get_data(as_text=True))
         self.assertIn("foundstore-stage-four", public_styles.get_data(as_text=True))
+        self.assertIn("foundstore-account-trigger", account_styles.get_data(as_text=True))
+        self.assertIn("FoundstoreAccount", account_script.get_data(as_text=True))
         self.assertIn("prefers-reduced-motion", motion_styles.get_data(as_text=True))
         motion_source = motion_script.get_data(as_text=True)
         self.assertIn("navigator.userAgent", motion_source)
         self.assertNotIn("fetch(", motion_source)
         self.assertIn("data-fallback", components.get_data(as_text=True))
         self.assertIn("foundstore-package-main", components.get_data(as_text=True))
+        self.assertIn("creatorPackageRow", components.get_data(as_text=True))
+        self.assertIn("foundstore-account.js", catalog)
 
     def test_github_login_starts_authorization_with_configured_callback(self) -> None:
         oauth_app = create_app({"TESTING": True, "DATA_DIR": self.tempdir.name, "MONGODB_URI": None, "GITHUB_CLIENT_ID": "client-id", "GITHUB_CLIENT_SECRET": "client-secret", "SECRET_KEY": "test-session"})
@@ -264,6 +272,34 @@ class FlaskRenderAppTests(unittest.TestCase):
         revoked = self.client.get(f"/api/v1/devices/{claimed.json['id']}/state", headers=agent_headers)
         self.assertEqual(revoked.status_code, 403)
         self.assertTrue(revoked.json["relinkRequired"])
+
+    def test_access_serial_and_onboarding_require_github_session(self) -> None:
+        self.assertEqual(self.client.post("/api/v1/me/access-serials", json={}).status_code, 401)
+        self.assertEqual(self.client.get("/api/v1/me/onboarding").status_code, 401)
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "jq34"
+        serial = self.client.post("/api/v1/me/access-serials", json={"platform": "Knosthalij"})
+        onboarding = self.client.get("/api/v1/me/onboarding")
+        self.assertEqual(serial.status_code, 201)
+        self.assertEqual(serial.json["kind"], "license_link")
+        self.assertTrue(serial.json["serial"])
+        self.assertEqual(serial.json["platform"], "Knosthalij")
+        self.assertEqual(onboarding.status_code, 200)
+        self.assertTrue(onboarding.json["githubAuthenticated"])
+        self.assertTrue(onboarding.json["localApprovalRequired"])
+        self.assertNotIn("agentToken", onboarding.json)
+        self.assertEqual(onboarding.json["serialEndpoint"], "/api/v1/me/access-serials")
+
+    def test_settings_requires_github_and_exposes_safe_account_sections(self) -> None:
+        self.assertEqual(self.client.get("/settings").status_code, 401)
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "jq34"
+        settings = self.client.get("/settings")
+        self.assertEqual(settings.status_code, 200)
+        body = settings.get_data(as_text=True)
+        self.assertIn("Configuración de Foundstore", body)
+        self.assertIn("Crear serial", body)
+        self.assertIn("aprobación local", body)
 
     def test_mongo_license_link_status_accepts_serialized_expiration(self) -> None:
         class Links:
