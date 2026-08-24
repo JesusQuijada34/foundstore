@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from app import catalog_references, create_app, github_public_repositories, github_public_star_count, package_revision, raw_github_text
+from app import MongoStore, catalog_references, create_app, github_public_repositories, github_public_star_count, package_revision, raw_github_text
 
 
 class FlaskRenderAppTests(unittest.TestCase):
@@ -247,6 +247,7 @@ class FlaskRenderAppTests(unittest.TestCase):
         license_code = license_response.json["license"]
         link = self.client.post("/api/v1/license-links", json={"license": license_code, "displayName": "DaneDesk de prueba"})
         self.assertEqual(link.status_code, 201)
+        self.assertTrue(link.json["verificationUri"].startswith("https://imfoundstore.onrender.com/link/"))
         link_id, link_token, user_code = link.json["linkId"], link.json["linkToken"], link.json["userCode"]
         link_headers = {"X-Foundstore-Link-Token": link_token}
         self.assertEqual(self.client.get(f"/api/v1/license-links/{link_id}", headers=link_headers).json["status"], "awaiting_owner")
@@ -263,6 +264,19 @@ class FlaskRenderAppTests(unittest.TestCase):
         revoked = self.client.get(f"/api/v1/devices/{claimed.json['id']}/state", headers=agent_headers)
         self.assertEqual(revoked.status_code, 403)
         self.assertTrue(revoked.json["relinkRequired"])
+
+    def test_mongo_license_link_status_accepts_serialized_expiration(self) -> None:
+        class Links:
+            def find_one(self, *_: object, **__: object) -> dict[str, object]:
+                return {"status": "approved", "expiresAt": "2099-01-01T00:00:00+00:00", "usedAt": None}
+
+        class Database:
+            license_links = Links()
+
+        store = object.__new__(MongoStore)
+        store.db = Database()
+        status = store.license_link_status("link-1", "token-1")
+        self.assertEqual(status, {"status": "approved", "expiresAt": "2099-01-01T00:00:00+00:00", "claimed": False})
 
     def test_catalog_install_requires_session_owned_device_and_never_returns_download_url(self) -> None:
         license_code = self.client.post("/api/v1/licenses", headers=self.owner_headers(), json={}).json["license"]

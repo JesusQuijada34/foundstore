@@ -696,8 +696,13 @@ class MongoStore:
         link = self.db.license_links.find_one({"id": link_id, "linkTokenHash": token_hash(link_token)}, {"_id": 0})
         if not link:
             return None
-        status = "expired" if link["expiresAt"] <= utc_now() and link["status"] == "awaiting_owner" else link["status"]
-        return {"status": status, "expiresAt": link["expiresAt"].isoformat(), "claimed": bool(link.get("usedAt"))}
+        expires_value = link.get("expiresAt")
+        try:
+            expires_at = expires_value if isinstance(expires_value, datetime) else parse_iso(str(expires_value))
+        except (TypeError, ValueError):
+            return None
+        status = "expired" if expires_at <= utc_now() and link["status"] == "awaiting_owner" else link["status"]
+        return {"status": status, "expiresAt": expires_at.isoformat(), "claimed": bool(link.get("usedAt"))}
 
     def approve_license_link(self, link_id: str, user_code: str, github_login: str) -> bool:
         link = self.db.license_links.find_one({"id": link_id, "status": "awaiting_owner", "userCodeHash": token_hash(user_code.upper()), "expiresAt": {"$gt": utc_now()}})
@@ -1675,7 +1680,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         link = app.extensions["device_store"].begin_license_link(license_code, display_name, platform)
         if not link:
             return jsonify({"error": "La licencia no es válida, fue revocada o ya está vinculada"}), 401
-        return jsonify({**link, "verificationUri": url_for("license_link_page", link_id=link["linkId"], _external=True)}), 201
+        verification_uri = f"{app.config['PUBLIC_ORIGIN'].rstrip('/')}{url_for('license_link_page', link_id=link['linkId'])}"
+        return jsonify({**link, "verificationUri": verification_uri}), 201
 
     @app.get("/api/v1/license-links/<link_id>")
     def license_link_status(link_id: str) -> Response:
