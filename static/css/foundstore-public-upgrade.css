@@ -10,11 +10,37 @@
 
 body.foundstore-public-login,
 body.foundstore-public-catalog{
+  isolation:isolate;
   color:var(--foundstore-ink);
   background:
     radial-gradient(circle at 84% 7%,rgba(25,229,155,.14),transparent 28rem),
     radial-gradient(circle at 10% 91%,rgba(18,113,75,.15),transparent 28rem),
     #081610;
+}
+
+body.foundstore-public-login::before,
+body.foundstore-public-login::after,
+body.foundstore-public-catalog::after{
+  content:"";
+  position:fixed;
+  z-index:-1;
+  width:min(54vmax,720px);
+  aspect-ratio:1;
+  border-radius:44% 56% 62% 38% / 45% 38% 62% 55%;
+  pointer-events:none;
+  filter:blur(46px);
+  opacity:.22;
+  will-change:transform;
+  background:radial-gradient(circle at 35% 28%,rgba(97,255,187,.92),rgba(13,183,114,.46) 34%,rgba(2,67,45,.05) 70%);
+  animation:foundstore-ambient-drift 18s cubic-bezier(.45,.05,.55,.95) infinite alternate;
+}
+body.foundstore-public-login::before{top:-24vmax;left:-16vmax}
+body.foundstore-public-login::after{right:-22vmax;bottom:-22vmax;animation-delay:-8s}
+body.foundstore-public-catalog::after{right:-22vmax;bottom:-24vmax;animation-delay:-9s}
+
+@keyframes foundstore-ambient-drift{
+  from{transform:translate3d(-2vmax,-1vmax,0) rotate(-11deg) scale(.88)}
+  to{transform:translate3d(5vmax,4vmax,0) rotate(15deg) scale(1.14)}
 }
 
 body.foundstore-public-catalog::before{
@@ -60,9 +86,12 @@ body.foundstore-public-login .card::before{
   background:linear-gradient(90deg,transparent,var(--foundstore-signal),transparent);
 }
 body.foundstore-public-login .logo .foundstore-brand-icon{
-  background:linear-gradient(145deg,#23e7a3,#007a57);
+  overflow:hidden;
+  background:#0b2016;
   box-shadow:0 0 0 1px rgba(255,255,255,.22) inset,0 14px 36px rgba(0,185,130,.25);
+  animation:foundstore-mark-breathe 4.8s ease-in-out infinite;
 }
+body.foundstore-public-login .logo .foundstore-brand-logo{transform:scale(1.15)}
 body.foundstore-public-login .title{color:var(--foundstore-ink)}
 body.foundstore-public-login .copy,body.foundstore-public-login .note{color:var(--foundstore-muted)}
 body.foundstore-public-login .login{
@@ -84,8 +113,15 @@ body.foundstore-public-catalog .brand{color:var(--foundstore-ink)}
 body.foundstore-public-catalog .brand::after{content:"CATALOG";margin-left:auto;color:#6e897d;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:9px;letter-spacing:.1em}
 body.foundstore-public-catalog .foundstore-brand-icon,
 body.foundstore-public-catalog .cube{
-  background:linear-gradient(145deg,#23e7a3,#007a57);
+  overflow:hidden;
+  background:#0b2016;
   box-shadow:0 0 0 1px rgba(255,255,255,.22) inset,0 12px 28px rgba(0,185,130,.22);
+}
+body.foundstore-public-catalog .foundstore-brand-logo{transform:scale(1.14)}
+
+@keyframes foundstore-mark-breathe{
+  0%,100%{transform:translateY(0) scale(1);box-shadow:0 0 0 1px rgba(255,255,255,.22) inset,0 14px 36px rgba(0,185,130,.25)}
+  50%{transform:translateY(-2px) scale(1.035);box-shadow:0 0 0 1px rgba(255,255,255,.28) inset,0 18px 42px rgba(0,224,151,.34)}
 }
 body.foundstore-public-catalog .search,
 body.foundstore-public-catalog .language,
@@ -167,8 +203,11 @@ body.foundstore-public-catalog .pwa-button.primary{border-color:transparent;back
   body.foundstore-public-catalog .foundstore-package-card{border-radius:16px}
 }
 @media(prefers-reduced-motion:reduce){
+  body.foundstore-public-login::before,body.foundstore-public-login::after,body.foundstore-public-catalog::after{animation:none;transform:none}
+  body.foundstore-public-login .logo .foundstore-brand-icon{animation:none}
   *,*::before,*::after{scroll-behavior:auto!important;transition-duration:.001ms!important;animation-duration:.001ms!important}
 }
 @media(prefers-reduced-transparency:reduce){
+  body.foundstore-public-login::before,body.foundstore-public-login::after,body.foundstore-public-catalog::after{display:none}
   body.foundstore-public-login .card,body.foundstore-public-catalog .sidebar,body.foundstore-public-catalog .search,body.foundstore-public-catalog .language,body.foundstore-public-catalog .account,body.foundstore-public-catalog .chip{backdrop-filter:none!important;background:#10251c!important}
 }
