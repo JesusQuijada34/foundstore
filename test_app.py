@@ -24,6 +24,8 @@ class FlaskRenderAppTests(unittest.TestCase):
         landing = root.get_data(as_text=True)
         self.assertIn("Encuentra software que", landing)
         self.assertIn("Explorar con GitHub", landing)
+        self.assertIn("Secuencia simulada de instalación de Foundstore", landing)
+        self.assertIn("la aprobación sigue siendo local", landing)
         self.assertNotIn("repositoryUrl", landing)
         health = self.client.get("/healthz")
         self.assertEqual(health.status_code, 200)
@@ -161,6 +163,7 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(public_styles.status_code, 200)
         self.assertIn("foundstore-ambient-drift", public_styles.get_data(as_text=True))
         self.assertIn("prefers-reduced-motion", public_styles.get_data(as_text=True))
+        self.assertIn("foundstore-stage-four", public_styles.get_data(as_text=True))
         self.assertIn("data-fallback", components.get_data(as_text=True))
         self.assertIn("foundstore-package-main", components.get_data(as_text=True))
 
