@@ -53,8 +53,8 @@ El AAD canónico liga `version`, `deviceId`, `keyEpoch`, `envelopeId`, `expiresA
 | Sobre `owner-to-device` opaco v1, AAD, tamaño, caducidad, epoch y replay | Implementado en el servidor | El servidor enruta y registra recibos; no descifra. |
 | Despacho por comando HMAC con `envelopeId` y `keyEpoch` | Implementado en el servidor | Requiere que el agente actualizado lo procese. |
 | Consola Web Crypto de propietario y clave no exportable | Pendiente | Falta definir persistencia/recuperación segura antes de exponerla. |
-| Descifrado local del agente y aprobación local de inventario | Pendiente | No se publica una release hasta probarlo. |
-| Sobres `device-to-owner` para inventario sensible | Pendiente | MAC, servicios y aplicaciones no se guardan en texto claro. |
+| Descifrado local del agente y aprobación local de inventario | Implementado en la rama fuente del agente | No se publica una release hasta validar integración y recibir autorización. |
+| Sobres `device-to-owner` para inventario sensible | Implementado en servidor y rama fuente del agente | El servidor almacena sólo ciphertext; falta la consola Web Crypto del propietario para descifrarlo visualmente. |
 
 Las acciones de instalación, bloqueo, timbre y renovación de configuración mantienen aprobación local. El agente nunca acepta que el servidor o la consola conviertan un sobre válido en una instalación automática.
 

@@ -6,7 +6,7 @@ from datetime import timedelta
 from unittest.mock import patch
 
 from cryptography.hazmat.primitives.asymmetric import ec
-from app import MongoStore, base64url_encode, canonical_e2e_aad, catalog_references, create_app, github_public_repositories, github_public_star_count, package_revision, raw_github_text, utc_now
+from app import MongoStore, base64url_encode, canonical_e2e_aad, canonical_e2e_report_aad, catalog_references, create_app, github_public_repositories, github_public_star_count, package_revision, raw_github_text, utc_now
 
 
 class FlaskRenderAppTests(unittest.TestCase):
@@ -407,6 +407,37 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(self.client.post(f"/api/v1/me/devices/{device_id}/e2e-envelopes", json=second).status_code, 202)
         self.assertEqual(self.client.post(f"/api/v1/devices/{device_id}/e2e-key", headers=agent_headers, json={"publicJwk": public_jwk, "keyEpoch": 2}).status_code, 201)
         self.assertEqual(self.client.get(f"/api/v1/devices/{device_id}/e2e-envelopes/{second['envelopeId']}", headers=agent_headers).status_code, 404)
+
+    def test_e2e_device_report_requires_owner_key_and_stays_opaque(self) -> None:
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "jq34"
+        license_code = self.client.post("/api/v1/me/licenses", json={}).json["license"]
+        link = self.client.post("/api/v1/license-links", json={"license": license_code, "displayName": "DaneDesk informe E2E", "platform": "Danenone"}).json
+        self.assertEqual(self.client.post(f"/link/{link['linkId']}", data={"code": link["userCode"]}).status_code, 200)
+        claimed = self.client.post(f"/api/v1/license-links/{link['linkId']}/claim", headers={"X-Foundstore-Link-Token": link["linkToken"]}).json
+        device_id, agent_headers = claimed["id"], {"X-Danenone-Agent-Token": claimed["agentToken"]}
+
+        def public_jwk() -> dict[str, str]:
+            numbers = ec.generate_private_key(ec.SECP256R1()).public_key().public_numbers()
+            return {"kty": "EC", "crv": "P-256", "x": base64.urlsafe_b64encode(numbers.x.to_bytes(32, "big")).decode("ascii").rstrip("="), "y": base64.urlsafe_b64encode(numbers.y.to_bytes(32, "big")).decode("ascii").rstrip("=")}
+
+        device_public, owner_public, sender_public = public_jwk(), public_jwk(), public_jwk()
+        self.assertEqual(self.client.post(f"/api/v1/devices/{device_id}/e2e-key", headers=agent_headers, json={"publicJwk": device_public, "keyEpoch": 1}).status_code, 201)
+        self.assertEqual(self.client.post("/api/v1/me/e2e-key", json={"publicJwk": owner_public, "keyEpoch": 1}).status_code, 201)
+        owner_key = self.client.get(f"/api/v1/devices/{device_id}/e2e-owner-key", headers=agent_headers)
+        self.assertEqual(owner_key.status_code, 200)
+        self.assertEqual(owner_key.json["publicJwk"], owner_public)
+        report_id, expires_at = "e2e_report_first", (utc_now() + timedelta(minutes=5)).isoformat()
+        aad = canonical_e2e_report_aad(1, device_id, 1, 1, report_id, expires_at)
+        report = {"version": 1, "deviceId": device_id, "deviceKeyEpoch": 1, "ownerKeyEpoch": 1, "reportId": report_id, "type": "device_inventory", "expiresAt": expires_at, "senderEphemeralPublicJwk": sender_public, "nonce": base64url_encode(b"R" * 12), "ciphertext": base64url_encode(b"opaque-device-inventory-ciphertext"), "aad": base64url_encode(aad)}
+        self.assertEqual(self.client.post(f"/api/v1/devices/{device_id}/e2e-reports", headers=agent_headers, json=report).status_code, 202)
+        reports = self.client.get(f"/api/v1/me/devices/{device_id}/e2e-reports")
+        self.assertEqual(reports.status_code, 200)
+        self.assertEqual(reports.json["reports"][0]["ciphertext"], report["ciphertext"])
+        self.assertNotIn("plaintext", reports.json["reports"][0])
+        self.assertEqual(self.client.post(f"/api/v1/devices/{device_id}/e2e-reports", headers=agent_headers, json=report).status_code, 409)
+        self.assertEqual(self.client.post("/api/v1/me/e2e-key", json={"publicJwk": public_jwk(), "keyEpoch": 2}).status_code, 201)
+        self.assertEqual(self.client.post(f"/api/v1/devices/{device_id}/e2e-reports", headers=agent_headers, json=report).status_code, 400)
 
     def test_account_sections_are_independent_and_require_github(self) -> None:
         paths = ["/account/profile", "/account/licenses", "/account/devices", "/account/privacy", "/account/packages/invalid"]

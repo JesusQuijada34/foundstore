@@ -121,6 +121,14 @@ def canonical_e2e_aad(version: int, device_id: str, key_epoch: int, envelope_id:
     ).encode("utf-8")
 
 
+def canonical_e2e_report_aad(version: int, device_id: str, device_key_epoch: int, owner_key_epoch: int, report_id: str, expires_at: str) -> bytes:
+    return json.dumps(
+        {"deviceId": device_id, "deviceKeyEpoch": device_key_epoch, "direction": "device-to-owner", "expiresAt": expires_at, "ownerKeyEpoch": owner_key_epoch, "reportId": report_id, "version": version},
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
 def normalize_owner_e2e_envelope(device_id: str, payload: Any, key_epoch: int) -> dict[str, Any] | None:
     """Validate only routing metadata; ciphertext is intentionally never decrypted server-side."""
     if not isinstance(payload, dict) or payload.get("version") != 1 or payload.get("deviceId") != device_id or payload.get("keyEpoch") != key_epoch:
@@ -156,6 +164,29 @@ def normalize_owner_e2e_envelope(device_id: str, payload: Any, key_epoch: int) -
         "ciphertext": base64url_encode(ciphertext),
         "aad": base64url_encode(aad),
     }
+
+
+def normalize_device_e2e_report(device_id: str, owner_login: str, payload: Any, device_key_epoch: int, owner_key_epoch: int) -> dict[str, Any] | None:
+    if not isinstance(payload, dict) or payload.get("version") != 1 or payload.get("deviceId") != device_id or payload.get("deviceKeyEpoch") != device_key_epoch or payload.get("ownerKeyEpoch") != owner_key_epoch:
+        return None
+    report_id, expires_at, report_type = payload.get("reportId"), payload.get("expiresAt"), payload.get("type")
+    if not isinstance(report_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{16,96}", report_id) or report_type != "device_inventory" or not isinstance(expires_at, str):
+        return None
+    try:
+        expires = parse_iso(expires_at)
+    except (TypeError, ValueError):
+        return None
+    now = utc_now()
+    if expires.tzinfo is None or expires <= now + timedelta(seconds=30) or expires > now + timedelta(minutes=15):
+        return None
+    sender_key = normalize_p256_public_jwk(payload.get("senderEphemeralPublicJwk"))
+    nonce = base64url_decode(payload.get("nonce"), 12, 12)
+    ciphertext = base64url_decode(payload.get("ciphertext"), 17, 65536)
+    aad = base64url_decode(payload.get("aad"), 16, 1024)
+    expected_aad = canonical_e2e_report_aad(1, device_id, device_key_epoch, owner_key_epoch, report_id, expires_at)
+    if not sender_key or nonce is None or ciphertext is None or aad is None or not hmac.compare_digest(aad, expected_aad):
+        return None
+    return {"version": 1, "deviceId": device_id, "ownerLogin": owner_login, "deviceKeyEpoch": device_key_epoch, "ownerKeyEpoch": owner_key_epoch, "reportId": report_id, "type": report_type, "expiresAt": expires_at, "senderEphemeralPublicJwk": sender_key, "nonce": base64url_encode(nonce), "ciphertext": base64url_encode(ciphertext), "aad": base64url_encode(aad)}
 
 
 def parse_iso(value: str) -> datetime:
@@ -282,6 +313,11 @@ class DeviceStore(Protocol):
     def revoke_license_for_owner(self, license_code: str, owner_login: str, reason: str) -> bool: ...
     def register_device_e2e_key(self, device_id: str, public_jwk: dict[str, str], key_epoch: int) -> dict[str, Any] | None: ...
     def get_device_e2e_key(self, device_id: str) -> dict[str, Any] | None: ...
+    def register_owner_e2e_key(self, owner_login: str, public_jwk: dict[str, str], key_epoch: int) -> dict[str, Any] | None: ...
+    def get_owner_e2e_key(self, owner_login: str) -> dict[str, Any] | None: ...
+    def get_owner_e2e_key_for_device(self, device_id: str) -> tuple[str, dict[str, Any]] | None: ...
+    def queue_e2e_report(self, report: dict[str, Any]) -> dict[str, Any] | None: ...
+    def list_e2e_reports_for_owner(self, device_id: str, owner_login: str) -> list[dict[str, Any]]: ...
     def record_installation_status(self, device_id: str, request_id: str, status: str) -> None: ...
     def list_device_installations_for_owner(self, device_id: str, github_login: str) -> list[dict[str, Any]]: ...
     def installation_count(self, package_ref: str) -> int: ...
@@ -373,6 +409,27 @@ class LocalStore:
                   fingerprint TEXT NOT NULL,
                   registered_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS owner_e2e_keys (
+                  owner_login TEXT PRIMARY KEY,
+                  public_jwk_json TEXT NOT NULL,
+                  key_epoch INTEGER NOT NULL,
+                  fingerprint TEXT NOT NULL,
+                  registered_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS e2e_reports (
+                  report_id TEXT PRIMARY KEY,
+                  device_id TEXT NOT NULL,
+                  owner_login TEXT NOT NULL,
+                  device_key_epoch INTEGER NOT NULL,
+                  owner_key_epoch INTEGER NOT NULL,
+                  report_type TEXT NOT NULL,
+                  expires_at TEXT NOT NULL,
+                  sender_ephemeral_public_jwk_json TEXT NOT NULL,
+                  nonce TEXT NOT NULL,
+                  ciphertext TEXT NOT NULL,
+                  aad TEXT NOT NULL,
+                  created_at TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS device_installations (
                   device_id TEXT NOT NULL,
                   package_ref TEXT NOT NULL,
@@ -449,6 +506,8 @@ class LocalStore:
                   ON device_installations(package_ref, status);
                 CREATE INDEX IF NOT EXISTS idx_e2e_envelopes_device_status
                   ON e2e_envelopes(device_id, status, expires_at);
+                CREATE INDEX IF NOT EXISTS idx_e2e_reports_owner_device
+                  ON e2e_reports(owner_login, device_id, expires_at);
                 """
             )
             for migration in (
@@ -600,6 +659,52 @@ class LocalStore:
         if not row:
             return None
         return {"publicJwk": json.loads(row["public_jwk_json"]), "keyEpoch": row["key_epoch"], "fingerprint": row["fingerprint"], "registeredAt": row["registered_at"]}
+
+    def register_owner_e2e_key(self, owner_login: str, public_jwk: dict[str, str], key_epoch: int) -> dict[str, Any] | None:
+        fingerprint = public_key_fingerprint(public_jwk)
+        with self._connect() as conn:
+            current = conn.execute("SELECT key_epoch FROM owner_e2e_keys WHERE owner_login = ?", (owner_login,)).fetchone()
+            if key_epoch < 1 or (current and key_epoch <= current["key_epoch"]):
+                return None
+            registered_at = iso_now()
+            conn.execute(
+                "INSERT INTO owner_e2e_keys(owner_login, public_jwk_json, key_epoch, fingerprint, registered_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(owner_login) DO UPDATE SET public_jwk_json=excluded.public_jwk_json, key_epoch=excluded.key_epoch, fingerprint=excluded.fingerprint, registered_at=excluded.registered_at",
+                (owner_login, json.dumps(public_jwk, sort_keys=True), key_epoch, fingerprint, registered_at),
+            )
+        return {"publicJwk": public_jwk, "keyEpoch": key_epoch, "fingerprint": fingerprint, "registeredAt": registered_at}
+
+    def get_owner_e2e_key(self, owner_login: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute("SELECT public_jwk_json, key_epoch, fingerprint, registered_at FROM owner_e2e_keys WHERE owner_login = ?", (owner_login,)).fetchone()
+        if not row:
+            return None
+        return {"publicJwk": json.loads(row["public_jwk_json"]), "keyEpoch": row["key_epoch"], "fingerprint": row["fingerprint"], "registeredAt": row["registered_at"]}
+
+    def get_owner_e2e_key_for_device(self, device_id: str) -> tuple[str, dict[str, Any]] | None:
+        with self._connect() as conn:
+            row = conn.execute("SELECT owner_login FROM device_licenses WHERE device_id = ? AND status = 'active' AND owner_login IS NOT NULL", (device_id,)).fetchone()
+        if not row:
+            return None
+        owner_login, key = str(row["owner_login"]), self.get_owner_e2e_key(str(row["owner_login"]))
+        return (owner_login, key) if key else None
+
+    def queue_e2e_report(self, report: dict[str, Any]) -> dict[str, Any] | None:
+        try:
+            with self._connect() as conn:
+                conn.execute(
+                    """INSERT INTO e2e_reports(report_id, device_id, owner_login, device_key_epoch, owner_key_epoch, report_type, expires_at, sender_ephemeral_public_jwk_json, nonce, ciphertext, aad, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (report["reportId"], report["deviceId"], report["ownerLogin"], report["deviceKeyEpoch"], report["ownerKeyEpoch"], report["type"], report["expiresAt"], json.dumps(report["senderEphemeralPublicJwk"], sort_keys=True), report["nonce"], report["ciphertext"], report["aad"], iso_now()),
+                )
+        except sqlite3.IntegrityError:
+            return None
+        self.record_event(report["deviceId"], "e2e.report_available", {"reportId": report["reportId"], "type": report["type"]})
+        return {"reportId": report["reportId"], "expiresAt": report["expiresAt"]}
+
+    def list_e2e_reports_for_owner(self, device_id: str, owner_login: str) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute("SELECT * FROM e2e_reports WHERE device_id = ? AND owner_login = ? AND expires_at > ? ORDER BY created_at DESC", (device_id, owner_login, iso_now())).fetchall()
+        return [{"version": 1, "deviceId": device_id, "deviceKeyEpoch": row["device_key_epoch"], "ownerKeyEpoch": row["owner_key_epoch"], "reportId": row["report_id"], "type": row["report_type"], "expiresAt": row["expires_at"], "senderEphemeralPublicJwk": json.loads(row["sender_ephemeral_public_jwk_json"]), "nonce": row["nonce"], "ciphertext": row["ciphertext"], "aad": row["aad"]} for row in rows]
 
     def record_installation_status(self, device_id: str, request_id: str, status: str) -> None:
         with self._connect() as conn:
@@ -869,7 +974,9 @@ class LocalStore:
         with self._connect() as conn:
             pairings = conn.execute("DELETE FROM pairing_codes WHERE used_at IS NOT NULL OR expires_at <= ?", (now,)).rowcount
             commands = conn.execute("DELETE FROM commands WHERE expires_at <= ?", (now,)).rowcount
-        return {"expiredPairingCodes": pairings, "expiredCommands": commands}
+            envelopes = conn.execute("DELETE FROM e2e_envelopes WHERE expires_at <= ?", (now,)).rowcount
+            reports = conn.execute("DELETE FROM e2e_reports WHERE expires_at <= ?", (now,)).rowcount
+        return {"expiredPairingCodes": pairings, "expiredCommands": commands, "expiredE2EEnvelopes": envelopes, "expiredE2EReports": reports}
 
 
 class MongoStore:
@@ -890,6 +997,10 @@ class MongoStore:
         self.db.e2e_envelopes.create_index("envelopeId", unique=True)
         self.db.e2e_envelopes.create_index("expiresAt", expireAfterSeconds=0)
         self.db.e2e_envelopes.create_index([("deviceId", 1), ("status", 1), ("expiresAt", 1)])
+        self.db.owner_e2e_keys.create_index("ownerLogin", unique=True)
+        self.db.e2e_reports.create_index("reportId", unique=True)
+        self.db.e2e_reports.create_index("expiresAt", expireAfterSeconds=0)
+        self.db.e2e_reports.create_index([("ownerLogin", 1), ("deviceId", 1), ("expiresAt", 1)])
         self.db.developer_profiles.create_index("githubLogin", unique=True)
         self.db.developer_follows.create_index([("followerLogin", 1), ("developerLogin", 1)], unique=True)
         self.db.developer_follows.create_index("developerLogin")
@@ -1015,6 +1126,42 @@ class MongoStore:
             return None
         registered_at = row.get("registeredAt")
         return {"publicJwk": row["publicJwk"], "keyEpoch": row["keyEpoch"], "fingerprint": row["fingerprint"], "registeredAt": registered_at.isoformat() if isinstance(registered_at, datetime) else registered_at}
+
+    def register_owner_e2e_key(self, owner_login: str, public_jwk: dict[str, str], key_epoch: int) -> dict[str, Any] | None:
+        current = self.db.owner_e2e_keys.find_one({"ownerLogin": owner_login}, {"keyEpoch": 1})
+        if key_epoch < 1 or (current and key_epoch <= int(current.get("keyEpoch", 0))):
+            return None
+        registered_at, fingerprint = utc_now(), public_key_fingerprint(public_jwk)
+        self.db.owner_e2e_keys.update_one({"ownerLogin": owner_login}, {"$set": {"ownerLogin": owner_login, "publicJwk": public_jwk, "keyEpoch": key_epoch, "fingerprint": fingerprint, "registeredAt": registered_at}}, upsert=True)
+        return {"publicJwk": public_jwk, "keyEpoch": key_epoch, "fingerprint": fingerprint, "registeredAt": registered_at.isoformat()}
+
+    def get_owner_e2e_key(self, owner_login: str) -> dict[str, Any] | None:
+        row = self.db.owner_e2e_keys.find_one({"ownerLogin": owner_login}, {"_id": 0})
+        if not row:
+            return None
+        registered_at = row.get("registeredAt")
+        return {"publicJwk": row["publicJwk"], "keyEpoch": row["keyEpoch"], "fingerprint": row["fingerprint"], "registeredAt": registered_at.isoformat() if isinstance(registered_at, datetime) else registered_at}
+
+    def get_owner_e2e_key_for_device(self, device_id: str) -> tuple[str, dict[str, Any]] | None:
+        license_row = self.db.device_licenses.find_one({"deviceId": device_id, "status": "active", "ownerLogin": {"$type": "string"}}, {"ownerLogin": 1})
+        if not license_row:
+            return None
+        owner_login, key = str(license_row["ownerLogin"]), self.get_owner_e2e_key(str(license_row["ownerLogin"]))
+        return (owner_login, key) if key else None
+
+    def queue_e2e_report(self, report: dict[str, Any]) -> dict[str, Any] | None:
+        from pymongo.errors import DuplicateKeyError
+
+        try:
+            self.db.e2e_reports.insert_one({"reportId": report["reportId"], "deviceId": report["deviceId"], "ownerLogin": report["ownerLogin"], "deviceKeyEpoch": report["deviceKeyEpoch"], "ownerKeyEpoch": report["ownerKeyEpoch"], "type": report["type"], "expiresAt": parse_iso(report["expiresAt"]), "senderEphemeralPublicJwk": report["senderEphemeralPublicJwk"], "nonce": report["nonce"], "ciphertext": report["ciphertext"], "aad": report["aad"], "createdAt": utc_now()})
+        except DuplicateKeyError:
+            return None
+        self.record_event(report["deviceId"], "e2e.report_available", {"reportId": report["reportId"], "type": report["type"]})
+        return {"reportId": report["reportId"], "expiresAt": report["expiresAt"]}
+
+    def list_e2e_reports_for_owner(self, device_id: str, owner_login: str) -> list[dict[str, Any]]:
+        rows = self.db.e2e_reports.find({"deviceId": device_id, "ownerLogin": owner_login, "expiresAt": {"$gt": utc_now()}}, {"_id": 0}).sort("createdAt", -1)
+        return [{"version": 1, "deviceId": device_id, "deviceKeyEpoch": row["deviceKeyEpoch"], "ownerKeyEpoch": row["ownerKeyEpoch"], "reportId": row["reportId"], "type": row["type"], "expiresAt": row["expiresAt"].isoformat() if isinstance(row.get("expiresAt"), datetime) else row.get("expiresAt"), "senderEphemeralPublicJwk": row["senderEphemeralPublicJwk"], "nonce": row["nonce"], "ciphertext": row["ciphertext"], "aad": row["aad"]} for row in rows]
 
     def record_installation_status(self, device_id: str, request_id: str, status: str) -> None:
         command = self.db.commands.find_one({"id": request_id, "deviceId": device_id, "type": "install_request"}, {"payload": 1})
@@ -2224,6 +2371,31 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return jsonify({"error": "La clave no pudo registrarse; usa una época de clave superior"}), 409
         return jsonify(registered), 201
 
+    @app.post("/api/v1/me/e2e-key")
+    def register_owner_e2e_key() -> Response:
+        login = github_login()
+        if not login:
+            return jsonify({"error": "Inicia sesión con GitHub para registrar tu clave E2E"}), 401
+        payload = request.get_json(silent=True) or {}
+        public_jwk = normalize_p256_public_jwk(payload.get("publicJwk"))
+        key_epoch = payload.get("keyEpoch")
+        if not public_jwk or isinstance(key_epoch, bool) or not isinstance(key_epoch, int):
+            return jsonify({"error": "Se requiere una clave pública P-256 y una época de clave válida"}), 400
+        registered = app.extensions["device_store"].register_owner_e2e_key(login, public_jwk, key_epoch)
+        if not registered:
+            return jsonify({"error": "La clave no pudo registrarse; usa una época de clave superior"}), 409
+        return jsonify(registered), 201
+
+    @app.get("/api/v1/me/e2e-key")
+    def my_owner_e2e_key() -> Response:
+        login = github_login()
+        if not login:
+            return jsonify({"error": "Inicia sesión con GitHub para consultar tu clave E2E"}), 401
+        key = app.extensions["device_store"].get_owner_e2e_key(login)
+        if not key:
+            return jsonify({"error": "Aún no registraste una clave E2E"}), 404
+        return jsonify(key)
+
     @app.get("/api/v1/me/devices/<device_id>/e2e-key")
     def my_device_e2e_key(device_id: str) -> Response:
         login = github_login()
@@ -2286,6 +2458,44 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if not key or not app.extensions["device_store"].receipt_e2e_envelope(device_id, envelope_id, int(key["keyEpoch"]), receipt):
             return jsonify({"error": "El sobre no admite otro recibo"}), 409
         return jsonify({"envelopeId": envelope_id, "receipt": receipt}), 202
+
+    @app.get("/api/v1/devices/<device_id>/e2e-owner-key")
+    def owner_e2e_key_for_agent(device_id: str) -> Response:
+        _, error = agent_device_or_error(app, device_id)
+        if error:
+            return error
+        owner_key = app.extensions["device_store"].get_owner_e2e_key_for_device(device_id)
+        if not owner_key:
+            return jsonify({"error": "El propietario aún no registró una clave E2E"}), 409
+        owner_login, key = owner_key
+        return jsonify({"ownerLogin": owner_login, **key})
+
+    @app.post("/api/v1/devices/<device_id>/e2e-reports")
+    def queue_agent_e2e_report(device_id: str) -> Response:
+        _, error = agent_device_or_error(app, device_id)
+        if error:
+            return error
+        device_key = app.extensions["device_store"].get_device_e2e_key(device_id)
+        owner_key = app.extensions["device_store"].get_owner_e2e_key_for_device(device_id)
+        if not device_key or not owner_key:
+            return jsonify({"error": "Falta una clave E2E activa del dispositivo o propietario"}), 409
+        owner_login, key = owner_key
+        report = normalize_device_e2e_report(device_id, owner_login, request.get_json(silent=True), int(device_key["keyEpoch"]), int(key["keyEpoch"]))
+        if not report:
+            return jsonify({"error": "Reporte E2E inválido, vencido o ligado a otra época de clave"}), 400
+        queued = app.extensions["device_store"].queue_e2e_report(report)
+        if not queued:
+            return jsonify({"error": "El identificador de reporte ya fue usado"}), 409
+        return jsonify(queued), 202
+
+    @app.get("/api/v1/me/devices/<device_id>/e2e-reports")
+    def my_device_e2e_reports(device_id: str) -> Response:
+        login = github_login()
+        if not login:
+            return jsonify({"error": "Inicia sesión con GitHub para consultar reportes E2E"}), 401
+        if not any(item["id"] == device_id for item in app.extensions["device_store"].list_devices_for_owner(login)):
+            return jsonify({"error": "El DaneDesk no pertenece a tu cuenta"}), 404
+        return jsonify({"deviceId": device_id, "reports": app.extensions["device_store"].list_e2e_reports_for_owner(device_id, login)})
 
     @app.get("/api/v1/me/devices/<device_id>/installations")
     def my_device_installations(device_id: str) -> Response:
