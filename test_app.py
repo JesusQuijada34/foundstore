@@ -1,5 +1,7 @@
 import os
 import base64
+import hashlib
+import re
 import tempfile
 import unittest
 from datetime import timedelta
@@ -295,6 +297,37 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertTrue(onboarding.json["localApprovalRequired"])
         self.assertNotIn("agentToken", onboarding.json)
         self.assertEqual(onboarding.json["serialEndpoint"], "/api/v1/me/access-serials")
+
+    def test_flet_console_authorization_uses_pkce_github_confirmation_and_revocable_session(self) -> None:
+        verifier = "flet-console-verifier-0123456789012345678901234567890123456789"
+        challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest()).decode("ascii").rstrip("=")
+        started = self.client.post("/api/v1/console-auth", json={"pkceChallenge": challenge})
+        self.assertEqual(started.status_code, 201)
+        request_id, user_code = started.json["requestId"], started.json["userCode"]
+        self.assertEqual(self.client.get(f"/api/v1/console-auth/{request_id}", headers={"X-Foundstore-Console-Code": user_code}).json["status"], "awaiting_owner")
+        verify_path = f"/console/authorize/{request_id}?code={user_code}"
+        self.assertEqual(self.client.get(verify_path).status_code, 401)
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "jq34"
+        approval_page = self.client.get(verify_path)
+        self.assertEqual(approval_page.status_code, 200)
+        csrf = re.search(r'name="csrf" value="([^"]+)"', approval_page.get_data(as_text=True))
+        self.assertIsNotNone(csrf)
+        approved = self.client.post(verify_path, data={"code": user_code, "csrf": csrf.group(1) if csrf else ""})
+        self.assertEqual(approved.status_code, 200)
+        self.assertEqual(self.client.get(f"/api/v1/console-auth/{request_id}", headers={"X-Foundstore-Console-Code": user_code}).json["status"], "approved")
+        self.assertEqual(self.client.post(f"/api/v1/console-auth/{request_id}/token", json={"pkceVerifier": verifier + "-wrong"}).status_code, 401)
+        claimed = self.client.post(f"/api/v1/console-auth/{request_id}/token", json={"pkceVerifier": verifier})
+        self.assertEqual(claimed.status_code, 201)
+        self.assertEqual(claimed.json["account"], "jq34")
+        self.assertNotIn("github", claimed.json["consoleToken"].lower())
+        self.assertEqual(self.client.post(f"/api/v1/console-auth/{request_id}/token", json={"pkceVerifier": verifier}).status_code, 401)
+        console_headers = {"X-Foundstore-Console-Token": claimed.json["consoleToken"]}
+        console_client = self.app.test_client()
+        self.assertEqual(console_client.get("/api/v1/me/devices", headers=console_headers).status_code, 200)
+        self.assertEqual(console_client.post("/api/v1/me/licenses", headers=console_headers, json={}).status_code, 201)
+        self.assertEqual(console_client.delete("/api/v1/console-session", headers=console_headers).status_code, 204)
+        self.assertEqual(console_client.get("/api/v1/me/licenses", headers=console_headers).status_code, 401)
 
     def test_settings_requires_github_and_exposes_safe_account_sections(self) -> None:
         self.assertEqual(self.client.get("/settings").status_code, 401)

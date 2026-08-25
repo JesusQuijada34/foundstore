@@ -12,6 +12,7 @@ import base64
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import hmac
+from html import escape
 import json
 import os
 import re
@@ -309,6 +310,12 @@ class DeviceStore(Protocol):
     def license_link_status(self, link_id: str, link_token: str) -> dict[str, Any] | None: ...
     def approve_license_link(self, link_id: str, user_code: str, github_login: str) -> bool: ...
     def claim_license_link(self, link_id: str, link_token: str) -> dict[str, Any] | None: ...
+    def begin_console_authorization(self, pkce_challenge: str) -> dict[str, Any] | None: ...
+    def console_authorization_status(self, request_id: str, user_code: str) -> dict[str, Any] | None: ...
+    def approve_console_authorization(self, request_id: str, user_code: str, github_login: str) -> bool: ...
+    def claim_console_authorization(self, request_id: str, pkce_verifier: str) -> dict[str, Any] | None: ...
+    def authenticate_console_token(self, console_token: str) -> str | None: ...
+    def revoke_console_token(self, console_token: str) -> bool: ...
     def revoke_license(self, license_code: str, reason: str) -> bool: ...
     def revoke_license_for_owner(self, license_code: str, owner_login: str, reason: str) -> bool: ...
     def register_device_e2e_key(self, device_id: str, public_jwk: dict[str, str], key_epoch: int) -> dict[str, Any] | None: ...
@@ -475,6 +482,22 @@ class LocalStore:
                   expires_at TEXT NOT NULL,
                   used_at TEXT
                 );
+                CREATE TABLE IF NOT EXISTS console_authorizations (
+                  id TEXT PRIMARY KEY,
+                  pkce_challenge TEXT NOT NULL,
+                  user_code_hash TEXT NOT NULL,
+                  status TEXT NOT NULL DEFAULT 'awaiting_owner',
+                  owner_login TEXT,
+                  expires_at TEXT NOT NULL,
+                  claimed_at TEXT
+                );
+                CREATE TABLE IF NOT EXISTS console_sessions (
+                  token_hash TEXT PRIMARY KEY,
+                  owner_login TEXT NOT NULL,
+                  expires_at TEXT NOT NULL,
+                  created_at TEXT NOT NULL,
+                  last_used_at TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS developer_profiles (
                   github_login TEXT PRIMARY KEY,
                   display_name TEXT,
@@ -500,6 +523,8 @@ class LocalStore:
                 );
                 CREATE INDEX IF NOT EXISTS idx_developer_follows_target ON developer_follows(developer_login);
                 CREATE INDEX IF NOT EXISTS idx_license_links_license ON license_links(license_hash);
+                CREATE INDEX IF NOT EXISTS idx_console_authorizations_expiry ON console_authorizations(expires_at);
+                CREATE INDEX IF NOT EXISTS idx_console_sessions_expiry ON console_sessions(expires_at);
                 CREATE INDEX IF NOT EXISTS idx_device_events_device_time
                   ON device_events(device_id, created_at);
                 CREATE INDEX IF NOT EXISTS idx_device_installations_package
@@ -605,6 +630,78 @@ class LocalStore:
             conn.execute("UPDATE license_links SET status = 'claimed', used_at = ? WHERE id = ?", (now, link_id))
         self.record_event(device_id, "device.paired", {"displayName": link["display_name"], "ownerLogin": link["owner_login"], "platform": link["platform"]})
         return {"id": device_id, "agentToken": agent_token, "platform": link["platform"]}
+
+    def begin_console_authorization(self, pkce_challenge: str) -> dict[str, Any] | None:
+        if not re.fullmatch(r"[A-Za-z0-9_-]{43}", pkce_challenge):
+            return None
+        request_id = secrets.token_urlsafe(18)
+        user_code = "".join(secrets.choice(PAIRING_ALPHABET) for _ in range(8))
+        expires_at = utc_now() + timedelta(minutes=10)
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT INTO console_authorizations(id, pkce_challenge, user_code_hash, expires_at) VALUES (?, ?, ?, ?)",
+                (request_id, pkce_challenge, token_hash(user_code), expires_at.isoformat()),
+            )
+        return {"requestId": request_id, "userCode": user_code, "expiresAt": expires_at.isoformat()}
+
+    def console_authorization_status(self, request_id: str, user_code: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT status, expires_at, claimed_at FROM console_authorizations WHERE id = ? AND user_code_hash = ?",
+                (request_id, token_hash(user_code.upper())),
+            ).fetchone()
+        if not row:
+            return None
+        status = "expired" if parse_iso(row["expires_at"]) <= utc_now() and row["status"] == "awaiting_owner" else row["status"]
+        return {"status": status, "expiresAt": row["expires_at"], "claimed": bool(row["claimed_at"])}
+
+    def approve_console_authorization(self, request_id: str, user_code: str, github_login: str) -> bool:
+        with self._connect() as conn:
+            changed = conn.execute(
+                "UPDATE console_authorizations SET status = 'approved', owner_login = ? WHERE id = ? AND user_code_hash = ? AND status = 'awaiting_owner' AND expires_at > ?",
+                (github_login, request_id, token_hash(user_code.upper()), iso_now()),
+            ).rowcount
+        return bool(changed)
+
+    def claim_console_authorization(self, request_id: str, pkce_verifier: str) -> dict[str, Any] | None:
+        if not isinstance(pkce_verifier, str) or not re.fullmatch(r"[A-Za-z0-9._~-]{43,128}", pkce_verifier):
+            return None
+        challenge = base64url_encode(hashlib.sha256(pkce_verifier.encode("ascii")).digest())
+        with self._connect() as conn:
+            request_row = conn.execute(
+                "SELECT owner_login FROM console_authorizations WHERE id = ? AND pkce_challenge = ? AND status = 'approved' AND claimed_at IS NULL AND expires_at > ?",
+                (request_id, challenge, iso_now()),
+            ).fetchone()
+            if not request_row or not request_row["owner_login"]:
+                return None
+            now, expires_at, console_token = iso_now(), (utc_now() + timedelta(hours=12)).isoformat(), secrets.token_urlsafe(32)
+            changed = conn.execute(
+                "UPDATE console_authorizations SET status = 'claimed', claimed_at = ? WHERE id = ? AND status = 'approved' AND claimed_at IS NULL",
+                (now, request_id),
+            ).rowcount
+            if not changed:
+                return None
+            conn.execute(
+                "INSERT INTO console_sessions(token_hash, owner_login, expires_at, created_at, last_used_at) VALUES (?, ?, ?, ?, ?)",
+                (token_hash(console_token), request_row["owner_login"], expires_at, now, now),
+            )
+        return {"consoleToken": console_token, "account": request_row["owner_login"], "expiresAt": expires_at}
+
+    def authenticate_console_token(self, console_token: str) -> str | None:
+        if not isinstance(console_token, str) or not 24 <= len(console_token) <= 256:
+            return None
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT owner_login FROM console_sessions WHERE token_hash = ? AND expires_at > ?",
+                (token_hash(console_token), iso_now()),
+            ).fetchone()
+            if row:
+                conn.execute("UPDATE console_sessions SET last_used_at = ? WHERE token_hash = ?", (iso_now(), token_hash(console_token)))
+        return str(row["owner_login"]) if row else None
+
+    def revoke_console_token(self, console_token: str) -> bool:
+        with self._connect() as conn:
+            return bool(conn.execute("DELETE FROM console_sessions WHERE token_hash = ?", (token_hash(console_token),)).rowcount)
 
     def revoke_license(self, license_code: str, reason: str) -> bool:
         license_hash = token_hash(normalize_license(license_code))
@@ -976,7 +1073,9 @@ class LocalStore:
             commands = conn.execute("DELETE FROM commands WHERE expires_at <= ?", (now,)).rowcount
             envelopes = conn.execute("DELETE FROM e2e_envelopes WHERE expires_at <= ?", (now,)).rowcount
             reports = conn.execute("DELETE FROM e2e_reports WHERE expires_at <= ?", (now,)).rowcount
-        return {"expiredPairingCodes": pairings, "expiredCommands": commands, "expiredE2EEnvelopes": envelopes, "expiredE2EReports": reports}
+            console_requests = conn.execute("DELETE FROM console_authorizations WHERE claimed_at IS NOT NULL OR expires_at <= ?", (now,)).rowcount
+            console_sessions = conn.execute("DELETE FROM console_sessions WHERE expires_at <= ?", (now,)).rowcount
+        return {"expiredPairingCodes": pairings, "expiredCommands": commands, "expiredE2EEnvelopes": envelopes, "expiredE2EReports": reports, "expiredConsoleAuthorizations": console_requests, "expiredConsoleSessions": console_sessions}
 
 
 class MongoStore:
@@ -991,6 +1090,10 @@ class MongoStore:
         self.license_fernet = license_cipher(license_secret)
         self.db.pairing_codes.create_index("expiresAt", expireAfterSeconds=0)
         self.db.license_links.create_index("expiresAt", expireAfterSeconds=0)
+        self.db.console_authorizations.create_index("id", unique=True)
+        self.db.console_authorizations.create_index("expiresAt", expireAfterSeconds=0)
+        self.db.console_sessions.create_index("tokenHash", unique=True)
+        self.db.console_sessions.create_index("expiresAt", expireAfterSeconds=0)
         self.db.commands.create_index("expiresAt", expireAfterSeconds=0)
         self.db.device_events.create_index([("deviceId", 1), ("createdAt", 1)])
         self.db.device_installations.create_index([("package", 1), ("status", 1)])
@@ -1081,6 +1184,60 @@ class MongoStore:
         self.db.license_links.update_one({"id": link_id}, {"$set": {"status": "claimed", "usedAt": utc_now()}})
         self.record_event(device_id, "device.paired", {"displayName": link["displayName"], "ownerLogin": link["ownerLogin"], "platform": link.get("platform", "Danenone")})
         return {"id": device_id, "agentToken": agent_token, "platform": link.get("platform", "Danenone")}
+
+    def begin_console_authorization(self, pkce_challenge: str) -> dict[str, Any] | None:
+        if not re.fullmatch(r"[A-Za-z0-9_-]{43}", pkce_challenge):
+            return None
+        request_id = secrets.token_urlsafe(18)
+        user_code = "".join(secrets.choice(PAIRING_ALPHABET) for _ in range(8))
+        expires_at = utc_now() + timedelta(minutes=10)
+        self.db.console_authorizations.insert_one({"id": request_id, "pkceChallenge": pkce_challenge, "userCodeHash": token_hash(user_code), "status": "awaiting_owner", "ownerLogin": None, "expiresAt": expires_at, "claimedAt": None})
+        return {"requestId": request_id, "userCode": user_code, "expiresAt": expires_at.isoformat()}
+
+    def console_authorization_status(self, request_id: str, user_code: str) -> dict[str, Any] | None:
+        row = self.db.console_authorizations.find_one({"id": request_id, "userCodeHash": token_hash(user_code.upper())}, {"_id": 0, "status": 1, "expiresAt": 1, "claimedAt": 1})
+        if not row:
+            return None
+        expires_at = row["expiresAt"] if isinstance(row["expiresAt"], datetime) else parse_iso(str(row["expiresAt"]))
+        status = "expired" if expires_at <= utc_now() and row["status"] == "awaiting_owner" else row["status"]
+        return {"status": status, "expiresAt": expires_at.isoformat(), "claimed": bool(row.get("claimedAt"))}
+
+    def approve_console_authorization(self, request_id: str, user_code: str, github_login: str) -> bool:
+        result = self.db.console_authorizations.update_one(
+            {"id": request_id, "userCodeHash": token_hash(user_code.upper()), "status": "awaiting_owner", "expiresAt": {"$gt": utc_now()}},
+            {"$set": {"status": "approved", "ownerLogin": github_login}},
+        )
+        return bool(result.modified_count)
+
+    def claim_console_authorization(self, request_id: str, pkce_verifier: str) -> dict[str, Any] | None:
+        if not isinstance(pkce_verifier, str) or not re.fullmatch(r"[A-Za-z0-9._~-]{43,128}", pkce_verifier):
+            return None
+        from pymongo import ReturnDocument
+
+        challenge = base64url_encode(hashlib.sha256(pkce_verifier.encode("ascii")).digest())
+        request_row = self.db.console_authorizations.find_one_and_update(
+            {"id": request_id, "pkceChallenge": challenge, "status": "approved", "claimedAt": None, "expiresAt": {"$gt": utc_now()}},
+            {"$set": {"status": "claimed", "claimedAt": utc_now()}},
+            return_document=ReturnDocument.BEFORE,
+        )
+        if not request_row or not request_row.get("ownerLogin"):
+            return None
+        console_token, expires_at, now = secrets.token_urlsafe(32), utc_now() + timedelta(hours=12), utc_now()
+        self.db.console_sessions.insert_one({"tokenHash": token_hash(console_token), "ownerLogin": request_row["ownerLogin"], "expiresAt": expires_at, "createdAt": now, "lastUsedAt": now})
+        return {"consoleToken": console_token, "account": request_row["ownerLogin"], "expiresAt": expires_at.isoformat()}
+
+    def authenticate_console_token(self, console_token: str) -> str | None:
+        if not isinstance(console_token, str) or not 24 <= len(console_token) <= 256:
+            return None
+        row = self.db.console_sessions.find_one_and_update(
+            {"tokenHash": token_hash(console_token), "expiresAt": {"$gt": utc_now()}},
+            {"$set": {"lastUsedAt": utc_now()}},
+            projection={"_id": 0, "ownerLogin": 1},
+        )
+        return str(row["ownerLogin"]) if row else None
+
+    def revoke_console_token(self, console_token: str) -> bool:
+        return bool(self.db.console_sessions.delete_one({"tokenHash": token_hash(console_token)}).deleted_count)
 
     def revoke_license(self, license_code: str, reason: str) -> bool:
         license_hash = token_hash(normalize_license(license_code))
@@ -1702,6 +1859,12 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     def github_login() -> str | None:
         return session.get("github_login")
 
+    def console_login() -> str | None:
+        return app.extensions["device_store"].authenticate_console_token(request.headers.get("X-Foundstore-Console-Token", ""))
+
+    def owner_login() -> str | None:
+        return github_login() or console_login()
+
     def oauth_ready() -> bool:
         return bool(app.config["GITHUB_CLIENT_ID"] and app.config["GITHUB_CLIENT_SECRET"])
 
@@ -1814,6 +1977,66 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         response = redirect(url_for("index"))
         response.headers["Cache-Control"] = "no-store"
         return response
+
+    @app.post("/api/v1/console-auth")
+    def begin_console_auth() -> Response:
+        payload = request.get_json(silent=True) or {}
+        started = app.extensions["device_store"].begin_console_authorization(payload.get("pkceChallenge"))
+        if not started:
+            return jsonify({"error": "Se requiere un desafío PKCE S256 válido"}), 400
+        request_id, user_code = started["requestId"], started["userCode"]
+        verification_uri = f"{app.config['PUBLIC_ORIGIN'].rstrip('/')}/console/authorize/{quote(request_id)}?code={quote(user_code)}"
+        return jsonify({**started, "verificationUri": verification_uri, "expiresInSeconds": 600, "requiresGitHubApproval": True}), 201
+
+    @app.get("/api/v1/console-auth/<request_id>")
+    def console_auth_status(request_id: str) -> Response:
+        status = app.extensions["device_store"].console_authorization_status(request_id, request.headers.get("X-Foundstore-Console-Code", ""))
+        if not status:
+            return jsonify({"error": "Solicitud de consola no válida"}), 401
+        return jsonify(status)
+
+    @app.post("/api/v1/console-auth/<request_id>/token")
+    def claim_console_auth(request_id: str) -> Response:
+        payload = request.get_json(silent=True) or {}
+        claimed = app.extensions["device_store"].claim_console_authorization(request_id, payload.get("pkceVerifier"))
+        if not claimed:
+            return jsonify({"error": "La autorización no está aprobada, venció o ya fue usada"}), 401
+        return jsonify(claimed), 201
+
+    @app.delete("/api/v1/console-session")
+    def logout_console() -> Response:
+        token = request.headers.get("X-Foundstore-Console-Token", "")
+        if not app.extensions["device_store"].revoke_console_token(token):
+            return jsonify({"error": "Sesión de consola no válida"}), 401
+        return Response(status=204)
+
+    @app.route("/console/authorize/<request_id>", methods=["GET", "POST"])
+    def authorize_console_browser(request_id: str) -> Response:
+        user_code = str(request.values.get("code", "")).upper()
+        status = app.extensions["device_store"].console_authorization_status(request_id, user_code)
+        if not status or status["status"] != "awaiting_owner":
+            abort(404)
+        if not github_login():
+            next_path = f"/console/authorize/{quote(request_id)}?code={quote(user_code)}"
+            return render_template("login.html", next_path=next_path), 401
+        session_key = f"console_authorize:{request_id}"
+        if request.method == "POST":
+            approval = session.get(session_key, {})
+            csrf = str(request.form.get("csrf", ""))
+            if not isinstance(approval, dict) or not secrets.compare_digest(str(approval.get("codeHash", "")), token_hash(user_code)) or not secrets.compare_digest(str(approval.get("csrf", "")), csrf):
+                abort(400)
+            session.pop(session_key, None)
+            if not app.extensions["device_store"].approve_console_authorization(request_id, user_code, str(github_login())):
+                abort(409)
+            return Response("<!doctype html><title>Foundstore Console</title><main><h1>Consola vinculada</h1><p>Regresa a Foundstore Console. No se compartió ningún token de GitHub.</p></main>", mimetype="text/html")
+        csrf = secrets.token_urlsafe(24)
+        session[session_key] = {"codeHash": token_hash(user_code), "csrf": csrf}
+        return Response(
+            "<!doctype html><title>Autorizar Foundstore Console</title><main><h1>Autorizar Foundstore Console</h1>"
+            "<p>La consola solicitará acceso sólo a tus licencias y DaneDesk. No podrá instalar sin aprobación local.</p>"
+            f"<form method=\"post\"><input type=\"hidden\" name=\"code\" value=\"{escape(user_code)}\"><input type=\"hidden\" name=\"csrf\" value=\"{escape(csrf)}\"><button type=\"submit\">Autorizar esta consola</button></form></main>",
+            mimetype="text/html",
+        )
 
     @app.get("/auth/github/callback")
     def github_oauth_callback() -> Response:
@@ -2135,21 +2358,21 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.get("/api/v1/me/devices")
     def my_devices() -> Response:
-        login = github_login()
+        login = owner_login()
         if not login:
             return jsonify({"error": "Inicia sesión con GitHub para ver tus DaneDesk"}), 401
         return jsonify({"devices": app.extensions["device_store"].list_devices_for_owner(login)})
 
     @app.get("/api/v1/me/licenses")
     def my_licenses() -> Response:
-        login = github_login()
+        login = owner_login()
         if not login:
             return jsonify({"error": "Inicia sesión con GitHub para ver tus licencias"}), 401
         return jsonify({"licenses": app.extensions["device_store"].list_licenses_for_owner(login)})
 
     @app.get("/api/v1/me/onboarding")
     def my_onboarding() -> Response:
-        login = github_login()
+        login = owner_login()
         if not login:
             return jsonify({"error": "Inicia sesión con GitHub para preparar un dispositivo"}), 401
         return jsonify({
@@ -2164,7 +2387,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.post("/api/v1/me/access-serials")
     def create_access_serial() -> Response:
-        login = github_login()
+        login = owner_login()
         if not login:
             return jsonify({"error": "Inicia sesión con GitHub antes de crear un serial"}), 401
         payload = request.get_json(silent=True) or {}
@@ -2200,7 +2423,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.post("/api/v1/me/licenses")
     def create_my_license() -> Response:
-        login = github_login()
+        login = owner_login()
         if not login:
             return jsonify({"error": "Inicia sesión con GitHub antes de crear una licencia"}), 401
         payload = request.get_json(silent=True) or {}
@@ -2227,7 +2450,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.post("/api/v1/me/devices/<device_id>/installations")
     def install_from_catalog(device_id: str) -> Response:
-        login = github_login()
+        login = owner_login()
         if not login:
             return jsonify({"error": "Inicia sesión con GitHub antes de solicitar una instalación"}), 401
         device = next((item for item in app.extensions["device_store"].list_devices_for_owner(login) if item["id"] == device_id and item["status"] == "active"), None)
@@ -2312,7 +2535,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.post("/api/v1/me/licenses/revoke")
     def revoke_my_license() -> Response:
-        login = github_login()
+        login = owner_login()
         if not login:
             return jsonify({"error": "Inicia sesión con GitHub para revocar una licencia"}), 401
         payload = request.get_json(silent=True) or {}
@@ -2324,7 +2547,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.get("/api/v1/me/devices/<device_id>")
     def my_device_detail(device_id: str) -> Response:
-        login = github_login()
+        login = owner_login()
         if not login:
             return jsonify({"error": "Inicia sesión con GitHub para ver un DaneDesk"}), 401
         device = next((item for item in app.extensions["device_store"].list_devices_for_owner(login) if item["id"] == device_id), None)
@@ -2341,7 +2564,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.post("/api/v1/me/devices/<device_id>/network-inventory-request")
     def request_network_inventory(device_id: str) -> Response:
-        login = github_login()
+        login = owner_login()
         if not login:
             return jsonify({"error": "Inicia sesión con GitHub para solicitar una actualización de red"}), 401
         device = next((item for item in app.extensions["device_store"].list_devices_for_owner(login) if item["id"] == device_id and item["status"] == "active"), None)
