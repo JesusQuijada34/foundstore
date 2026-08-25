@@ -2722,7 +2722,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.get("/api/v1/me/devices/<device_id>/installations")
     def my_device_installations(device_id: str) -> Response:
-        login = github_login()
+        login = owner_login()
         if not login:
             return jsonify({"error": "Inicia sesión con GitHub para ver instalaciones"}), 401
         if not any(item["id"] == device_id for item in app.extensions["device_store"].list_devices_for_owner(login)):
