@@ -26,6 +26,7 @@ from urllib.parse import quote, urlencode
 
 import requests
 from cryptography.fernet import Fernet, InvalidToken
+from cryptography.hazmat.primitives.asymmetric import ec
 from flask import Flask, Response, jsonify, redirect, render_template, request, send_from_directory, session, url_for
 
 CATALOG_OWNER = os.environ.get("CATALOG_OWNER") or "JesusQuijada34"
@@ -73,6 +74,29 @@ def command_signature(command_key: str, command: dict[str, Any]) -> str:
     signed = {key: command.get(key) for key in ("id", "deviceId", "type", "payload", "expiresAt")}
     canonical = json.dumps(signed, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hmac.new(command_key.encode("utf-8"), canonical, hashlib.sha256).hexdigest()
+
+
+def normalize_p256_public_jwk(value: Any) -> dict[str, str] | None:
+    """Accept only a compact public P-256 JWK; private material is never valid here."""
+    if not isinstance(value, dict):
+        return None
+    normalized = {key: value.get(key) for key in ("kty", "crv", "x", "y")}
+    if normalized["kty"] != "EC" or normalized["crv"] != "P-256":
+        return None
+    if not all(isinstance(normalized[key], str) and re.fullmatch(r"[A-Za-z0-9_-]{43}", normalized[key]) for key in ("x", "y")):
+        return None
+    try:
+        x = int.from_bytes(base64.urlsafe_b64decode(f"{normalized['x']}="), "big")
+        y = int.from_bytes(base64.urlsafe_b64decode(f"{normalized['y']}="), "big")
+        ec.EllipticCurvePublicNumbers(x, y, ec.SECP256R1()).public_key()
+    except (TypeError, ValueError):
+        return None
+    return {key: str(normalized[key]) for key in ("kty", "crv", "x", "y")}
+
+
+def public_key_fingerprint(public_jwk: dict[str, str]) -> str:
+    canonical = json.dumps(public_jwk, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()[:16]
 
 
 def parse_iso(value: str) -> datetime:
@@ -196,6 +220,9 @@ class DeviceStore(Protocol):
     def approve_license_link(self, link_id: str, user_code: str, github_login: str) -> bool: ...
     def claim_license_link(self, link_id: str, link_token: str) -> dict[str, Any] | None: ...
     def revoke_license(self, license_code: str, reason: str) -> bool: ...
+    def revoke_license_for_owner(self, license_code: str, owner_login: str, reason: str) -> bool: ...
+    def register_device_e2e_key(self, device_id: str, public_jwk: dict[str, str], key_epoch: int) -> dict[str, Any] | None: ...
+    def get_device_e2e_key(self, device_id: str) -> dict[str, Any] | None: ...
     def authenticate_device(self, device_id: str, agent_token: str) -> dict[str, Any] | None: ...
     def pending_commands(self, device_id: str) -> list[dict[str, Any]]: ...
     def enqueue_command(self, device_id: str, command_type: str, payload: dict[str, Any], expires_in_seconds: int | None = None) -> dict[str, Any] | None: ...
@@ -273,6 +300,13 @@ class LocalStore:
                   topic TEXT NOT NULL,
                   data_json TEXT NOT NULL,
                   created_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS device_e2e_keys (
+                  device_id TEXT PRIMARY KEY,
+                  public_jwk_json TEXT NOT NULL,
+                  key_epoch INTEGER NOT NULL,
+                  fingerprint TEXT NOT NULL,
+                  registered_at TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS device_licenses (
                   code_hash TEXT PRIMARY KEY,
@@ -432,6 +466,47 @@ class LocalStore:
         if license_row["device_id"]:
             self.record_event(license_row["device_id"], "license.revoked", {"reason": reason[:240]})
         return True
+
+    def revoke_license_for_owner(self, license_code: str, owner_login: str, reason: str) -> bool:
+        license_hash = token_hash(normalize_license(license_code))
+        with self._connect() as conn:
+            license_row = conn.execute(
+                "SELECT device_id FROM device_licenses WHERE code_hash = ? AND status = 'active' AND owner_login = ?",
+                (license_hash, owner_login),
+            ).fetchone()
+            if not license_row:
+                return False
+            conn.execute(
+                "UPDATE device_licenses SET status = 'revoked', revoked_at = ?, revoke_reason = ? WHERE code_hash = ? AND owner_login = ?",
+                (iso_now(), reason[:240], license_hash, owner_login),
+            )
+            if license_row["device_id"]:
+                conn.execute("UPDATE devices SET status = 'revoked' WHERE id = ?", (license_row["device_id"],))
+        if license_row["device_id"]:
+            self.record_event(license_row["device_id"], "license.revoked", {"reason": reason[:240]})
+        return True
+
+    def register_device_e2e_key(self, device_id: str, public_jwk: dict[str, str], key_epoch: int) -> dict[str, Any] | None:
+        fingerprint = public_key_fingerprint(public_jwk)
+        with self._connect() as conn:
+            device = conn.execute("SELECT id FROM devices WHERE id = ?", (device_id,)).fetchone()
+            current = conn.execute("SELECT key_epoch FROM device_e2e_keys WHERE device_id = ?", (device_id,)).fetchone()
+            if not device or key_epoch < 1 or (current and key_epoch <= current["key_epoch"]):
+                return None
+            registered_at = iso_now()
+            conn.execute(
+                "INSERT INTO device_e2e_keys(device_id, public_jwk_json, key_epoch, fingerprint, registered_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(device_id) DO UPDATE SET public_jwk_json=excluded.public_jwk_json, key_epoch=excluded.key_epoch, fingerprint=excluded.fingerprint, registered_at=excluded.registered_at",
+                (device_id, json.dumps(public_jwk, sort_keys=True), key_epoch, fingerprint, registered_at),
+            )
+        self.record_event(device_id, "device.e2e_key_registered", {"keyEpoch": key_epoch, "fingerprint": fingerprint})
+        return {"publicJwk": public_jwk, "keyEpoch": key_epoch, "fingerprint": fingerprint, "registeredAt": registered_at}
+
+    def get_device_e2e_key(self, device_id: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute("SELECT public_jwk_json, key_epoch, fingerprint, registered_at FROM device_e2e_keys WHERE device_id = ?", (device_id,)).fetchone()
+        if not row:
+            return None
+        return {"publicJwk": json.loads(row["public_jwk_json"]), "keyEpoch": row["key_epoch"], "fingerprint": row["fingerprint"], "registeredAt": row["registered_at"]}
 
     def authenticate_device(self, device_id: str, agent_token: str) -> dict[str, Any] | None:
         with self._connect() as conn:
@@ -737,6 +812,41 @@ class MongoStore:
             self.db.devices.update_one({"id": license_row["deviceId"]}, {"$set": {"status": "revoked"}})
             self.record_event(license_row["deviceId"], "license.revoked", {"reason": reason[:240]})
         return True
+
+    def revoke_license_for_owner(self, license_code: str, owner_login: str, reason: str) -> bool:
+        license_hash = token_hash(normalize_license(license_code))
+        license_row = self.db.device_licenses.find_one_and_update(
+            {"codeHash": license_hash, "ownerLogin": owner_login, "status": "active"},
+            {"$set": {"status": "revoked", "revokedAt": utc_now(), "revokeReason": reason[:240]}},
+        )
+        if not license_row:
+            return False
+        if license_row.get("deviceId"):
+            self.db.devices.update_one({"id": license_row["deviceId"]}, {"$set": {"status": "revoked"}})
+            self.record_event(license_row["deviceId"], "license.revoked", {"reason": reason[:240]})
+        return True
+
+    def register_device_e2e_key(self, device_id: str, public_jwk: dict[str, str], key_epoch: int) -> dict[str, Any] | None:
+        current = self.db.device_e2e_keys.find_one({"deviceId": device_id}, {"keyEpoch": 1})
+        if key_epoch < 1 or (current and key_epoch <= int(current.get("keyEpoch", 0))):
+            return None
+        if not self.db.devices.find_one({"id": device_id}, {"_id": 1}):
+            return None
+        registered_at, fingerprint = utc_now(), public_key_fingerprint(public_jwk)
+        self.db.device_e2e_keys.update_one(
+            {"deviceId": device_id},
+            {"$set": {"deviceId": device_id, "publicJwk": public_jwk, "keyEpoch": key_epoch, "fingerprint": fingerprint, "registeredAt": registered_at}},
+            upsert=True,
+        )
+        self.record_event(device_id, "device.e2e_key_registered", {"keyEpoch": key_epoch, "fingerprint": fingerprint})
+        return {"publicJwk": public_jwk, "keyEpoch": key_epoch, "fingerprint": fingerprint, "registeredAt": registered_at.isoformat()}
+
+    def get_device_e2e_key(self, device_id: str) -> dict[str, Any] | None:
+        row = self.db.device_e2e_keys.find_one({"deviceId": device_id}, {"_id": 0})
+        if not row:
+            return None
+        registered_at = row.get("registeredAt")
+        return {"publicJwk": row["publicJwk"], "keyEpoch": row["keyEpoch"], "fingerprint": row["fingerprint"], "registeredAt": registered_at.isoformat() if isinstance(registered_at, datetime) else registered_at}
 
     def authenticate_device(self, device_id: str, agent_token: str) -> dict[str, Any] | None:
         device = self.db.devices.find_one({"id": device_id, "agentTokenHash": token_hash(agent_token)})
@@ -1808,6 +1918,79 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if not app.extensions["device_store"].revoke_license(str(payload.get("license", "")), reason):
             return jsonify({"error": "La licencia no está activa o no existe"}), 404
         return jsonify({"success": True, "reason": reason})
+
+    @app.post("/api/v1/me/licenses/revoke")
+    def revoke_my_license() -> Response:
+        login = github_login()
+        if not login:
+            return jsonify({"error": "Inicia sesión con GitHub para revocar una licencia"}), 401
+        payload = request.get_json(silent=True) or {}
+        license_code = str(payload.get("license", ""))
+        reason = str(payload.get("reason", "Revocación solicitada por el propietario")).strip()[:240] or "Revocación solicitada por el propietario"
+        if not app.extensions["device_store"].revoke_license_for_owner(license_code, login, reason):
+            return jsonify({"error": "La licencia no está activa, no existe o no pertenece a tu cuenta"}), 404
+        return jsonify({"success": True, "reason": reason})
+
+    @app.get("/api/v1/me/devices/<device_id>")
+    def my_device_detail(device_id: str) -> Response:
+        login = github_login()
+        if not login:
+            return jsonify({"error": "Inicia sesión con GitHub para ver un DaneDesk"}), 401
+        device = next((item for item in app.extensions["device_store"].list_devices_for_owner(login) if item["id"] == device_id), None)
+        if not device:
+            return jsonify({"error": "El DaneDesk no pertenece a tu cuenta"}), 404
+        events = app.extensions["device_store"].events_after(device_id, None)[-20:]
+        safe_events = [{"id": item.get("id"), "topic": item.get("topic"), "createdAt": item.get("createdAt")} for item in events]
+        return jsonify({
+            "device": device,
+            "security": {"commandTransport": "signed", "endToEndPayloads": "pending_agent_update", "devicePublicKey": app.extensions["device_store"].get_device_e2e_key(device_id)},
+            "events": safe_events,
+            "sensitiveDetails": "available_only_after_e2e_agent_update",
+        })
+
+    @app.post("/api/v1/me/devices/<device_id>/network-inventory-request")
+    def request_network_inventory(device_id: str) -> Response:
+        login = github_login()
+        if not login:
+            return jsonify({"error": "Inicia sesión con GitHub para solicitar una actualización de red"}), 401
+        device = next((item for item in app.extensions["device_store"].list_devices_for_owner(login) if item["id"] == device_id and item["status"] == "active"), None)
+        if not device:
+            return jsonify({"error": "El DaneDesk elegido no pertenece a tu cuenta o no está activo"}), 403
+        command = app.extensions["device_store"].enqueue_command(
+            device_id,
+            "device_inventory_request",
+            {"localApprovalRequired": True, "scope": "network_inventory"},
+        )
+        if not command:
+            return jsonify({"error": "No se pudo encolar la solicitud"}), 409
+        return jsonify({**command, "localApprovalRequired": True, "note": "El agente pedirá confirmación local y no cambiará la dirección MAC."}), 202
+
+    @app.post("/api/v1/devices/<device_id>/e2e-key")
+    def register_device_e2e_key(device_id: str) -> Response:
+        _, error = agent_device_or_error(app, device_id)
+        if error:
+            return error
+        payload = request.get_json(silent=True) or {}
+        public_jwk = normalize_p256_public_jwk(payload.get("publicJwk"))
+        key_epoch = payload.get("keyEpoch")
+        if not public_jwk or isinstance(key_epoch, bool) or not isinstance(key_epoch, int):
+            return jsonify({"error": "Se requiere una clave pública P-256 y una época de clave válida"}), 400
+        registered = app.extensions["device_store"].register_device_e2e_key(device_id, public_jwk, key_epoch)
+        if not registered:
+            return jsonify({"error": "La clave no pudo registrarse; usa una época de clave superior"}), 409
+        return jsonify(registered), 201
+
+    @app.get("/api/v1/me/devices/<device_id>/e2e-key")
+    def my_device_e2e_key(device_id: str) -> Response:
+        login = github_login()
+        if not login:
+            return jsonify({"error": "Inicia sesión con GitHub para consultar una clave de DaneDesk"}), 401
+        if not any(item["id"] == device_id for item in app.extensions["device_store"].list_devices_for_owner(login)):
+            return jsonify({"error": "El DaneDesk no pertenece a tu cuenta"}), 404
+        key = app.extensions["device_store"].get_device_e2e_key(device_id)
+        if not key:
+            return jsonify({"error": "El agente aún no publicó una clave E2E"}), 404
+        return jsonify(key)
 
     @app.post("/api/v1/agent/bootstrap")
     def bootstrap() -> Response:

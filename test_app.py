@@ -1,8 +1,10 @@
 import os
+import base64
 import tempfile
 import unittest
 from unittest.mock import patch
 
+from cryptography.hazmat.primitives.asymmetric import ec
 from app import MongoStore, catalog_references, create_app, github_public_repositories, github_public_star_count, package_revision, raw_github_text
 
 
@@ -323,6 +325,47 @@ class FlaskRenderAppTests(unittest.TestCase):
         landing = self.client.get("/")
         self.assertEqual(landing.status_code, 200)
         self.assertIn("Tu catálogo", landing.get_data(as_text=True))
+
+    def test_account_owner_can_revoke_only_own_license_and_view_minimized_device_detail(self) -> None:
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "jq34"
+        created = self.client.post("/api/v1/me/licenses", json={})
+        self.assertEqual(created.status_code, 201)
+        license_code = created.json["license"]
+        link = self.client.post("/api/v1/license-links", json={"license": license_code, "displayName": "DaneDesk privado", "platform": "Danenone"}).json
+        self.assertEqual(self.client.post(f"/link/{link['linkId']}", data={"code": link["userCode"]}).status_code, 200)
+        claimed = self.client.post(f"/api/v1/license-links/{link['linkId']}/claim", headers={"X-Foundstore-Link-Token": link["linkToken"]})
+        self.assertEqual(claimed.status_code, 201)
+        device_id = claimed.json["id"]
+        detail = self.client.get(f"/api/v1/me/devices/{device_id}")
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.json["device"]["id"], device_id)
+        self.assertEqual(detail.json["security"]["endToEndPayloads"], "pending_agent_update")
+        public_numbers = ec.generate_private_key(ec.SECP256R1()).public_key().public_numbers()
+        public_jwk = {
+            "kty": "EC",
+            "crv": "P-256",
+            "x": base64.urlsafe_b64encode(public_numbers.x.to_bytes(32, "big")).decode("ascii").rstrip("="),
+            "y": base64.urlsafe_b64encode(public_numbers.y.to_bytes(32, "big")).decode("ascii").rstrip("="),
+        }
+        agent_headers = {"X-Danenone-Agent-Token": claimed.json["agentToken"]}
+        registered = self.client.post(f"/api/v1/devices/{device_id}/e2e-key", headers=agent_headers, json={"publicJwk": public_jwk, "keyEpoch": 1})
+        self.assertEqual(registered.status_code, 201)
+        self.assertEqual(registered.json["publicJwk"], public_jwk)
+        self.assertEqual(self.client.post(f"/api/v1/devices/{device_id}/e2e-key", headers=agent_headers, json={"publicJwk": public_jwk, "keyEpoch": 1}).status_code, 409)
+        owner_key = self.client.get(f"/api/v1/me/devices/{device_id}/e2e-key")
+        self.assertEqual(owner_key.status_code, 200)
+        self.assertEqual(owner_key.json["fingerprint"], registered.json["fingerprint"])
+        requested = self.client.post(f"/api/v1/me/devices/{device_id}/network-inventory-request")
+        self.assertEqual(requested.status_code, 202)
+        self.assertTrue(requested.json["localApprovalRequired"])
+        revoked = self.client.post("/api/v1/me/licenses/revoke", json={"license": license_code, "reason": "Revocación de prueba"})
+        self.assertEqual(revoked.status_code, 200)
+        self.assertTrue(revoked.json["success"])
+        intruder = self.app.test_client()
+        with intruder.session_transaction() as browser_session:
+            browser_session["github_login"] = "otro"
+        self.assertEqual(intruder.post("/api/v1/me/licenses/revoke", json={"license": license_code}).status_code, 404)
 
     def test_account_sections_are_independent_and_require_github(self) -> None:
         paths = ["/account/profile", "/account/licenses", "/account/devices", "/account/privacy", "/account/packages/invalid"]
