@@ -346,6 +346,8 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(device_page.status_code, 200)
         self.assertIn('id="device-console"', device_page.get_data(as_text=True))
         self.assertIn("Instalaciones verificadas", device_page.get_data(as_text=True))
+        self.assertIn("Canal cifrado de extremo a extremo", device_page.get_data(as_text=True))
+        self.assertIn("clave no exportable", device_page.get_data(as_text=True))
         self.assertNotIn("Dirección MAC", device_page.get_data(as_text=True))
         public_numbers = ec.generate_private_key(ec.SECP256R1()).public_key().public_numbers()
         public_jwk = {
