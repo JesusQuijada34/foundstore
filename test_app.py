@@ -321,6 +321,8 @@ class FlaskRenderAppTests(unittest.TestCase):
             page = self.client.get(path)
             self.assertEqual(page.status_code, 200)
             self.assertIn(heading, page.get_data(as_text=True))
+        mobile_markup = self.client.get("/account/profile").get_data(as_text=True)
+        self.assertIn(".nav-card{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible}", mobile_markup)
         legacy = self.client.get("/profile")
         self.assertEqual(legacy.status_code, 302)
         self.assertIn("/account/profile", legacy.headers["Location"])
