@@ -1312,6 +1312,16 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return redirect(url_for("index"))
         return render_template("login.html", next_path=safe_next_path(str(request.args.get("next", ""))) or "/")
 
+    @app.route("/logout", methods=["GET", "POST"])
+    def logout() -> Response:
+        grant_id = str(session.get("github_star_grant_id") or "")
+        if grant_id:
+            app.extensions["github_star_grants"].pop(grant_id, None)
+        session.clear()
+        response = redirect(url_for("index"))
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
     @app.get("/auth/github/callback")
     def github_oauth_callback() -> Response:
         incoming_state = str(request.args.get("state", ""))

@@ -304,6 +304,26 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertIn("/account/licenses", body)
         self.assertIn("/account/packages/invalid", body)
 
+    def test_logout_clears_github_session_and_redirects_to_public_landing(self) -> None:
+        grant_id = "temporary-star-grant"
+        self.app.extensions["github_star_grants"][grant_id] = {"login": "jq34", "expiresAt": 4102444800}
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "jq34"
+            browser_session["github_star_grant_id"] = grant_id
+            browser_session["github_oauth_state"] = "oauth-state"
+            browser_session["github_oauth_next"] = "/account/profile"
+        response = self.client.get("/logout")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["Location"], "/")
+        self.assertEqual(response.headers["Cache-Control"], "no-store")
+        self.assertNotIn(grant_id, self.app.extensions["github_star_grants"])
+        with self.client.session_transaction() as browser_session:
+            self.assertNotIn("github_login", browser_session)
+            self.assertNotIn("github_oauth_state", browser_session)
+        landing = self.client.get("/")
+        self.assertEqual(landing.status_code, 200)
+        self.assertIn("Tu catálogo", landing.get_data(as_text=True))
+
     def test_account_sections_are_independent_and_require_github(self) -> None:
         paths = ["/account/profile", "/account/licenses", "/account/devices", "/account/privacy", "/account/packages/invalid"]
         for path in paths:
