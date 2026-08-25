@@ -1358,19 +1358,53 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         next_path = safe_next_path(str(session.pop("github_oauth_next", "")))
         return redirect(url_for("license_link_page", link_id=link_id) if link_id else next_path or url_for("index"))
 
-    @app.get("/profile")
-    def profile() -> Response | str:
+    def account_page(section: str) -> Response | str:
         blocked = web_session_or_login()
         if blocked:
             return blocked
-        return render_template("profile.html", github_login=github_login(), visitor_country=request.headers.get("CF-IPCountry", ""))
+        labels = {
+            "profile": "Perfil",
+            "licenses": "Licencias",
+            "devices": "Dispositivos",
+            "privacy": "Privacidad",
+            "invalid": "Paquetes inválidos",
+            "preferences": "Preferencias",
+        }
+        return render_template(
+            "account.html",
+            account_section=section,
+            account_label=labels[section],
+            github_login=github_login(),
+            visitor_country=request.headers.get("CF-IPCountry", ""),
+        )
+
+    @app.get("/profile")
+    def profile() -> Response:
+        return redirect(url_for("account_profile"))
 
     @app.get("/settings")
     def settings_page() -> Response | str:
-        blocked = web_session_or_login()
-        if blocked:
-            return blocked
-        return render_template("settings.html", github_login=github_login(), visitor_country=request.headers.get("CF-IPCountry", ""))
+        return account_page("preferences")
+
+    @app.get("/account/profile")
+    def account_profile() -> Response | str:
+        return account_page("profile")
+
+    @app.get("/account/licenses")
+    def account_licenses() -> Response | str:
+        return account_page("licenses")
+
+    @app.get("/account/devices")
+    def account_devices() -> Response | str:
+        return account_page("devices")
+
+    @app.get("/account/privacy")
+    def account_privacy() -> Response | str:
+        return account_page("privacy")
+
+    @app.get("/account/packages/invalid")
+    def account_invalid_packages() -> Response | str:
+        return account_page("invalid")
 
     @app.get("/developer/<github_login>")
     def developer_page(github_login: str) -> Response | str:

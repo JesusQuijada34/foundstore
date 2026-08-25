@@ -30,3 +30,5 @@ La configuración se organiza en secciones de Cuenta, Privacidad, Licencias y Di
 ## Comprobación visual local
 
 La portada pública se verificó en el servidor Flask local: mantiene la laptop demostrativa, el logotipo y las llamadas a GitHub sin exponer catálogo privado. La ruta `/settings` respondió con el muro de GitHub para una sesión anónima; por ello las superficies de seriales, dispositivos y preferencias no se entregan antes de la autenticación.
+
+La misma comprobación se repitió contra `https://imfoundstore.onrender.com/settings` después del despliegue de `73bf638`. Producción redirige la vista de configuración hacia el acceso GitHub y conserva el retorno previsto a `/settings`; ningún serial, dispositivo o token aparece en esa respuesta anónima.

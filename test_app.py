@@ -297,9 +297,30 @@ class FlaskRenderAppTests(unittest.TestCase):
         settings = self.client.get("/settings")
         self.assertEqual(settings.status_code, 200)
         body = settings.get_data(as_text=True)
-        self.assertIn("Configuración de Foundstore", body)
-        self.assertIn("Crear serial", body)
-        self.assertIn("aprobación local", body)
+        self.assertIn("Preferencias del navegador", body)
+        self.assertIn("/account/licenses", body)
+        self.assertIn("/account/packages/invalid", body)
+
+    def test_account_sections_are_independent_and_require_github(self) -> None:
+        paths = ["/account/profile", "/account/licenses", "/account/devices", "/account/privacy", "/account/packages/invalid"]
+        for path in paths:
+            self.assertEqual(self.client.get(path).status_code, 401)
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "jq34"
+        expected = {
+            "/account/profile": "Tu perfil público",
+            "/account/licenses": "Licencias de dispositivo",
+            "/account/devices": "Dispositivos vinculados",
+            "/account/privacy": "Privacidad del perfil",
+            "/account/packages/invalid": "Paquetes inválidos",
+        }
+        for path, heading in expected.items():
+            page = self.client.get(path)
+            self.assertEqual(page.status_code, 200)
+            self.assertIn(heading, page.get_data(as_text=True))
+        legacy = self.client.get("/profile")
+        self.assertEqual(legacy.status_code, 302)
+        self.assertIn("/account/profile", legacy.headers["Location"])
 
     def test_mongo_license_link_status_accepts_serialized_expiration(self) -> None:
         class Links:
@@ -391,7 +412,7 @@ class FlaskRenderAppTests(unittest.TestCase):
     def test_profile_keeps_owner_license_and_links_a_knosthalij_device(self) -> None:
         with self.client.session_transaction() as browser_session:
             browser_session["github_login"] = "jq34"
-        self.assertEqual(self.client.get("/profile").status_code, 200)
+        self.assertEqual(self.client.get("/account/licenses").status_code, 200)
         created = self.client.post("/api/v1/me/licenses", json={})
         self.assertEqual(created.status_code, 201)
         license_code = created.json["license"]
@@ -442,10 +463,10 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(repositories.json["repositories"], public_repositories)
         self.assertTrue(profile.json["isOwnProfile"])
         self.assertIn('id="ownerStatus"', page.get_data(as_text=True))
-        own_profile = self.client.get("/profile").get_data(as_text=True)
-        self.assertIn("Inventario Packagemaker", own_profile)
-        self.assertIn("validRepositories", own_profile)
-        self.assertNotIn('id="catalogRepository"', own_profile)
+        invalid_packages = self.client.get("/account/packages/invalid").get_data(as_text=True)
+        self.assertIn("Paquetes inválidos", invalid_packages)
+        self.assertIn("invalid-packages", invalid_packages)
+        self.assertNotIn('id="catalogRepository"', invalid_packages)
 
     def test_profile_privacy_is_public_by_default_and_filters_third_party_view(self) -> None:
         with self.client.session_transaction() as browser_session:
