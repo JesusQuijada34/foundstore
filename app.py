@@ -223,6 +223,9 @@ class DeviceStore(Protocol):
     def revoke_license_for_owner(self, license_code: str, owner_login: str, reason: str) -> bool: ...
     def register_device_e2e_key(self, device_id: str, public_jwk: dict[str, str], key_epoch: int) -> dict[str, Any] | None: ...
     def get_device_e2e_key(self, device_id: str) -> dict[str, Any] | None: ...
+    def record_installation_status(self, device_id: str, request_id: str, status: str) -> None: ...
+    def list_device_installations_for_owner(self, device_id: str, github_login: str) -> list[dict[str, Any]]: ...
+    def installation_count(self, package_ref: str) -> int: ...
     def authenticate_device(self, device_id: str, agent_token: str) -> dict[str, Any] | None: ...
     def pending_commands(self, device_id: str) -> list[dict[str, Any]]: ...
     def enqueue_command(self, device_id: str, command_type: str, payload: dict[str, Any], expires_in_seconds: int | None = None) -> dict[str, Any] | None: ...
@@ -308,6 +311,14 @@ class LocalStore:
                   fingerprint TEXT NOT NULL,
                   registered_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS device_installations (
+                  device_id TEXT NOT NULL,
+                  package_ref TEXT NOT NULL,
+                  request_id TEXT NOT NULL,
+                  status TEXT NOT NULL,
+                  updated_at TEXT NOT NULL,
+                  PRIMARY KEY(device_id, package_ref)
+                );
                 CREATE TABLE IF NOT EXISTS device_licenses (
                   code_hash TEXT PRIMARY KEY,
                   status TEXT NOT NULL DEFAULT 'active',
@@ -356,6 +367,8 @@ class LocalStore:
                 CREATE INDEX IF NOT EXISTS idx_license_links_license ON license_links(license_hash);
                 CREATE INDEX IF NOT EXISTS idx_device_events_device_time
                   ON device_events(device_id, created_at);
+                CREATE INDEX IF NOT EXISTS idx_device_installations_package
+                  ON device_installations(package_ref, status);
                 """
             )
             for migration in (
@@ -507,6 +520,32 @@ class LocalStore:
         if not row:
             return None
         return {"publicJwk": json.loads(row["public_jwk_json"]), "keyEpoch": row["key_epoch"], "fingerprint": row["fingerprint"], "registeredAt": row["registered_at"]}
+
+    def record_installation_status(self, device_id: str, request_id: str, status: str) -> None:
+        with self._connect() as conn:
+            command = conn.execute("SELECT payload_json FROM commands WHERE id = ? AND device_id = ? AND command_type = 'install_request'", (request_id, device_id)).fetchone()
+            if not command:
+                return
+            package_ref = str(json.loads(command["payload_json"]).get("package", ""))
+            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,79}/[A-Za-z0-9][A-Za-z0-9_.-]{0,119}", package_ref):
+                return
+            conn.execute(
+                "INSERT INTO device_installations(device_id, package_ref, request_id, status, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(device_id, package_ref) DO UPDATE SET request_id=excluded.request_id, status=excluded.status, updated_at=excluded.updated_at",
+                (device_id, package_ref, request_id, status, iso_now()),
+            )
+
+    def list_device_installations_for_owner(self, device_id: str, github_login: str) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            owned = conn.execute("SELECT 1 FROM device_licenses WHERE device_id = ? AND owner_login = ?", (device_id, github_login)).fetchone()
+            if not owned:
+                return []
+            rows = conn.execute("SELECT package_ref, request_id, status, updated_at FROM device_installations WHERE device_id = ? ORDER BY updated_at DESC", (device_id,)).fetchall()
+        return [{"package": row["package_ref"], "requestId": row["request_id"], "status": row["status"], "updatedAt": row["updated_at"]} for row in rows]
+
+    def installation_count(self, package_ref: str) -> int:
+        with self._connect() as conn:
+            row = conn.execute("SELECT COUNT(*) AS count FROM device_installations WHERE package_ref = ? AND status = 'installed'", (package_ref,)).fetchone()
+        return int(row["count"])
 
     def authenticate_device(self, device_id: str, agent_token: str) -> dict[str, Any] | None:
         with self._connect() as conn:
@@ -690,6 +729,16 @@ class LocalStore:
                 "INSERT INTO device_events(id, device_id, topic, data_json, created_at) VALUES (?, ?, ?, ?, ?)",
                 (event["id"], device_id, topic, json.dumps(data), event["createdAt"]),
             )
+        installation_state = {
+            "install.awaiting_approval": "awaiting_local_approval",
+            "install.approved": "installing",
+            "install.completed": "installed",
+            "install.failed": "failed",
+            "install.rejected": "rejected",
+        }.get(topic)
+        request_id = str(data.get("requestId", ""))
+        if installation_state and request_id:
+            self.record_installation_status(device_id, request_id, installation_state)
         return event
 
     def events_after(self, device_id: str, after: str | None) -> list[dict[str, Any]]:
@@ -722,6 +771,7 @@ class MongoStore:
         self.db.license_links.create_index("expiresAt", expireAfterSeconds=0)
         self.db.commands.create_index("expiresAt", expireAfterSeconds=0)
         self.db.device_events.create_index([("deviceId", 1), ("createdAt", 1)])
+        self.db.device_installations.create_index([("package", 1), ("status", 1)])
         self.db.developer_profiles.create_index("githubLogin", unique=True)
         self.db.developer_follows.create_index([("followerLogin", 1), ("developerLogin", 1)], unique=True)
         self.db.developer_follows.create_index("developerLogin")
@@ -848,6 +898,29 @@ class MongoStore:
         registered_at = row.get("registeredAt")
         return {"publicJwk": row["publicJwk"], "keyEpoch": row["keyEpoch"], "fingerprint": row["fingerprint"], "registeredAt": registered_at.isoformat() if isinstance(registered_at, datetime) else registered_at}
 
+    def record_installation_status(self, device_id: str, request_id: str, status: str) -> None:
+        command = self.db.commands.find_one({"id": request_id, "deviceId": device_id, "type": "install_request"}, {"payload": 1})
+        if not command:
+            return
+        package_ref = str((command.get("payload") or {}).get("package", ""))
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,79}/[A-Za-z0-9][A-Za-z0-9_.-]{0,119}", package_ref):
+            return
+        self.db.device_installations.update_one(
+            {"deviceId": device_id, "package": package_ref},
+            {"$set": {"deviceId": device_id, "package": package_ref, "requestId": request_id, "status": status, "updatedAt": utc_now()}},
+            upsert=True,
+        )
+
+    def list_device_installations_for_owner(self, device_id: str, github_login: str) -> list[dict[str, Any]]:
+        owned = self.db.device_licenses.find_one({"deviceId": device_id, "ownerLogin": github_login}, {"_id": 1})
+        if not owned:
+            return []
+        rows = self.db.device_installations.find({"deviceId": device_id}, {"_id": 0}).sort("updatedAt", -1)
+        return [{"package": row["package"], "requestId": row["requestId"], "status": row["status"], "updatedAt": row["updatedAt"].isoformat() if isinstance(row.get("updatedAt"), datetime) else row.get("updatedAt")} for row in rows]
+
+    def installation_count(self, package_ref: str) -> int:
+        return int(self.db.device_installations.count_documents({"package": package_ref, "status": "installed"}))
+
     def authenticate_device(self, device_id: str, agent_token: str) -> dict[str, Any] | None:
         device = self.db.devices.find_one({"id": device_id, "agentTokenHash": token_hash(agent_token)})
         if device and device.get("status") != "revoked":
@@ -967,6 +1040,16 @@ class MongoStore:
     def record_event(self, device_id: str, topic: str, data: dict[str, Any]) -> dict[str, Any]:
         event = {"id": secrets.token_urlsafe(18), "deviceId": device_id, "topic": topic, "data": data, "createdAt": utc_now()}
         self.db.device_events.insert_one(event)
+        installation_state = {
+            "install.awaiting_approval": "awaiting_local_approval",
+            "install.approved": "installing",
+            "install.completed": "installed",
+            "install.failed": "failed",
+            "install.rejected": "rejected",
+        }.get(topic)
+        request_id = str(data.get("requestId", ""))
+        if installation_state and request_id:
+            self.record_installation_status(device_id, request_id, installation_state)
         return {**event, "createdAt": event["createdAt"].isoformat()}
 
     def events_after(self, device_id: str, after: str | None) -> list[dict[str, Any]]:
@@ -1992,6 +2075,21 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return jsonify({"error": "El agente aún no publicó una clave E2E"}), 404
         return jsonify(key)
 
+    @app.get("/api/v1/me/devices/<device_id>/installations")
+    def my_device_installations(device_id: str) -> Response:
+        login = github_login()
+        if not login:
+            return jsonify({"error": "Inicia sesión con GitHub para ver instalaciones"}), 401
+        if not any(item["id"] == device_id for item in app.extensions["device_store"].list_devices_for_owner(login)):
+            return jsonify({"error": "El DaneDesk no pertenece a tu cuenta"}), 404
+        return jsonify({"deviceId": device_id, "installations": app.extensions["device_store"].list_device_installations_for_owner(device_id, login)})
+
+    @app.get("/api/v1/packages/<author>/<slug>/installations")
+    def package_installation_count(author: str, slug: str) -> Response:
+        if author != CATALOG_OWNER or not valid_repository_name(slug):
+            return jsonify({"error": "Paquete no encontrado"}), 404
+        return jsonify({"package": f"{author}/{slug}", "installedDevices": app.extensions["device_store"].installation_count(f"{author}/{slug}")})
+
     @app.post("/api/v1/agent/bootstrap")
     def bootstrap() -> Response:
         if not app.config["ALLOW_LEGACY_PAIRING"]:
@@ -2083,7 +2181,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         payload = request.get_json(silent=True) or {}
         topic = str(payload.get("topic", ""))
         data = payload.get("data", {})
-        allowed_topics = {"agent.connected", "command.rejected_signature", "command.rejected_expired", "install.awaiting_approval", "install.approved", "install.rejected", "install.completed", "install.failed", "device.locked", "device.ring.started", "device.ring.failed"}
+        allowed_topics = {"agent.connected", "agent.capabilities", "command.rejected_signature", "command.rejected_expired", "install.awaiting_approval", "install.approved", "install.rejected", "install.completed", "install.failed", "device.locked", "device.ring.started", "device.ring.failed", "device.e2e_key_registered"}
         if topic not in allowed_topics or not isinstance(data, dict):
             return jsonify({"error": "Evento no permitido"}), 400
         return jsonify(app.extensions["device_store"].record_event(device_id, topic, data)), 202

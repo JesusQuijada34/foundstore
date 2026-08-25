@@ -391,6 +391,31 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(legacy.status_code, 302)
         self.assertIn("/account/profile", legacy.headers["Location"])
 
+    def test_installation_progress_and_catalog_count_require_real_agent_events(self) -> None:
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "jq34"
+        license_code = self.client.post("/api/v1/me/licenses", json={}).json["license"]
+        link = self.client.post("/api/v1/license-links", json={"license": license_code, "displayName": "DaneDesk de progreso", "platform": "Danenone"}).json
+        self.assertEqual(self.client.post(f"/link/{link['linkId']}", data={"code": link["userCode"]}).status_code, 200)
+        claimed = self.client.post(f"/api/v1/license-links/{link['linkId']}/claim", headers={"X-Foundstore-Link-Token": link["linkToken"]}).json
+        device_id = claimed["id"]
+        requested = self.client.post(
+            f"/api/v1/devices/{device_id}/installation-requests",
+            headers=self.owner_headers(),
+            json={"package": "JesusQuijada34/packagemaker"},
+        )
+        self.assertEqual(requested.status_code, 202)
+        request_id = requested.json["id"]
+        agent_headers = {"X-Danenone-Agent-Token": claimed["agentToken"]}
+        self.assertEqual(self.client.post(f"/api/v1/devices/{device_id}/events", headers=agent_headers, json={"topic": "install.approved", "data": {"requestId": request_id}}).status_code, 202)
+        active = self.client.get(f"/api/v1/me/devices/{device_id}/installations")
+        self.assertEqual(active.status_code, 200)
+        self.assertEqual(active.json["installations"][0]["status"], "installing")
+        self.assertEqual(self.client.post(f"/api/v1/devices/{device_id}/events", headers=agent_headers, json={"topic": "install.completed", "data": {"requestId": request_id}}).status_code, 202)
+        count = self.client.get("/api/v1/packages/JesusQuijada34/packagemaker/installations")
+        self.assertEqual(count.status_code, 200)
+        self.assertEqual(count.json["installedDevices"], 1)
+
     def test_mongo_license_link_status_accepts_serialized_expiration(self) -> None:
         class Links:
             def find_one(self, *_: object, **__: object) -> dict[str, object]:
