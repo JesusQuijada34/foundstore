@@ -1,0 +1,3 @@
+flet[all]>=0.86,<0.87
+flet-secure-storage>=0.86,<0.87
+requests>=2.32,<3
