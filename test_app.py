@@ -175,6 +175,9 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertIn("foundstore-stage-four", public_styles.get_data(as_text=True))
         self.assertIn("foundstore-account-trigger", account_styles.get_data(as_text=True))
         self.assertIn("FoundstoreAccount", account_script.get_data(as_text=True))
+        account_menu = account_script.get_data(as_text=True)
+        for path in ("/account/profile", "/account/licenses", "/account/devices", "/account/privacy", "/account/packages/invalid"):
+            self.assertIn(path, account_menu)
         self.assertIn("prefers-reduced-motion", motion_styles.get_data(as_text=True))
         motion_source = motion_script.get_data(as_text=True)
         self.assertIn("navigator.userAgent", motion_source)
