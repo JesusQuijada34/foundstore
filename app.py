@@ -27,7 +27,7 @@ from urllib.parse import quote, urlencode
 import requests
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives.asymmetric import ec
-from flask import Flask, Response, jsonify, redirect, render_template, request, send_from_directory, session, url_for
+from flask import Flask, Response, abort, jsonify, redirect, render_template, request, send_from_directory, session, url_for
 
 CATALOG_OWNER = os.environ.get("CATALOG_OWNER") or "JesusQuijada34"
 CATALOG_REPOSITORY = os.environ.get("CATALOG_REPOSITORY") or "catalog"
@@ -1561,14 +1561,17 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         next_path = safe_next_path(str(session.pop("github_oauth_next", "")))
         return redirect(url_for("license_link_page", link_id=link_id) if link_id else next_path or url_for("index"))
 
-    def account_page(section: str) -> Response | str:
+    def account_page(section: str, device_id: str | None = None) -> Response | str:
         blocked = web_session_or_login()
         if blocked:
             return blocked
+        if section == "device" and (not device_id or not any(item["id"] == device_id for item in app.extensions["device_store"].list_devices_for_owner(str(github_login() or "")))):
+            abort(404)
         labels = {
             "profile": "Perfil",
             "licenses": "Licencias",
             "devices": "Dispositivos",
+            "device": "DaneDesk",
             "privacy": "Privacidad",
             "invalid": "Paquetes inválidos",
             "preferences": "Preferencias",
@@ -1577,6 +1580,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             "account.html",
             account_section=section,
             account_label=labels[section],
+            device_id=device_id,
             github_login=github_login(),
             visitor_country=request.headers.get("CF-IPCountry", ""),
         )
@@ -1600,6 +1604,10 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     @app.get("/account/devices")
     def account_devices() -> Response | str:
         return account_page("devices")
+
+    @app.get("/account/devices/<device_id>")
+    def account_device_detail(device_id: str) -> Response | str:
+        return account_page("device", device_id)
 
     @app.get("/account/privacy")
     def account_privacy() -> Response | str:

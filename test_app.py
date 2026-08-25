@@ -341,6 +341,11 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(detail.status_code, 200)
         self.assertEqual(detail.json["device"]["id"], device_id)
         self.assertEqual(detail.json["security"]["endToEndPayloads"], "pending_agent_update")
+        device_page = self.client.get(f"/account/devices/{device_id}")
+        self.assertEqual(device_page.status_code, 200)
+        self.assertIn('id="device-console"', device_page.get_data(as_text=True))
+        self.assertIn("Instalaciones verificadas", device_page.get_data(as_text=True))
+        self.assertNotIn("Dirección MAC", device_page.get_data(as_text=True))
         public_numbers = ec.generate_private_key(ec.SECP256R1()).public_key().public_numbers()
         public_jwk = {
             "kty": "EC",
@@ -390,6 +395,12 @@ class FlaskRenderAppTests(unittest.TestCase):
         legacy = self.client.get("/profile")
         self.assertEqual(legacy.status_code, 302)
         self.assertIn("/account/profile", legacy.headers["Location"])
+
+    def test_device_detail_page_stays_owner_only(self) -> None:
+        self.assertEqual(self.client.get("/account/devices/not-owned").status_code, 401)
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "jq34"
+        self.assertEqual(self.client.get("/account/devices/not-owned").status_code, 404)
 
     def test_installation_progress_and_catalog_count_require_real_agent_events(self) -> None:
         with self.client.session_transaction() as browser_session:
