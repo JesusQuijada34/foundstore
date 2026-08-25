@@ -99,6 +99,65 @@ def public_key_fingerprint(public_jwk: dict[str, str]) -> str:
     return hashlib.sha256(canonical).hexdigest()[:16]
 
 
+def base64url_encode(value: bytes) -> str:
+    return base64.urlsafe_b64encode(value).decode("ascii").rstrip("=")
+
+
+def base64url_decode(value: Any, minimum: int, maximum: int) -> bytes | None:
+    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", value) or not minimum <= len(value) <= maximum * 2:
+        return None
+    try:
+        decoded = base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
+    except (ValueError, TypeError):
+        return None
+    return decoded if minimum <= len(decoded) <= maximum else None
+
+
+def canonical_e2e_aad(version: int, device_id: str, key_epoch: int, envelope_id: str, expires_at: str, direction: str) -> bytes:
+    return json.dumps(
+        {"deviceId": device_id, "direction": direction, "envelopeId": envelope_id, "expiresAt": expires_at, "keyEpoch": key_epoch, "version": version},
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def normalize_owner_e2e_envelope(device_id: str, payload: Any, key_epoch: int) -> dict[str, Any] | None:
+    """Validate only routing metadata; ciphertext is intentionally never decrypted server-side."""
+    if not isinstance(payload, dict) or payload.get("version") != 1 or payload.get("deviceId") != device_id or payload.get("keyEpoch") != key_epoch:
+        return None
+    envelope_id, expires_at, envelope_type = payload.get("envelopeId"), payload.get("expiresAt"), payload.get("type")
+    if not isinstance(envelope_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{16,96}", envelope_id):
+        return None
+    if envelope_type not in {"network_inventory_request"} or not isinstance(expires_at, str):
+        return None
+    try:
+        expires = parse_iso(expires_at)
+    except (TypeError, ValueError):
+        return None
+    now = utc_now()
+    if expires.tzinfo is None or expires <= now + timedelta(seconds=30) or expires > now + timedelta(minutes=15):
+        return None
+    sender_key = normalize_p256_public_jwk(payload.get("senderEphemeralPublicJwk"))
+    nonce = base64url_decode(payload.get("nonce"), 12, 12)
+    ciphertext = base64url_decode(payload.get("ciphertext"), 17, 65536)
+    aad = base64url_decode(payload.get("aad"), 16, 1024)
+    expected_aad = canonical_e2e_aad(1, device_id, key_epoch, envelope_id, expires_at, "owner-to-device")
+    if not sender_key or nonce is None or ciphertext is None or aad is None or not hmac.compare_digest(aad, expected_aad):
+        return None
+    return {
+        "version": 1,
+        "deviceId": device_id,
+        "keyEpoch": key_epoch,
+        "envelopeId": envelope_id,
+        "type": envelope_type,
+        "expiresAt": expires_at,
+        "senderEphemeralPublicJwk": sender_key,
+        "nonce": base64url_encode(nonce),
+        "ciphertext": base64url_encode(ciphertext),
+        "aad": base64url_encode(aad),
+    }
+
+
 def parse_iso(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
@@ -226,6 +285,9 @@ class DeviceStore(Protocol):
     def record_installation_status(self, device_id: str, request_id: str, status: str) -> None: ...
     def list_device_installations_for_owner(self, device_id: str, github_login: str) -> list[dict[str, Any]]: ...
     def installation_count(self, package_ref: str) -> int: ...
+    def queue_e2e_envelope(self, envelope: dict[str, Any]) -> dict[str, Any] | None: ...
+    def take_e2e_envelope(self, device_id: str, envelope_id: str, key_epoch: int) -> dict[str, Any] | None: ...
+    def receipt_e2e_envelope(self, device_id: str, envelope_id: str, key_epoch: int, receipt: str) -> bool: ...
     def authenticate_device(self, device_id: str, agent_token: str) -> dict[str, Any] | None: ...
     def pending_commands(self, device_id: str) -> list[dict[str, Any]]: ...
     def enqueue_command(self, device_id: str, command_type: str, payload: dict[str, Any], expires_in_seconds: int | None = None) -> dict[str, Any] | None: ...
@@ -319,6 +381,22 @@ class LocalStore:
                   updated_at TEXT NOT NULL,
                   PRIMARY KEY(device_id, package_ref)
                 );
+                CREATE TABLE IF NOT EXISTS e2e_envelopes (
+                  envelope_id TEXT PRIMARY KEY,
+                  device_id TEXT NOT NULL,
+                  key_epoch INTEGER NOT NULL,
+                  envelope_type TEXT NOT NULL,
+                  expires_at TEXT NOT NULL,
+                  sender_ephemeral_public_jwk_json TEXT NOT NULL,
+                  nonce TEXT NOT NULL,
+                  ciphertext TEXT NOT NULL,
+                  aad TEXT NOT NULL,
+                  status TEXT NOT NULL DEFAULT 'queued',
+                  created_at TEXT NOT NULL,
+                  delivered_at TEXT,
+                  received_at TEXT,
+                  receipt TEXT
+                );
                 CREATE TABLE IF NOT EXISTS device_licenses (
                   code_hash TEXT PRIMARY KEY,
                   status TEXT NOT NULL DEFAULT 'active',
@@ -369,6 +447,8 @@ class LocalStore:
                   ON device_events(device_id, created_at);
                 CREATE INDEX IF NOT EXISTS idx_device_installations_package
                   ON device_installations(package_ref, status);
+                CREATE INDEX IF NOT EXISTS idx_e2e_envelopes_device_status
+                  ON e2e_envelopes(device_id, status, expires_at);
                 """
             )
             for migration in (
@@ -546,6 +626,41 @@ class LocalStore:
         with self._connect() as conn:
             row = conn.execute("SELECT COUNT(*) AS count FROM device_installations WHERE package_ref = ? AND status = 'installed'", (package_ref,)).fetchone()
         return int(row["count"])
+
+    def queue_e2e_envelope(self, envelope: dict[str, Any]) -> dict[str, Any] | None:
+        try:
+            with self._connect() as conn:
+                conn.execute(
+                    """INSERT INTO e2e_envelopes(envelope_id, device_id, key_epoch, envelope_type, expires_at, sender_ephemeral_public_jwk_json, nonce, ciphertext, aad, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (envelope["envelopeId"], envelope["deviceId"], envelope["keyEpoch"], envelope["type"], envelope["expiresAt"], json.dumps(envelope["senderEphemeralPublicJwk"], sort_keys=True), envelope["nonce"], envelope["ciphertext"], envelope["aad"], iso_now()),
+                )
+        except sqlite3.IntegrityError:
+            return None
+        self.record_event(envelope["deviceId"], "e2e.envelope_queued", {"envelopeId": envelope["envelopeId"], "keyEpoch": envelope["keyEpoch"], "type": envelope["type"]})
+        return {"envelopeId": envelope["envelopeId"], "expiresAt": envelope["expiresAt"], "status": "queued"}
+
+    def take_e2e_envelope(self, device_id: str, envelope_id: str, key_epoch: int) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute("SELECT * FROM e2e_envelopes WHERE device_id = ? AND envelope_id = ? AND key_epoch = ?", (device_id, envelope_id, key_epoch)).fetchone()
+            if not row or row["status"] in {"accepted", "rejected", "expired"}:
+                return None
+            if parse_iso(row["expires_at"]) <= utc_now():
+                conn.execute("UPDATE e2e_envelopes SET status = 'expired' WHERE envelope_id = ?", (envelope_id,))
+                return None
+            if row["status"] == "queued":
+                conn.execute("UPDATE e2e_envelopes SET status = 'delivered', delivered_at = ? WHERE envelope_id = ?", (iso_now(), envelope_id))
+        return {"version": 1, "deviceId": device_id, "keyEpoch": row["key_epoch"], "envelopeId": envelope_id, "type": row["envelope_type"], "expiresAt": row["expires_at"], "senderEphemeralPublicJwk": json.loads(row["sender_ephemeral_public_jwk_json"]), "nonce": row["nonce"], "ciphertext": row["ciphertext"], "aad": row["aad"]}
+
+    def receipt_e2e_envelope(self, device_id: str, envelope_id: str, key_epoch: int, receipt: str) -> bool:
+        with self._connect() as conn:
+            row = conn.execute("SELECT status, expires_at FROM e2e_envelopes WHERE device_id = ? AND envelope_id = ? AND key_epoch = ?", (device_id, envelope_id, key_epoch)).fetchone()
+            if not row or row["status"] not in {"queued", "delivered"} or parse_iso(row["expires_at"]) <= utc_now():
+                return False
+            changed = conn.execute("UPDATE e2e_envelopes SET status = ?, receipt = ?, received_at = ? WHERE envelope_id = ? AND key_epoch = ? AND status IN ('queued', 'delivered')", (receipt, receipt, iso_now(), envelope_id, key_epoch)).rowcount
+        if changed:
+            self.record_event(device_id, "e2e.envelope_received", {"envelopeId": envelope_id, "receipt": receipt})
+        return bool(changed)
 
     def authenticate_device(self, device_id: str, agent_token: str) -> dict[str, Any] | None:
         with self._connect() as conn:
@@ -772,6 +887,9 @@ class MongoStore:
         self.db.commands.create_index("expiresAt", expireAfterSeconds=0)
         self.db.device_events.create_index([("deviceId", 1), ("createdAt", 1)])
         self.db.device_installations.create_index([("package", 1), ("status", 1)])
+        self.db.e2e_envelopes.create_index("envelopeId", unique=True)
+        self.db.e2e_envelopes.create_index("expiresAt", expireAfterSeconds=0)
+        self.db.e2e_envelopes.create_index([("deviceId", 1), ("status", 1), ("expiresAt", 1)])
         self.db.developer_profiles.create_index("githubLogin", unique=True)
         self.db.developer_follows.create_index([("followerLogin", 1), ("developerLogin", 1)], unique=True)
         self.db.developer_follows.create_index("developerLogin")
@@ -920,6 +1038,41 @@ class MongoStore:
 
     def installation_count(self, package_ref: str) -> int:
         return int(self.db.device_installations.count_documents({"package": package_ref, "status": "installed"}))
+
+    def queue_e2e_envelope(self, envelope: dict[str, Any]) -> dict[str, Any] | None:
+        from pymongo.errors import DuplicateKeyError
+
+        try:
+            self.db.e2e_envelopes.insert_one({
+                "envelopeId": envelope["envelopeId"], "deviceId": envelope["deviceId"], "keyEpoch": envelope["keyEpoch"], "type": envelope["type"],
+                "expiresAt": parse_iso(envelope["expiresAt"]), "senderEphemeralPublicJwk": envelope["senderEphemeralPublicJwk"], "nonce": envelope["nonce"],
+                "ciphertext": envelope["ciphertext"], "aad": envelope["aad"], "status": "queued", "createdAt": utc_now(),
+            })
+        except DuplicateKeyError:
+            return None
+        self.record_event(envelope["deviceId"], "e2e.envelope_queued", {"envelopeId": envelope["envelopeId"], "keyEpoch": envelope["keyEpoch"], "type": envelope["type"]})
+        return {"envelopeId": envelope["envelopeId"], "expiresAt": envelope["expiresAt"], "status": "queued"}
+
+    def take_e2e_envelope(self, device_id: str, envelope_id: str, key_epoch: int) -> dict[str, Any] | None:
+        from pymongo import ReturnDocument
+
+        row = self.db.e2e_envelopes.find_one_and_update(
+            {"deviceId": device_id, "envelopeId": envelope_id, "keyEpoch": key_epoch, "status": {"$in": ["queued", "delivered"]}, "expiresAt": {"$gt": utc_now()}},
+            {"$set": {"status": "delivered", "deliveredAt": utc_now()}},
+            return_document=ReturnDocument.AFTER,
+        )
+        if not row:
+            return None
+        return {"version": 1, "deviceId": device_id, "keyEpoch": row["keyEpoch"], "envelopeId": envelope_id, "type": row["type"], "expiresAt": row["expiresAt"].isoformat(), "senderEphemeralPublicJwk": row["senderEphemeralPublicJwk"], "nonce": row["nonce"], "ciphertext": row["ciphertext"], "aad": row["aad"]}
+
+    def receipt_e2e_envelope(self, device_id: str, envelope_id: str, key_epoch: int, receipt: str) -> bool:
+        result = self.db.e2e_envelopes.update_one(
+            {"deviceId": device_id, "envelopeId": envelope_id, "keyEpoch": key_epoch, "status": {"$in": ["queued", "delivered"]}, "expiresAt": {"$gt": utc_now()}},
+            {"$set": {"status": receipt, "receipt": receipt, "receivedAt": utc_now()}},
+        )
+        if result.modified_count:
+            self.record_event(device_id, "e2e.envelope_received", {"envelopeId": envelope_id, "receipt": receipt})
+        return bool(result.modified_count)
 
     def authenticate_device(self, device_id: str, agent_token: str) -> dict[str, Any] | None:
         device = self.db.devices.find_one({"id": device_id, "agentTokenHash": token_hash(agent_token)})
@@ -2082,6 +2235,57 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if not key:
             return jsonify({"error": "El agente aún no publicó una clave E2E"}), 404
         return jsonify(key)
+
+    @app.post("/api/v1/me/devices/<device_id>/e2e-envelopes")
+    def queue_owner_e2e_envelope(device_id: str) -> Response:
+        login = github_login()
+        if not login:
+            return jsonify({"error": "Inicia sesión con GitHub para enviar un sobre E2E"}), 401
+        if not any(item["id"] == device_id and item["status"] == "active" for item in app.extensions["device_store"].list_devices_for_owner(login)):
+            return jsonify({"error": "El DaneDesk elegido no pertenece a tu cuenta o no está activo"}), 403
+        key = app.extensions["device_store"].get_device_e2e_key(device_id)
+        if not key:
+            return jsonify({"error": "El agente aún no publicó una clave E2E"}), 409
+        envelope = normalize_owner_e2e_envelope(device_id, request.get_json(silent=True), int(key["keyEpoch"]))
+        if not envelope:
+            return jsonify({"error": "Sobre E2E inválido, vencido o ligado a otra época de clave"}), 400
+        queued = app.extensions["device_store"].queue_e2e_envelope(envelope)
+        if not queued:
+            return jsonify({"error": "El identificador de sobre ya fue usado"}), 409
+        seconds = max(30, min(900, int((parse_iso(envelope["expiresAt"]) - utc_now()).total_seconds())))
+        command = app.extensions["device_store"].enqueue_command(device_id, "e2e_envelope", {"envelopeId": envelope["envelopeId"], "keyEpoch": envelope["keyEpoch"]}, seconds)
+        if not command:
+            return jsonify({"error": "No se pudo enviar la notificación firmada al agente"}), 409
+        return jsonify({**queued, "commandId": command["id"], "localApprovalRequired": True}), 202
+
+    @app.get("/api/v1/devices/<device_id>/e2e-envelopes/<envelope_id>")
+    def get_agent_e2e_envelope(device_id: str, envelope_id: str) -> Response:
+        _, error = agent_device_or_error(app, device_id)
+        if error:
+            return error
+        if not re.fullmatch(r"[A-Za-z0-9_-]{16,96}", envelope_id):
+            return jsonify({"error": "Identificador de sobre inválido"}), 400
+        key = app.extensions["device_store"].get_device_e2e_key(device_id)
+        if not key:
+            return jsonify({"error": "No hay clave E2E registrada para este agente"}), 409
+        envelope = app.extensions["device_store"].take_e2e_envelope(device_id, envelope_id, int(key["keyEpoch"]))
+        if not envelope:
+            return jsonify({"error": "Sobre no disponible, vencido o ya recibido"}), 404
+        return jsonify(envelope)
+
+    @app.post("/api/v1/devices/<device_id>/e2e-envelopes/<envelope_id>/receipt")
+    def receipt_agent_e2e_envelope(device_id: str, envelope_id: str) -> Response:
+        _, error = agent_device_or_error(app, device_id)
+        if error:
+            return error
+        payload = request.get_json(silent=True) or {}
+        receipt = payload.get("receipt")
+        if not re.fullmatch(r"[A-Za-z0-9_-]{16,96}", envelope_id) or receipt not in {"accepted", "rejected"}:
+            return jsonify({"error": "Recibo de sobre inválido"}), 400
+        key = app.extensions["device_store"].get_device_e2e_key(device_id)
+        if not key or not app.extensions["device_store"].receipt_e2e_envelope(device_id, envelope_id, int(key["keyEpoch"]), receipt):
+            return jsonify({"error": "El sobre no admite otro recibo"}), 409
+        return jsonify({"envelopeId": envelope_id, "receipt": receipt}), 202
 
     @app.get("/api/v1/me/devices/<device_id>/installations")
     def my_device_installations(device_id: str) -> Response:

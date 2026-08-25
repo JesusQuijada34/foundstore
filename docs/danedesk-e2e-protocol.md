@@ -17,11 +17,11 @@ La implementación v1 usará capacidades nativas de navegador y Python `cryptogr
 | Cifrado autenticado | AES-256-GCM | Confidencialidad e integridad de cada payload con nonce único de 96 bits. |
 | Transporte y autorización | HTTPS + HMAC existente de comando + token de agente | Conserva autenticación de ruta y rechazo temprano antes del descifrado E2E. |
 
-La elección P-256 permite usar Web Crypto directamente en la consola. X25519 sigue siendo una alternativa aceptable para clientes nativos, pero no se mezclará dentro de la versión 1 del mismo protocolo. La documentación de `cryptography` recomienda pasar secretos ECDH por una KDF y rotar la clave efímera en cada intercambio. [1] El modo AEAD elegido protege confidencialidad e integridad del mensaje asociado al nonce, no sólo su confidencialidad. [2]
+La elección P-256 permite usar Web Crypto directamente en la consola. X25519 sigue siendo una alternativa aceptable para clientes nativos, pero no se mezclará dentro de la versión 1 del mismo protocolo. La documentación de `cryptography` recomienda pasar secretos ECDH por una KDF y rotar la clave efímera en cada intercambio. [1] El modo AES-GCM protege confidencialidad e integridad del mensaje asociado al nonce, no sólo su confidencialidad. [2]
 
 ## Identidades y claves
 
-Cada DaneDesk genera localmente una pareja P-256 de cifrado durante una migración confirmada. La clave privada nunca se envía y se guarda junto al estado del agente con permisos `0600`; el servidor registra sólo la clave pública JWK, un `keyEpoch`, una huella y la fecha de alta. La consola del propietario genera una clave de control P-256 no exportable en el navegador y publica únicamente su JWK.
+Cada DaneDesk genera localmente una pareja P-256 de cifrado durante una migración confirmada. La clave privada nunca se envía y se guarda junto al estado del agente con permisos `0600`; el servidor registra sólo la clave pública JWK, un `keyEpoch`, una huella y la fecha de alta. La consola del propietario generará una clave de control P-256 no exportable en el navegador y publicará únicamente su JWK cuando exista una política de persistencia y recuperación explícita; esa consola todavía no está implementada.
 
 La rotación de una clave de dispositivo exige token de agente válido y prueba de posesión de la clave actual o una aprobación de propietario que invalida los sobres pendientes. La rotación de clave de control se inicia desde una sesión GitHub del propietario y deja los sobres históricos sin descifrar a propósito; no existe una puerta trasera de recuperación en el servidor.
 
@@ -43,7 +43,18 @@ La consola descarga la clave pública del DaneDesk desde una ruta protegida, gen
 }
 ```
 
-El AAD canónico liga `version`, `deviceId`, `keyEpoch`, `envelopeId`, `expiresAt` y dirección `owner-to-device`. El servidor inserta el sobre en un comando de transporte firmado; el agente verifica primero la firma HMAC, caducidad y no repetición, y sólo después descifra. Un fallo de autenticación, época o AAD se registra como error genérico sin guardar plaintext.
+El AAD canónico liga `version`, `deviceId`, `keyEpoch`, `envelopeId`, `expiresAt` y dirección `owner-to-device`. El servidor valida tamaño, estructura, caducidad, AAD y época; guarda sólo el sobre opaco y emite un comando de transporte firmado que contiene el identificador y la época. Los sobres tienen identificador único, recibo único y quedan inaccesibles después de una rotación de época. El agente deberá verificar primero la firma HMAC, caducidad y no repetición, y sólo después descifrar. Un fallo de autenticación, época o AAD se registra como error genérico sin guardar plaintext.
+
+## Estado de implementación
+
+| Componente | Estado | Límite |
+| --- | --- | --- |
+| Registro de clave pública P-256 y huella por DaneDesk | Implementado | La clave privada sigue local; no se registra material privado. |
+| Sobre `owner-to-device` opaco v1, AAD, tamaño, caducidad, epoch y replay | Implementado en el servidor | El servidor enruta y registra recibos; no descifra. |
+| Despacho por comando HMAC con `envelopeId` y `keyEpoch` | Implementado en el servidor | Requiere que el agente actualizado lo procese. |
+| Consola Web Crypto de propietario y clave no exportable | Pendiente | Falta definir persistencia/recuperación segura antes de exponerla. |
+| Descifrado local del agente y aprobación local de inventario | Pendiente | No se publica una release hasta probarlo. |
+| Sobres `device-to-owner` para inventario sensible | Pendiente | MAC, servicios y aplicaciones no se guardan en texto claro. |
 
 Las acciones de instalación, bloqueo, timbre y renovación de configuración mantienen aprobación local. El agente nunca acepta que el servidor o la consola conviertan un sobre válido en una instalación automática.
 
@@ -63,6 +74,6 @@ Los agentes anteriores continúan en modo de compatibilidad: sólo reciben coman
 
 ## Referencias
 
-[1] [Documentación oficial de X25519 y KDF, `cryptography`](https://cryptography.io/en/latest/hazmat/primitives/asymmetric/x25519/)
+[1] [Documentación oficial de ECDH y KDF, `cryptography`](https://cryptography.io/en/latest/hazmat/primitives/asymmetric/ec/)
 
-[2] [RFC 8439, ChaCha20 y Poly1305 para protocolos IETF](https://www.rfc-editor.org/rfc/rfc8439)
+[2] [Documentación oficial de AESGCM, `cryptography`](https://cryptography.io/en/latest/hazmat/primitives/aead/)

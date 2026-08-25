@@ -2,10 +2,11 @@ import os
 import base64
 import tempfile
 import unittest
+from datetime import timedelta
 from unittest.mock import patch
 
 from cryptography.hazmat.primitives.asymmetric import ec
-from app import MongoStore, catalog_references, create_app, github_public_repositories, github_public_star_count, package_revision, raw_github_text
+from app import MongoStore, base64url_encode, canonical_e2e_aad, catalog_references, create_app, github_public_repositories, github_public_star_count, package_revision, raw_github_text, utc_now
 
 
 class FlaskRenderAppTests(unittest.TestCase):
@@ -371,6 +372,41 @@ class FlaskRenderAppTests(unittest.TestCase):
         with intruder.session_transaction() as browser_session:
             browser_session["github_login"] = "otro"
         self.assertEqual(intruder.post("/api/v1/me/licenses/revoke", json={"license": license_code}).status_code, 404)
+
+    def test_e2e_envelope_is_opaque_one_time_and_key_epoch_bound(self) -> None:
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "jq34"
+        license_code = self.client.post("/api/v1/me/licenses", json={}).json["license"]
+        link = self.client.post("/api/v1/license-links", json={"license": license_code, "displayName": "DaneDesk E2E", "platform": "Danenone"}).json
+        self.assertEqual(self.client.post(f"/link/{link['linkId']}", data={"code": link["userCode"]}).status_code, 200)
+        claimed = self.client.post(f"/api/v1/license-links/{link['linkId']}/claim", headers={"X-Foundstore-Link-Token": link["linkToken"]}).json
+        device_id, agent_headers = claimed["id"], {"X-Danenone-Agent-Token": claimed["agentToken"]}
+        numbers = ec.generate_private_key(ec.SECP256R1()).public_key().public_numbers()
+        public_jwk = {"kty": "EC", "crv": "P-256", "x": base64.urlsafe_b64encode(numbers.x.to_bytes(32, "big")).decode("ascii").rstrip("="), "y": base64.urlsafe_b64encode(numbers.y.to_bytes(32, "big")).decode("ascii").rstrip("=")}
+        self.assertEqual(self.client.post(f"/api/v1/devices/{device_id}/e2e-key", headers=agent_headers, json={"publicJwk": public_jwk, "keyEpoch": 1}).status_code, 201)
+
+        def envelope(envelope_id: str, epoch: int = 1) -> dict[str, object]:
+            expires_at = (utc_now() + timedelta(minutes=5)).isoformat()
+            aad = canonical_e2e_aad(1, device_id, epoch, envelope_id, expires_at, "owner-to-device")
+            return {"version": 1, "deviceId": device_id, "keyEpoch": epoch, "envelopeId": envelope_id, "type": "network_inventory_request", "expiresAt": expires_at, "senderEphemeralPublicJwk": public_jwk, "nonce": base64url_encode(b"N" * 12), "ciphertext": base64url_encode(b"opaque-ciphertext-without-plaintext"), "aad": base64url_encode(aad)}
+
+        first = envelope("e2e_envelope_first")
+        invalid = {**first, "aad": base64url_encode(b"not-the-canonical-aad")}
+        self.assertEqual(self.client.post(f"/api/v1/me/devices/{device_id}/e2e-envelopes", json=invalid).status_code, 400)
+        queued = self.client.post(f"/api/v1/me/devices/{device_id}/e2e-envelopes", json=first)
+        self.assertEqual(queued.status_code, 202)
+        commands = self.client.get(f"/api/v1/devices/{device_id}/commands/next?wait=0", headers=agent_headers)
+        self.assertTrue(any(item["type"] == "e2e_envelope" and item["payload"]["envelopeId"] == first["envelopeId"] for item in commands.json["commands"]))
+        fetched = self.client.get(f"/api/v1/devices/{device_id}/e2e-envelopes/{first['envelopeId']}", headers=agent_headers)
+        self.assertEqual(fetched.status_code, 200)
+        self.assertEqual(fetched.json["ciphertext"], first["ciphertext"])
+        self.assertEqual(self.client.post(f"/api/v1/devices/{device_id}/e2e-envelopes/{first['envelopeId']}/receipt", headers=agent_headers, json={"receipt": "accepted"}).status_code, 202)
+        self.assertEqual(self.client.post(f"/api/v1/devices/{device_id}/e2e-envelopes/{first['envelopeId']}/receipt", headers=agent_headers, json={"receipt": "accepted"}).status_code, 409)
+        self.assertEqual(self.client.get(f"/api/v1/devices/{device_id}/e2e-envelopes/{first['envelopeId']}", headers=agent_headers).status_code, 404)
+        second = envelope("e2e_envelope_second")
+        self.assertEqual(self.client.post(f"/api/v1/me/devices/{device_id}/e2e-envelopes", json=second).status_code, 202)
+        self.assertEqual(self.client.post(f"/api/v1/devices/{device_id}/e2e-key", headers=agent_headers, json={"publicJwk": public_jwk, "keyEpoch": 2}).status_code, 201)
+        self.assertEqual(self.client.get(f"/api/v1/devices/{device_id}/e2e-envelopes/{second['envelopeId']}", headers=agent_headers).status_code, 404)
 
     def test_account_sections_are_independent_and_require_github(self) -> None:
         paths = ["/account/profile", "/account/licenses", "/account/devices", "/account/privacy", "/account/packages/invalid"]
