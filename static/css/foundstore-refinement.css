@@ -48,3 +48,57 @@ body.foundstore-public-developer {
   body { background-attachment: scroll; }
 }
 @media (prefers-reduced-motion: reduce) { body { background-attachment: scroll; } }
+
+/* Mobile layout correction: the catalog must never leave a fixed sidebar over the page. */
+@media (max-width: 850px) {
+  body.foundstore-public-catalog .shell {
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+  }
+  body.foundstore-public-catalog .sidebar {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    height: auto !important;
+    position: relative !important;
+    inset: auto !important;
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--foundstore-line) !important;
+    overflow: visible !important;
+    z-index: 5 !important;
+  }
+  body.foundstore-public-catalog .sidebar .foundstore-brand-wrap {
+    grid-column: 1 / -1;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  body.foundstore-public-catalog .sidebar .foundstore-brand-word {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  body.foundstore-public-catalog .sidebar .search {
+    grid-column: 1 / -1;
+    width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+  }
+  body.foundstore-public-catalog .content {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    padding: 30px 18px 72px !important;
+  }
+}
+@media (max-width: 520px) {
+  body.foundstore-public-catalog .sidebar { padding: 12px !important; }
+  body.foundstore-public-catalog .foundstore-language-label { min-width: 92px; }
+  body.foundstore-public-catalog .foundstore-language { min-height: 36px; padding-inline: 9px; font-size: 12px; }
+  body.foundstore-public-catalog .content { padding-inline: 14px !important; }
+}
