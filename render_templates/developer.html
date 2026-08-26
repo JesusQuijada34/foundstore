@@ -18,7 +18,7 @@
     <style>@media(max-width:700px){html,body{max-width:100%;overflow-x:hidden}.shell{width:calc(100% - 24px);max-width:100%;overflow-x:hidden}.hero,.grid,.card{min-width:0;max-width:100%}.card>*{min-width:0}.card h3,.desc,.handle,.bio{overflow-wrap:anywhere;word-break:break-word}.art{max-width:100%}}</style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-components.css') }}"><script defer src="{{ url_for('static', filename='js/foundstore-motion.js') }}"></script>
     <script src="{{ url_for('static', filename='js/foundstore-components.js') }}"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-v2.css') }}?v=pwa2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-v2.css') }}?v=pwa3">
   </head>
   <body>
     <main class="shell"><nav class="nav">{{ foundstore_brand('brand') }}<a class="back" href="/">Volver al catálogo</a></nav><section class="hero vibrant" id="hero"><div class="avatar-wrap"><img class="avatar" id="avatar" alt="" hidden><span class="avatar-fallback" id="avatarFallback">?</span></div><div><p class="eyebrow">Perfil de desarrollador</p><h1 class="title" id="title">Cargando perfil…</h1><p class="handle" id="handle"></p><p class="bio" id="bio"></p><div class="links" id="links"></div></div><button class="follow" id="follow" type="button" disabled>Cargando…</button><span class="owner-status" id="ownerStatus" hidden>Tu perfil</span></section><section><div class="heading"><h2>Paquetes Fluthin publicados</h2><span class="count" id="count"></span></div><div class="grid" id="catalog"><div class="empty vibrant">Cargando catálogo del desarrollador…</div></div></section></main>
