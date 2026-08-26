@@ -30,6 +30,8 @@ from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives.asymmetric import ec
 from flask import Flask, Response, abort, jsonify, redirect, render_template, request, send_from_directory, session, url_for
 
+from i18n import COOKIE_NAME, SUPPORTED_LOCALES, catalog as locale_catalog, normalize_locale, resolve_locale, translate
+
 CATALOG_OWNER = os.environ.get("CATALOG_OWNER") or "JesusQuijada34"
 CATALOG_REPOSITORY = os.environ.get("CATALOG_REPOSITORY") or "catalog"
 DEFAULT_LONG_POLL_SECONDS = 25
@@ -1855,6 +1857,27 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         app.config["COMMAND_SIGNING_KEY"] = app.config["SECRET_KEY"]
     app.extensions["device_store"] = build_store(app.config)
     app.extensions["github_star_grants"] = {}
+
+    @app.before_request
+    def load_locale() -> None:
+        request.locale = resolve_locale(request)  # type: ignore[attr-defined]
+
+    @app.context_processor
+    def inject_i18n() -> dict[str, Any]:
+        locale = getattr(request, "locale", "es")
+        return {
+            "current_locale": locale,
+            "available_locales": SUPPORTED_LOCALES,
+            "locale_catalog": locale_catalog(),
+            "t": lambda key, **values: translate(key, locale, **values),
+        }
+
+    @app.after_request
+    def persist_locale(response: Response) -> Response:
+        explicit = normalize_locale(request.args.get("lang"))
+        if explicit:
+            response.set_cookie(COOKIE_NAME, explicit, max_age=60 * 60 * 24 * 365, secure=app.config.get("SESSION_COOKIE_SECURE", True), httponly=False, samesite="Lax")
+        return response
 
     def github_login() -> str | None:
         return session.get("github_login")

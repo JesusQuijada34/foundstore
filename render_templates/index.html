@@ -1,6 +1,6 @@
 <!doctype html>
-{% from "_foundstore_brand.html" import foundstore_brand %}
-<html lang="es" data-country="{{ visitor_country }}">
+{% from "_foundstore_brand.html" import foundstore_brand with context %}
+<html lang="{{ current_locale }}" data-country="{{ visitor_country }}">
   <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Foundstore · Danenone</title>
@@ -25,16 +25,17 @@
     <script src="{{ url_for('static', filename='js/foundstore-components.js') }}"></script>
     <script src="{{ url_for('static', filename='js/foundstore-account.js') }}"></script>
     <script defer src="{{ url_for('static', filename='js/foundstore-motion.js') }}"></script>
-  </head>
+      <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-refinement.css') }}">
+</head>
   <body class="foundstore-public-catalog">
     <a class="foundstore-skip-link" href="#main-content">Saltar al catálogo</a>
     <div class="shell">
       <aside class="sidebar">
         {{ foundstore_brand('brand') }}
-        <label class="search" aria-label="Buscar"><span aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></span><input id="search" type="search" autocomplete="off"></label>
+        <label class="search" aria-label="Buscar usuarios y paquetes"><span aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></span><input id="search" type="search" autocomplete="off" placeholder="@usuario o paquete" spellcheck="false"></label>
         <div class="nav-label" data-i18n="browse">Explorar</div>
         <nav class="nav" id="categoryNav"></nav>
-        <div class="sidebar-bottom"><select class="language" id="language" aria-label="Idioma"><option value="es">Español</option><option value="en">English</option><option value="pt">Português</option><option value="ru">Русский</option></select></div>
+        <div class="sidebar-bottom"><select class="language" id="language" data-language-selector aria-label="{{ t('Language') }}">{% for code, name in available_locales.items() %}<option value="{{ code }}"{% if code == current_locale %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></div>
       </aside>
       <main id="main-content" class="content" tabindex="-1">
         <div class="topline"><span class="eyebrow" data-i18n="eyebrow">Influent Danenone</span><div class="account" id="account"><span data-i18n="checking">Comprobando sesión…</span></div></div>
@@ -53,7 +54,7 @@
       function translate(){document.documentElement.lang=locale;document.querySelectorAll('[data-i18n]').forEach(n=>n.textContent=t(n.dataset.i18n));search.placeholder=t('browse')+'…'}
       async function updateAccount(){if(!window.signedIn){account.className='account';account.innerHTML=`<a href="/auth/github/login">${t('signin')}</a>`;return}if(window.FoundstoreAccount)await window.FoundstoreAccount.mount(account,{deviceCount:devices.length});if(!devices.length){status.innerHTML=`<strong>${t('noDevices')}</strong><span>${t('linkHint')}</span>`;status.classList.add('show');return}status.classList.remove('show')}
       function categories(){const values=['all',...new Set(packages.map(p=>p.category||'Fluthin'))];document.getElementById('categoryNav').innerHTML=values.map(value=>`<button class="${value===active?'active':''}" data-category="${esc(value)}"><span class="nav-dot"></span>${value==='all'?t('all'):esc(value)}</button>`).join('');document.getElementById('filters').innerHTML=values.slice(0,5).map(value=>`<button class="chip ${value===active?'active':''}" data-category="${esc(value)}">${value==='all'?t('all'):esc(value)}</button>`).join('');document.getElementById('platformFilters').innerHTML=['all','Danenone','Knosthalij'].map(value=>`<button class="chip ${value===activePlatform?'active':''}" data-platform="${value}">${tp(value)}</button>`).join('');document.querySelectorAll('[data-category]').forEach(b=>b.onclick=()=>{active=b.dataset.category;categories();render()});document.querySelectorAll('[data-platform]').forEach(b=>b.onclick=()=>{activePlatform=b.dataset.platform;categories();render()})}
-      function render(newIds=[]){const term=search.value.trim().toLowerCase(),fresh=new Set(newIds),visible=packages.filter(p=>(active==='all'||(p.category||'Fluthin')===active)&&(activePlatform==='all'||(p.platformTargets||[]).includes(activePlatform))&&`${p.name} ${p.description||''} ${(p.tags||[]).join(' ')}`.toLowerCase().includes(term));notice.textContent=`${visible.length} ${t('categories').toLowerCase()}`;catalogNode.innerHTML=visible.length?visible.map(p=>FoundstoreUI.packageCard(p,{newCard:fresh.has(`${p.author}/${p.slug}`)})).join(''):`<div class="empty">${t('empty')}</div>`}
+      function render(newIds=[]){const rawTerm=search.value.trim().toLowerCase(),term=rawTerm.startsWith('@')?rawTerm.slice(1):rawTerm,fresh=new Set(newIds),visible=packages.filter(p=>(active==='all'||(p.category||'Fluthin')===active)&&(activePlatform==='all'||(p.platformTargets||[]).includes(activePlatform))&&(rawTerm.startsWith('@')?String(p.author||'').toLowerCase().includes(term):`${p.name} ${p.description||''} ${(p.tags||[]).join(' ')}`.toLowerCase().includes(term)));notice.textContent=`${visible.length} ${t('categories').toLowerCase()}`;catalogNode.innerHTML=visible.length?visible.map(p=>FoundstoreUI.packageCard(p,{newCard:fresh.has(`${p.author}/${p.slug}`)})).join(''):`<div class="empty">${t('empty')}</div>`}
       function useCachedCatalog(){try{const cached=JSON.parse(localStorage.getItem(CATALOG_CACHE_KEY)||'');if(Array.isArray(cached.packages)&&cached.packages.length){packages=cached.packages;categories();render();cacheState.textContent='Mostrando catálogo guardado en este dispositivo.';return cached.packages}}catch(_){}return null}
       function saveCatalog(data){try{localStorage.setItem(CATALOG_CACHE_KEY,JSON.stringify({packages:data.packages||[],catalogVersion:data.catalogVersion||'',fetchedAt:data.fetchedAt||Date.now()}));cacheState.textContent='Catálogo actualizado y guardado en este dispositivo.'}catch(_){cacheState.textContent='La caché local no está disponible en este navegador.'}}
       function announceNewPackages(previous,next){const prior=new Set(previous.map(p=>`${p.author}/${p.slug}`)),added=next.filter(p=>!prior.has(`${p.author}/${p.slug}`));if(!added.length)return [];const followed=added.filter(item=>followedDevelopers.has(item.author)),visible=followed.length||!followedDevelopers.size?added:followed;status.innerHTML=`<strong>${visible.length} paquete${visible.length===1?'':'s'} nuevo${visible.length===1?'':'s'} disponible${visible.length===1?'':'s'}.</strong><span>${followed.length?'Provienen de desarrolladores que sigues.':'Se agregaron al catálogo sin interrumpir tu vista.'}</span>`;status.classList.add('show');if(followed.length&&window.Notification?.permission==='granted')new Notification('Foundstore',{body:`${followed.length} paquete${followed.length===1?'':'s'} nuevo${followed.length===1?'':'s'} de desarrolladores que sigues.`});return added.map(p=>`${p.author}/${p.slug}`)}

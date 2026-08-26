@@ -1,6 +1,6 @@
 <!doctype html>
-{% from "_foundstore_brand.html" import foundstore_brand %}
-<html lang="es">
+{% from "_foundstore_brand.html" import foundstore_brand with context %}
+<html lang="{{ current_locale }}">
   <head>
     <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <title>{{ github_login }} · Foundstore</title><meta name="description" content="Perfil de {{ github_login }} y sus paquetes Fluthin verificados en Foundstore."><link rel="canonical" href="https://imfoundstore.onrender.com/developer/{{ github_login }}"><meta property="og:type" content="profile"><meta property="og:site_name" content="Foundstore"><meta property="og:title" content="{{ github_login }} · Foundstore"><meta property="og:description" content="Perfil y paquetes Fluthin verificados en Foundstore."><meta property="og:url" content="https://imfoundstore.onrender.com/developer/{{ github_login }}"><meta property="og:image" content="https://imfoundstore.onrender.com/assets/github-avatar/{{ github_login }}.png"><meta property="og:image:alt" content="Avatar de {{ github_login }}"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="{{ github_login }} · Foundstore"><meta name="twitter:description" content="Perfil y paquetes Fluthin verificados."><meta name="twitter:image" content="https://imfoundstore.onrender.com/assets/github-avatar/{{ github_login }}.png"><link rel="icon" href="/assets/developer-favicon/{{ github_login }}.png" type="image/png">
@@ -15,7 +15,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-components.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-motion.css') }}"><script defer src="{{ url_for('static', filename='js/foundstore-motion.js') }}"></script>
     <script src="{{ url_for('static', filename='js/foundstore-components.js') }}"></script>
-  </head>
+      <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-refinement.css') }}">
+</head>
   <body>
     <main class="shell"><nav class="nav">{{ foundstore_brand('brand') }}<a class="back" href="/">Volver al catálogo</a></nav><section class="hero vibrant" id="hero"><div class="avatar-wrap"><img class="avatar" id="avatar" alt="" hidden><span class="avatar-fallback" id="avatarFallback">?</span></div><div><p class="eyebrow">Perfil de desarrollador</p><h1 class="title" id="title">Cargando perfil…</h1><p class="handle" id="handle"></p><p class="bio" id="bio"></p><div class="links" id="links"></div></div><button class="follow" id="follow" type="button" disabled>Cargando…</button><span class="owner-status" id="ownerStatus" hidden>Tu perfil</span></section><section><div class="heading"><h2>Paquetes Fluthin publicados</h2><span class="count" id="count"></span></div><div class="grid" id="catalog"><div class="empty vibrant">Cargando catálogo del desarrollador…</div></div></section></main>
     <script>

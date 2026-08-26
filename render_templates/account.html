@@ -1,6 +1,6 @@
-{% from "_foundstore_brand.html" import foundstore_brand %}
+{% from "_foundstore_brand.html" import foundstore_brand with context %}
 <!doctype html>
-<html lang="es" data-country="{{ visitor_country }}">
+<html lang="{{ current_locale }}" data-country="{{ visitor_country }}">
   <head>
     <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
     <title>{{ account_label }} · Foundstore</title>
@@ -13,7 +13,8 @@
     </style>
     <style>@media(max-width:780px){.nav-card{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible}.nav-card a{min-width:0;min-height:46px;justify-content:center;text-align:center;line-height:1.2;white-space:normal}.nav-card a:nth-of-type(5){grid-column:1/-1}}</style>
     <style>.button.danger{border-color:rgba(255,136,148,.45);background:rgba(138,42,58,.42);color:#ffd9dd;box-shadow:none}.item-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}.item-actions .button{min-height:38px;padding:7px 10px;font-size:12px}.device-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}.device-hero h2{font-size:clamp(25px,4vw,37px);letter-spacing:-.055em}.signal{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border:1px solid rgba(89,232,163,.35);border-radius:999px;color:#a7ffd0;background:rgba(8,135,77,.18);font-size:12px;font-weight:850}.signal::before{width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 14px currentColor;content:""}.device-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px;margin-top:20px}.device-stat{min-width:0;padding:14px;border:1px solid rgba(151,172,213,.18);border-radius:15px;background:rgba(7,14,27,.34)}.device-stat dt{color:#95a7c5;font-size:11px;font-weight:850;letter-spacing:.08em;text-transform:uppercase}.device-stat dd{margin:7px 0 0;color:#f1f5ff;font-size:14px;font-weight:750;overflow-wrap:anywhere}.timeline{display:grid;gap:10px;margin:4px 0 0;padding:0;list-style:none}.timeline li{position:relative;padding:0 0 0 19px;color:#b9c7db;font-size:13px;line-height:1.45}.timeline li::before{position:absolute;left:0;top:.38em;width:8px;height:8px;border:2px solid #68ebae;border-radius:50%;background:#17243a;content:""}@media(max-width:780px){.device-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.device-hero{display:grid;gap:13px}}</style>
-  </head>
+      <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-refinement.css') }}">
+</head>
   <body data-section="{{ account_section }}">
     <main class="shell">
       <nav class="top" aria-label="Navegación principal">{{ foundstore_brand('brand') }}<a class="back" href="/">Volver al catálogo</a></nav>
@@ -34,7 +35,7 @@
           {% elif account_section == 'invalid' %}
           <article class="panel"><h2>Paquetes inválidos</h2><p>Este diagnóstico es privado. Foundstore no publica repositorios que no cumplan la estructura requerida.</p><div class="list" id="invalid-packages"><div class="empty">Auditando repositorios…</div></div></article>
           {% else %}
-          <article class="panel"><h2>Preferencias del navegador</h2><p>Estas opciones se guardan sólo en este navegador. No cambian tu cuenta, tus licencias ni dispositivos.</p><div class="preferences"><div class="preference"><h3>Idioma</h3><p>Elige el idioma preferido de esta interfaz.</p><label><span class="visually-hidden">Idioma</span><select class="select" id="language"><option value="auto">Automático</option><option value="es">Español</option><option value="en">English</option><option value="pt">Português</option></select></label></div><div class="preference"><h3>Restablecer</h3><p>Elimina las preferencias locales de Foundstore de este navegador.</p><button class="button secondary" id="clear-preferences" type="button">Restablecer preferencias</button></div></div></article>
+          <article class="panel"><h2>Preferencias del navegador</h2><p>Estas opciones se guardan sólo en este navegador. No cambian tu cuenta, tus licencias ni dispositivos.</p><div class="preferences"><div class="preference"><h3>Idioma</h3><p>Elige el idioma preferido de esta interfaz.</p><label><span class="visually-hidden">Idioma</span><select class="select" id="language" data-language-selector><option value="auto">Automático</option>{% for code, name in available_locales.items() %}<option value="{{ code }}"{% if code == current_locale %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label></div><div class="preference"><h3>Restablecer</h3><p>Elimina las preferencias locales de Foundstore de este navegador.</p><button class="button secondary" id="clear-preferences" type="button">Restablecer preferencias</button></div></div></article>
           {% endif %}
         </section>
       </section>

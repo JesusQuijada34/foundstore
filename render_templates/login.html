@@ -1,6 +1,6 @@
 <!doctype html>
-{% from "_foundstore_brand.html" import foundstore_brand %}
-<html lang="es">
+{% from "_foundstore_brand.html" import foundstore_brand with context %}
+<html lang="{{ current_locale }}">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Iniciar sesión · Foundstore</title>
@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-components.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-public-upgrade.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-motion.css') }}"><script defer src="{{ url_for('static', filename='js/foundstore-motion.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-refinement.css') }}">
 </head>
 <body class="foundstore-public-login">
   <a class="foundstore-skip-link" href="#login-content">Saltar al acceso</a>

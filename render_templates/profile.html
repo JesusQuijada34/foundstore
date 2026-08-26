@@ -1,6 +1,6 @@
 <!doctype html>
-{% from "_foundstore_brand.html" import foundstore_brand %}
-<html lang="es" data-country="{{ visitor_country }}">
+{% from "_foundstore_brand.html" import foundstore_brand with context %}
+<html lang="{{ current_locale }}" data-country="{{ visitor_country }}">
   <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Perfil · Foundstore</title>
@@ -16,7 +16,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-components.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-motion.css') }}"><script defer src="{{ url_for('static', filename='js/foundstore-motion.js') }}"></script>
     <script src="{{ url_for('static', filename='js/foundstore-components.js') }}"></script>
-  </head>
+      <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-refinement.css') }}">
+</head>
   <body>
     <main class="shell">
       <nav class="nav" aria-label="Navegación">{{ foundstore_brand('brand') }}<a class="back" href="/">Volver al catálogo</a></nav>
