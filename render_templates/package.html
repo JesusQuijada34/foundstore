@@ -14,7 +14,7 @@
     <style>@media(hover:none) and (pointer:coarse){.page{padding-bottom:82px}.bottom-nav{position:fixed;z-index:10;left:0;right:0;bottom:0;display:flex;justify-content:space-around;padding:10px 18px calc(10px + env(safe-area-inset-bottom));background:rgba(12,18,31,.92);border-top:1px solid rgba(151,172,213,.26);backdrop-filter:blur(18px)}.bottom-nav a{color:#b8c5da;text-decoration:none;font-size:11px;font-weight:750;display:grid;gap:4px;place-items:center}.bottom-nav a.active{color:#85ffc1}.bottom-nav svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}}</style>
     <style>.bottom-nav{display:none!important}.page{padding-bottom:32px!important}</style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-components.css') }}"><script defer src="{{ url_for('static', filename='js/foundstore-motion.js') }}"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-v2.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-v2.css?v=1f9870e') }}">
   </head>
   <body>
     <header class="bar">{{ foundstore_brand('brand') }}<a class="back" href="/" id="back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6M8 12h12"/></svg><span data-i18n="back">Catálogo</span></a><select class="lang" id="language" data-language-selector aria-label="{{ t('Choose language') }}">{% for code, name in available_locales.items() %}<option value="{{ code }}"{% if code == current_locale %} selected{% endif %}>{{ code }}</option>{% endfor %}</select></header>
