@@ -39,6 +39,7 @@ MAX_LONG_POLL_SECONDS = 25
 PACKAGE_METADATA_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 CATALOG_SNAPSHOT_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 GITHUB_STAR_CACHE: dict[str, tuple[float, int | None]] = {}
+GITHUB_USER_SEARCH_CACHE: dict[str, tuple[float, list[dict[str, str]]]] = {}
 PAIRING_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 LICENSE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
@@ -1619,6 +1620,33 @@ def github_public_profile(github_login: str) -> dict[str, str]:
     return {"githubLogin": github_login, "githubName": github_login, "avatarUrl": f"https://github.com/{quote(github_login)}.png?size=176", "githubUrl": f"https://github.com/{github_login}"}
 
 
+def github_user_search(query: str, limit: int = 8) -> list[dict[str, str]]:
+    """Search public GitHub users for the home explorer; never exposes private data or tokens."""
+    normalized = re.sub(r"[^A-Za-z0-9-]", "", query.strip().lstrip("@").lower())[:39]
+    if not normalized:
+        return []
+    cached = GITHUB_USER_SEARCH_CACHE.get(normalized)
+    if cached and cached[0] > time.time():
+        return cached[1]
+    results: list[dict[str, str]] = []
+    try:
+        response = requests.get(
+            "https://api.github.com/search/users",
+            params={"q": normalized, "per_page": max(1, min(limit, 12))},
+            headers={"Accept": "application/vnd.github+json", "User-Agent": "Foundstore-Flask-Render"},
+            timeout=6,
+        )
+        if response.ok:
+            for item in response.json().get("items", []):
+                login = str(item.get("login") or "")
+                if valid_github_login(login):
+                    results.append({"githubLogin": login, "githubName": login, "avatarUrl": str(item.get("avatar_url") or f"https://github.com/{quote(login)}.png?size=96"), "githubUrl": str(item.get("html_url") or f"https://github.com/{login}")})
+    except (requests.RequestException, ValueError, TypeError):
+        results = []
+    GITHUB_USER_SEARCH_CACHE[normalized] = (time.time() + 120, results)
+    return results
+
+
 def github_public_star_count(author: str, slug: str) -> int | None:
     """Read only GitHub's visible star label when the repository API inventory is unavailable."""
     cache_key = f"{author.lower()}/{slug.lower()}"
@@ -1943,7 +1971,16 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     @app.get("/")
     def index() -> Response | str:
         if not github_login():
-            return render_template("landing.html")
+            landing_stats = {"packages": 0, "creators": 0, "stars": 0, "platforms": 0}
+            try:
+                public_snapshot = catalog_snapshot()
+                public_packages = public_snapshot.get("packages", [])
+                creators = {str(item.get("author") or item.get("owner") or "").lower() for item in public_packages if item.get("author") or item.get("owner")}
+                platforms = {str(platform) for item in public_packages for platform in (item.get("platformTargets") or []) if platform}
+                landing_stats = {"packages": len(public_packages), "creators": len(creators), "stars": sum(int(item.get("stars") or 0) for item in public_packages), "platforms": len(platforms)}
+            except (OSError, requests.RequestException, TypeError, ValueError):
+                pass
+            return render_template("landing.html", landing_stats=landing_stats)
         return render_template("index.html", catalog_owner=CATALOG_OWNER, visitor_country=request.headers.get("CF-IPCountry", ""))
 
     @app.get("/<author>/<slug>")
@@ -2301,6 +2338,13 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if not package:
             return jsonify({"error": "Aplicación no encontrada"}), 404
         return jsonify({"scan": static_repository_scan(app.extensions["device_store"], package["author"], package["slug"], package.get("branch", "main"))})
+
+    @app.get("/api/v1/developers/search")
+    def developer_search_api() -> Response:
+        query = str(request.args.get("q", ""))
+        if len(query.strip().lstrip("@")) < 2:
+            return jsonify({"users": [], "query": query})
+        return jsonify({"users": github_user_search(query), "query": query})
 
     @app.get("/api/v1/developers/<github_login>")
     def developer_api(github_login: str) -> Response:

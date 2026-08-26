@@ -40,6 +40,14 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(favicon.status_code, 200)
         self.assertEqual(favicon.content_type, "image/svg+xml")
 
+    def test_developer_search_route_returns_public_users_before_dynamic_profile_route(self) -> None:
+        users = [{"githubLogin": "JesusQuijada34", "githubName": "JesusQuijada34", "avatarUrl": "https://example.test/avatar.png", "githubUrl": "https://github.com/JesusQuijada34"}]
+        with patch("app.github_user_search", return_value=users) as search:
+            response = self.client.get("/api/v1/developers/search?q=%40JesusQuijada34")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json["users"], users)
+        search.assert_called_once_with("@JesusQuijada34")
+
     def test_social_preview_crawler_can_read_public_metadata_without_browser_session(self) -> None:
         response = self.client.get("/", headers={"User-Agent": "TelegramBot (like TwitterBot)"})
         self.assertEqual(response.status_code, 200)
