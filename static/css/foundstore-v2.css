@@ -1,0 +1,56 @@
+/* Foundstore V2 — clean mobile-first storefront */
+:root{--v2-bg:#070b12;--v2-panel:#101827;--v2-panel-2:#151f31;--v2-text:#f7fafc;--v2-muted:#9aa8bc;--v2-line:rgba(255,255,255,.12);--v2-green:#39e6a0;--v2-green-2:#19b978;--v2-radius:22px}
+html,body{margin:0!important;min-width:0!important;overflow-x:hidden!important;background:var(--v2-bg)!important;color:var(--v2-text)!important;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif!important}
+*,*:before,*:after{box-sizing:border-box}
+body:before,body:after{display:none!important}
+img{max-width:100%}
+.foundstore-brand-wrap{display:flex!important;align-items:center!important;gap:12px!important;min-width:0!important}
+.foundstore-brand{display:flex!important;align-items:center!important;gap:10px!important;min-width:0!important;color:var(--v2-text)!important;text-decoration:none!important}
+.foundstore-brand-word{font-size:20px!important;font-weight:850!important;letter-spacing:-.04em!important;white-space:nowrap!important}
+.foundstore-brand-icon{width:38px!important;height:38px!important;display:grid!important;place-items:center!important;flex:none!important;border-radius:13px!important;background:linear-gradient(135deg,var(--v2-green),#116d4f)!important;overflow:hidden!important}
+.foundstore-brand-logo{width:28px!important;height:28px!important;object-fit:contain!important}
+.foundstore-language-label{display:flex!important;align-items:center!important;min-width:0!important}
+.foundstore-language{min-height:42px!important;width:auto!important;max-width:150px!important;padding:0 12px!important;border:1px solid var(--v2-line)!important;border-radius:13px!important;background:rgba(255,255,255,.08)!important;color:var(--v2-text)!important;font-size:13px!important}
+.foundstore-language option{background:#101827;color:#fff}
+/* Catalog */
+body.foundstore-public-catalog{background:radial-gradient(circle at 100% 0,rgba(35,179,124,.18),transparent 28rem),linear-gradient(150deg,#070b12 0,#0b1220 55%,#07131a 100%)!important}
+body.foundstore-public-catalog .shell{display:block!important;width:100%!important;min-height:100dvh!important}
+body.foundstore-public-catalog .sidebar{position:relative!important;inset:auto!important;width:100%!important;height:auto!important;padding:18px clamp(16px,4vw,44px)!important;display:flex!important;align-items:center!important;gap:18px!important;background:rgba(7,12,20,.78)!important;border:0!important;border-bottom:1px solid var(--v2-line)!important;box-shadow:0 12px 35px rgba(0,0,0,.18)!important;backdrop-filter:blur(22px)!important;z-index:10!important}
+body.foundstore-public-catalog .sidebar .foundstore-brand-wrap{flex:0 1 auto!important}
+body.foundstore-public-catalog .sidebar .search{display:flex!important;order:2!important;flex:1 1 280px!important;min-width:120px!important;margin:0!important;padding:11px 14px!important;border:1px solid var(--v2-line)!important;border-radius:15px!important;background:rgba(255,255,255,.07)!important;box-shadow:none!important}
+body.foundstore-public-catalog .sidebar .search input{color:var(--v2-text)!important;font-size:15px!important}
+body.foundstore-public-catalog .sidebar .nav,body.foundstore-public-catalog .sidebar .nav-label,body.foundstore-public-catalog .sidebar .sidebar-bottom{display:none!important}
+body.foundstore-public-catalog .content{width:min(1180px,100%)!important;margin:0 auto!important;padding:clamp(34px,6vw,78px) clamp(16px,4vw,44px) 80px!important}
+body.foundstore-public-catalog .topline{display:flex!important;align-items:center!important;gap:16px!important}
+body.foundstore-public-catalog .eyebrow{color:var(--v2-green)!important;font-size:12px!important;letter-spacing:.14em!important}
+body.foundstore-public-catalog .title{max-width:820px!important;margin:14px 0!important;color:#fff!important;font-size:clamp(38px,6vw,76px)!important;line-height:.96!important;letter-spacing:-.075em!important}
+body.foundstore-public-catalog .sub{max-width:650px!important;color:var(--v2-muted)!important;font-size:17px!important;line-height:1.6!important}
+body.foundstore-public-catalog .toolbar{margin:36px 0 18px!important;gap:14px!important}
+body.foundstore-public-catalog .filters{gap:8px!important}
+body.foundstore-public-catalog .chip{min-height:42px!important;padding:0 15px!important;border:1px solid var(--v2-line)!important;border-radius:999px!important;background:rgba(255,255,255,.06)!important;color:#d6dfec!important;box-shadow:none!important}
+body.foundstore-public-catalog .chip.active{background:var(--v2-green)!important;border-color:var(--v2-green)!important;color:#06150f!important}
+body.foundstore-public-catalog .grid{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:18px!important}
+.foundstore-creator-package{border-radius:var(--v2-radius)!important;background:linear-gradient(145deg,rgba(24,37,57,.92),rgba(11,17,29,.95))!important;border:1px solid var(--v2-line)!important;box-shadow:0 24px 60px rgba(0,0,0,.24),inset 0 1px rgba(255,255,255,.1)!important}
+.foundstore-creator-package:hover{border-color:rgba(57,230,160,.65)!important;transform:translateY(-3px)!important}
+.foundstore-creator-art{min-height:220px!important;background:linear-gradient(145deg,#123d3a,#101a2d)!important}
+.foundstore-creator-copy{padding:24px!important}
+.foundstore-creator-badge{color:#89f9bf!important;background:rgba(57,230,160,.1)!important;border-color:rgba(57,230,160,.35)!important}
+.foundstore-creator-identity h3{color:#fff!important}
+.foundstore-creator-summary{color:#aab8cb!important}
+.foundstore-creator-author{color:var(--v2-green)!important}
+.foundstore-creator-target{color:#c7d5e7!important}
+/* Public landing */
+body.foundstore-public-landing{background:radial-gradient(circle at 75% 8%,rgba(56,230,160,.14),transparent 25rem),linear-gradient(145deg,#071019,#0c1722 56%,#07131a)!important}
+body.foundstore-public-landing .landing-nav,body.foundstore-public-landing .landing-hero,body.foundstore-public-landing .landing-stats,body.foundstore-public-landing .landing-how,body.foundstore-public-landing .landing-trust,body.foundstore-public-landing .landing-final,body.foundstore-public-landing .landing-footer{width:min(1160px,calc(100% - 32px))!important}
+body.foundstore-public-landing .landing-nav{margin:16px auto!important;padding:12px 16px!important;border:1px solid var(--v2-line)!important;border-radius:18px!important;background:rgba(16,24,39,.68)!important;backdrop-filter:blur(20px)!important}
+body.foundstore-public-landing .landing-hero{min-height:650px!important;padding:90px 0 75px!important}
+body.foundstore-public-landing .landing-copy h1{color:#fff!important;letter-spacing:-.075em!important}
+body.foundstore-public-landing .landing-copy h1 span,body.foundstore-public-landing .landing-copy h1 em{color:var(--v2-green)!important}
+body.foundstore-public-landing .landing-intro,body.foundstore-public-landing .landing-copy p{color:var(--v2-muted)!important}
+body.foundstore-public-landing .landing-primary{background:var(--v2-green)!important;color:#06150f!important;border:0!important}
+body.foundstore-public-landing .landing-secondary,body.foundstore-public-landing .landing-nav-cta{background:rgba(255,255,255,.08)!important;color:#fff!important;border-color:var(--v2-line)!important}
+body.foundstore-public-landing .landing-stats,body.foundstore-public-landing .landing-trust{background:rgba(255,255,255,.06)!important;border:1px solid var(--v2-line)!important;border-radius:var(--v2-radius)!important}
+body.foundstore-public-landing .orbit-card-main,body.foundstore-public-landing .orbit-card-side{background:rgba(16,24,39,.78)!important;border-color:var(--v2-line)!important;backdrop-filter:blur(20px)!important}
+@media(max-width:760px){body.foundstore-public-catalog .sidebar{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;padding:14px!important;gap:12px!important}body.foundstore-public-catalog .sidebar .foundstore-brand-wrap{grid-column:1/-1!important;width:100%!important;justify-content:space-between!important}body.foundstore-public-catalog .sidebar .search{grid-column:1/-1!important;width:100%!important}body.foundstore-public-catalog .content{padding:34px 14px 64px!important}body.foundstore-public-catalog .topline{align-items:flex-start!important;flex-direction:column!important}body.foundstore-public-catalog .title{font-size:clamp(42px,13vw,62px)!important}body.foundstore-public-catalog .grid{grid-template-columns:1fr!important}body.foundstore-public-landing .landing-nav{margin:10px auto!important}body.foundstore-public-landing .landing-hero{min-height:0!important;padding:62px 0 48px!important}}
+@media(max-width:430px){.foundstore-brand-word{font-size:18px!important}.foundstore-language{max-width:126px!important}.foundstore-language-label{font-size:0!important}.foundstore-creator-art{min-height:150px!important}.foundstore-creator-copy{padding:18px!important}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}

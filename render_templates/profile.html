@@ -13,11 +13,10 @@
     <style>@media(hover:none) and (pointer:coarse){.shell{padding-bottom:88px}.mobile-dock{position:fixed;z-index:30;left:0;right:0;bottom:0;display:flex;justify-content:space-around;padding:10px 18px calc(10px + env(safe-area-inset-bottom));background:rgba(12,18,31,.94);border-top:1px solid rgba(151,172,213,.25);backdrop-filter:blur(18px)}.mobile-dock a{display:grid;place-items:center;gap:4px;color:#bac7dc;text-decoration:none;font-size:11px;font-weight:800}.mobile-dock a.active{color:#85ffc1}.mobile-dock svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}}</style>
     <style>.mobile-dock{display:none!important}</style>
     <style>.profile-form input:user-invalid,.profile-form textarea:user-invalid,.profile-form select:user-invalid,.profile-form [aria-invalid="true"]{border-color:#ff7180!important;box-shadow:0 0 0 2px rgba(255,113,128,.18)}.field-error{display:none;color:#ffadb5;font-size:12px;line-height:1.35}.profile-form [aria-invalid="true"]+.field-error{display:block}.profile-form input:-webkit-autofill{box-shadow:0 0 0 1000px #131b2e inset!important;-webkit-text-fill-color:#e8f0ff!important;caret-color:#e8f0ff}</style>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-components.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-motion.css') }}"><script defer src="{{ url_for('static', filename='js/foundstore-motion.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-components.css') }}"><script defer src="{{ url_for('static', filename='js/foundstore-motion.js') }}"></script>
     <script src="{{ url_for('static', filename='js/foundstore-components.js') }}"></script>
-      <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-refinement.css') }}">
-</head>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-v2.css') }}">
+  </head>
   <body>
     <main class="shell">
       <nav class="nav" aria-label="Navegación">{{ foundstore_brand('brand') }}<a class="back" href="/">Volver al catálogo</a></nav>
