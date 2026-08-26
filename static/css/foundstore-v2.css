@@ -205,3 +205,8 @@ body.foundstore-public-catalog .sidebar{padding-block:10px!important}
 @media(min-width:860px){.grid#catalog{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:680px){.grid#catalog{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}}
 @media(max-width:420px){.grid#catalog{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+
+/* Account menu: do not inherit the trigger width; use a controlled two-column panel. */
+.foundstore-account-panel{box-sizing:border-box;width:min(276px,calc(100vw - 24px))!important;max-width:none!important;grid-template-columns:repeat(2,minmax(0,1fr))!important}
+.foundstore-account-summary,.foundstore-account-link.danger{grid-column:1/-1}
