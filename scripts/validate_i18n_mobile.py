@@ -12,7 +12,7 @@ with app.test_client() as client:
         assert response.status_code == 200
         assert f'<html lang="{locale}">' in html
         assert "foundstore-v2.css') }}?v=pwa5" not in html
-        assert 'foundstore-v2.css?v=pwa5' in html
+        assert 'foundstore-v2.css?v=pwa6' in html
         assert "data-language-selector" in html
         assert "value=\"auto\"" in html
         print(locale, response.status_code, len(html))
