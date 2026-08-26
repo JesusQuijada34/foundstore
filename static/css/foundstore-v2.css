@@ -197,3 +197,11 @@ body.foundstore-public-catalog .sidebar{padding-block:10px!important}
   .foundstore-account-link svg{width:16px!important;height:16px!important}
 }
 @media(max-width:360px){.foundstore-account-panel{width:calc(100vw - 20px)!important}.foundstore-account-link{font-size:10px!important;padding-inline:6px!important}}
+
+
+/* Public developer catalog uses the same compact store density as the authenticated catalog. */
+.grid#catalog{grid-template-columns:repeat(3,minmax(0,1fr));align-items:stretch;gap:14px}
+.grid#catalog .foundstore-store-card{min-width:0}
+@media(min-width:860px){.grid#catalog{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:680px){.grid#catalog{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}}
+@media(max-width:420px){.grid#catalog{grid-template-columns:repeat(2,minmax(0,1fr))}}
