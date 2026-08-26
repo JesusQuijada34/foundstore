@@ -197,7 +197,7 @@ class FlaskRenderAppTests(unittest.TestCase):
         response = oauth_app.test_client().get("/auth/github/login", follow_redirects=False)
         self.assertEqual(response.status_code, 302)
         self.assertIn("https://github.com/login/oauth/authorize?", response.location)
-        self.assertIn("redirect_uri=https%3A%2F%2Fimfoundstore.onrender.com%2Fauth%2Fgithub%2Fcallback", response.location)
+        self.assertIn("redirect_uri=https%3A%2F%2Fhifoundstore.onrender.com%2Fauth%2Fgithub%2Fcallback", response.location)
         legacy = oauth_app.test_client().get("/login", follow_redirects=False)
         self.assertEqual(legacy.status_code, 200)
         self.assertIn("Continuar con GitHub", legacy.get_data(as_text=True))
@@ -263,7 +263,7 @@ class FlaskRenderAppTests(unittest.TestCase):
         license_code = license_response.json["license"]
         link = self.client.post("/api/v1/license-links", json={"license": license_code, "displayName": "DaneDesk de prueba"})
         self.assertEqual(link.status_code, 201)
-        self.assertTrue(link.json["verificationUri"].startswith("https://imfoundstore.onrender.com/link/"))
+        self.assertTrue(link.json["verificationUri"].startswith("https://hifoundstore.onrender.com/link/"))
         link_id, link_token, user_code = link.json["linkId"], link.json["linkToken"], link.json["userCode"]
         link_headers = {"X-Foundstore-Link-Token": link_token}
         self.assertEqual(self.client.get(f"/api/v1/license-links/{link_id}", headers=link_headers).json["status"], "awaiting_owner")

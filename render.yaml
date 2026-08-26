@@ -6,8 +6,11 @@ services:
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: python app.py
-    healthCheckPath: /healthz
     autoDeployTrigger: commit
+    healthCheckPath: /healthz
+    envVars:
+      - key: PUBLIC_ORIGIN
+        value: https://hifoundstore.onrender.com
     maxShutdownDelaySeconds: 45
     envVars:
       - key: MONGO_DATABASE
