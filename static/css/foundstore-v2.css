@@ -180,3 +180,20 @@ svg{display:block;max-width:100%;overflow:hidden;flex:none}button,a{max-width:10
   body.foundstore-public-catalog .pwa-button{background:#fff!important;border-color:rgba(28,65,45,.18)!important;color:#087b49!important}
   body.foundstore-public-catalog .pwa-button.primary{background:#dff7e9!important;border-color:#75dca7!important;color:#075a37!important}
 }
+
+
+/* Compact authenticated catalog chrome: reset legacy brand margin and shorten account menu. */
+body.foundstore-public-catalog .sidebar .foundstore-brand{margin:0!important}
+body.foundstore-public-catalog .sidebar{padding-block:10px!important}
+.foundstore-account-panel{gap:3px!important;padding:8px!important}
+.foundstore-account-summary{padding:6px 8px 8px!important;line-height:1.25!important}
+.foundstore-account-link{box-sizing:border-box;min-height:38px!important;padding:7px 8px!important;border-radius:9px!important;font-size:12px!important;line-height:1.15!important}
+.foundstore-account-link svg{width:17px!important;height:17px!important}
+.foundstore-account-link.danger{margin-top:1px!important}
+@media(max-width:560px){
+  .foundstore-account-panel{width:min(276px,calc(100vw - 24px))!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px!important}
+  .foundstore-account-summary,.foundstore-account-link.danger{grid-column:1/-1}
+  .foundstore-account-link{min-height:40px!important;padding-inline:7px!important;font-size:11px!important;gap:6px!important}
+  .foundstore-account-link svg{width:16px!important;height:16px!important}
+}
+@media(max-width:360px){.foundstore-account-panel{width:calc(100vw - 20px)!important}.foundstore-account-link{font-size:10px!important;padding-inline:6px!important}}
