@@ -210,3 +210,9 @@ body.foundstore-public-catalog .sidebar{padding-block:10px!important}
 /* Account menu: do not inherit the trigger width; use a controlled two-column panel. */
 .foundstore-account-panel{box-sizing:border-box;width:min(276px,calc(100vw - 24px))!important;max-width:none!important;grid-template-columns:repeat(2,minmax(0,1fr))!important}
 .foundstore-account-summary,.foundstore-account-link.danger{grid-column:1/-1}
+
+
+/* Final vertical compaction of the catalog navbar while preserving 44px controls. */
+body.foundstore-public-catalog .sidebar{padding-block:7px!important}
+body.foundstore-public-catalog .sidebar .search{padding-block:9px!important}
+body.foundstore-public-catalog .sidebar .foundstore-language{min-height:36px!important}
