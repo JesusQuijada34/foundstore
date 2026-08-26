@@ -1865,8 +1865,10 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     @app.context_processor
     def inject_i18n() -> dict[str, Any]:
         locale = getattr(request, "locale", "es")
+        preference = normalize_locale(request.args.get("lang")) or normalize_locale(request.cookies.get(COOKIE_NAME)) or "auto"
         return {
             "current_locale": locale,
+            "locale_preference": preference,
             "available_locales": SUPPORTED_LOCALES,
             "locale_catalog": locale_catalog(),
             "t": lambda key, **values: translate(key, locale, **values),
