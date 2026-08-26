@@ -2121,14 +2121,15 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return blocked
         if section == "device" and (not device_id or not any(item["id"] == device_id for item in app.extensions["device_store"].list_devices_for_owner(str(github_login() or "")))):
             abort(404)
+        locale = resolve_locale(request)
         labels = {
-            "profile": "Perfil",
-            "licenses": "Licencias",
-            "devices": "Dispositivos",
+            "profile": translate("Profile", locale),
+            "licenses": translate("Licenses", locale),
+            "devices": translate("Devices", locale),
             "device": "DaneDesk",
-            "privacy": "Privacidad",
-            "invalid": "Paquetes inválidos",
-            "preferences": "Preferencias",
+            "privacy": translate("Privacy", locale),
+            "invalid": translate("Invalid packages", locale),
+            "preferences": translate("Preferences", locale),
         }
         return render_template(
             "account.html",

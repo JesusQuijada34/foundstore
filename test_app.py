@@ -481,10 +481,10 @@ class FlaskRenderAppTests(unittest.TestCase):
         with self.client.session_transaction() as browser_session:
             browser_session["github_login"] = "jq34"
         expected = {
-            "/account/profile": "Tu perfil público",
-            "/account/licenses": "Licencias de dispositivo",
+            "/account/profile": "Perfil público",
+            "/account/licenses": "Licencias",
             "/account/devices": "Dispositivos vinculados",
-            "/account/privacy": "Privacidad del perfil",
+            "/account/privacy": "Privacidad",
             "/account/packages/invalid": "Paquetes inválidos",
         }
         for path, heading in expected.items():
