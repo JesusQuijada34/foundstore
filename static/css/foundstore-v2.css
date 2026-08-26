@@ -89,3 +89,5 @@ body.foundstore-public-landing .orbit-card-main,body.foundstore-public-landing .
 @media(max-width:760px){.store-preview{padding:17px}.store-preview-heading{margin-top:25px}.store-preview-heading strong{font-size:24px}}
 
 .store-preview-note{margin:16px 0 0;color:#6f879b;font-size:10px}
+
+.landing-proof{display:flex!important;flex-wrap:wrap!important;gap:14px!important;margin:28px 0 0!important;padding:0!important;list-style:none!important}.landing-proof li{display:flex!important;align-items:center!important;gap:8px!important;color:#b6c5d5!important;font-size:13px!important}.landing-proof svg{display:block!important;width:18px!important;height:18px!important;flex:none!important;fill:none!important;stroke:var(--v2-green)!important;stroke-width:1.8!important;stroke-linecap:round!important;stroke-linejoin:round!important}.landing-proof path{fill:none!important;stroke:currentColor!important}.landing-pulse{display:inline-block!important;width:8px!important;height:8px!important;border-radius:50%!important;background:var(--v2-green)!important;box-shadow:0 0 12px var(--v2-green)!important}
