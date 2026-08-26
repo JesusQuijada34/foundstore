@@ -216,3 +216,11 @@ body.foundstore-public-catalog .sidebar{padding-block:10px!important}
 body.foundstore-public-catalog .sidebar{padding-block:7px!important}
 body.foundstore-public-catalog .sidebar .search{padding-block:9px!important}
 body.foundstore-public-catalog .sidebar .foundstore-language{min-height:36px!important}
+
+
+/* Android capture fix: keep the account trigger and its wider menu on-screen. */
+@media(max-width:760px){
+  body.foundstore-public-catalog .topline{align-items:stretch!important}
+  body.foundstore-public-catalog .topline>.foundstore-account{align-self:flex-end!important;width:max-content!important;max-width:100%!important}
+  body.foundstore-public-catalog .topline>.foundstore-account .foundstore-account-panel{right:0!important;left:auto!important;transform-origin:top right!important}
+}
