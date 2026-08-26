@@ -1893,6 +1893,12 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     def oauth_ready() -> bool:
         return bool(app.config["GITHUB_CLIENT_ID"] and app.config["GITHUB_CLIENT_SECRET"])
 
+    def public_origin() -> str:
+        host = request.host.split(":", 1)[0].lower()
+        if host in {"hifoundstore.onrender.com", "imfoundstore.onrender.com"}:
+            return "https://hifoundstore.onrender.com"
+        return str(app.config.get("PUBLIC_ORIGIN") or "https://hifoundstore.onrender.com").rstrip("/")
+
     def safe_next_path(value: str) -> str:
         return value if value.startswith("/") and not value.startswith("//") else ""
 
@@ -1970,7 +1976,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             session["github_oauth_link"] = link_id
         if next_path:
             session["github_oauth_next"] = next_path
-        callback = f"{app.config['PUBLIC_ORIGIN']}/auth/github/callback"
+        callback = f"{public_origin()}/auth/github/callback"
         query = urlencode({"client_id": app.config["GITHUB_CLIENT_ID"], "redirect_uri": callback, "state": state, "scope": "read:user"})
         return redirect(f"https://github.com/login/oauth/authorize?{query}")
 
@@ -1983,7 +1989,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         state = secrets.token_urlsafe(24)
         session["github_star_oauth_state"] = state
         session["github_star_target"] = {"author": author, "slug": slug}
-        callback = f"{app.config['PUBLIC_ORIGIN']}/auth/github/callback"
+        callback = f"{public_origin()}/auth/github/callback"
         query = urlencode({"client_id": app.config["GITHUB_CLIENT_ID"], "redirect_uri": callback, "state": state, "scope": "read:user public_repo"})
         return redirect(f"https://github.com/login/oauth/authorize?{query}")
 
@@ -2010,7 +2016,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if not started:
             return jsonify({"error": "Se requiere un desafío PKCE S256 válido"}), 400
         request_id, user_code = started["requestId"], started["userCode"]
-        verification_uri = f"{app.config['PUBLIC_ORIGIN'].rstrip('/')}/console/authorize/{quote(request_id)}?code={quote(user_code)}"
+        verification_uri = f"{public_origin()}/console/authorize/{quote(request_id)}?code={quote(user_code)}"
         return jsonify({**started, "verificationUri": verification_uri, "expiresInSeconds": 600, "requiresGitHubApproval": True}), 201
 
     @app.get("/api/v1/console-auth/<request_id>")
