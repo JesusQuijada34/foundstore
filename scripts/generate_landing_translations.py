@@ -1,0 +1,16 @@
+import json
+from pathlib import Path
+from openai import OpenAI
+
+locales = ['es','en','fr','de','pt','it','nl','ca','ja','ko','zh-CN','ru','ar','hi','tr','pl','uk']
+sources = {
+  'nav_how':'Cómo funciona','nav_trust':'Confianza','nav_login':'Entrar con GitHub','hero_eyebrow':'ECOSISTEMA FLUTHIN','hero_title_before':'Encuentra software que','hero_title_accent':'encaja','hero_title_after':'con tu DaneDesk.','hero_intro':'Un catálogo con contexto para descubrir paquetes Fluthin, revisar su compatibilidad y enviar instalaciones a tus dispositivos vinculados.','hero_explore':'Explorar con GitHub','hero_how':'Ver cómo funciona','proof_metadata':'Metadatos verificables','proof_install':'Instalación autorizada','preview_week':'Selección de la semana','preview_title':'Paquetes que encajan','preview_featured':'destacado del creador','preview_local':'aprobación local','preview_privacy':'Detección local · no se guarda ni se transmite.','stats_context':'Paquetes con contexto','stats_context_text':'Compatibilidad, origen y versiones antes de pedir una instalación.','stats_device':'Decisiones en tu dispositivo','stats_device_text':'La tienda solicita; DaneDesk conserva la aprobación local.','stats_access':'Un acceso, tus dispositivos','stats_access_text':'Vincula Danenone o Knosthalij con tu cuenta GitHub.','how_eyebrow':'UN RECORRIDO CLARO','how_title':'Descubrir no debería ser adivinar.','how_text':'Foundstore separa explorar, comprobar y solicitar para que siempre sepas qué ocurrirá antes de tocar tu sistema.','trust_eyebrow':'DISEÑADO PARA EL CONTROL','trust_title':'Tu catálogo no es una carpeta de enlaces.','trust_text':'El diseño público explica el servicio sin revelar perfiles, fichas privadas ni dispositivos. Al entrar, accedes a la experiencia completa de Foundstore.','trust_open':'Abrir Foundstore','final_eyebrow':'EMPIEZA CON UNA CUENTA','final_title':'Tu próximo paquete merece un lugar claro.','final_text':'Entra para explorar el catálogo, gestionar tu perfil y conectar un DaneDesk.','final_cta':'Continuar con GitHub','status_ready':'listo para explorar'}
+
+schema = {'type':'object','properties':{locale:{'type':'object','properties':{k:{'type':'string'} for k in sources},'required':list(sources),'additionalProperties':False} for locale in locales},'required':locales,'additionalProperties':False}
+prompt = f"Translate the following Foundstore UI strings from Spanish into each target locale. Return natural, concise UI copy. Preserve product names Foundstore, Fluthin, Danenone, Knosthalij, GitHub and DaneDesk exactly. Keep punctuation and capitalization appropriate for each language. Source strings: {json.dumps(sources, ensure_ascii=False)}\nTarget locales: {', '.join(locales)}"
+client = OpenAI()
+response = client.chat.completions.create(model='gpt-5-mini', messages=[{'role':'system','content':'You are a professional software localization translator. Output only the requested JSON.'},{'role':'user','content':prompt}], response_format={'type':'json_schema','json_schema':{'name':'foundstore_landing_translations','strict':True,'schema':schema}}, max_completion_tokens=16000)
+data = json.loads(response.choices[0].message.content)
+out = Path(__file__).resolve().parents[1] / 'landing_translations.json'
+out.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+print(out)

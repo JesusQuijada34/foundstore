@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from pathlib import Path
 from functools import lru_cache
 from typing import Any
 
@@ -44,6 +45,16 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
 # High-value UI strings are translated explicitly; every other key safely falls
 # back to Spanish so a missing translation never breaks rendering.
 TRANSLATIONS.update({locale: dict(TRANSLATIONS["en"]) for locale in SUPPORTED_LOCALES if locale not in TRANSLATIONS})
+
+_LANDING_CATALOG = Path(__file__).with_name("landing_translations.json")
+if _LANDING_CATALOG.exists():
+    try:
+        _landing_data = json.loads(_LANDING_CATALOG.read_text(encoding="utf-8"))
+        for _locale, _strings in _landing_data.items():
+            if _locale in SUPPORTED_LOCALES and isinstance(_strings, dict):
+                TRANSLATIONS.setdefault(_locale, {}).update({str(k): str(v) for k, v in _strings.items()})
+    except (OSError, ValueError, TypeError):
+        pass
 
 
 def normalize_locale(value: str | None) -> str | None:

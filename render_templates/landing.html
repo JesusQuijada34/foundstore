@@ -21,33 +21,33 @@
   <a class="foundstore-skip-link" href="#landing-main">Saltar al contenido</a>
   <header class="landing-nav" aria-label="Navegación principal">
     {{ foundstore_brand('landing-brand') }}
-    <nav class="landing-nav-links" aria-label="Secciones de Foundstore"><a href="#como-funciona">Cómo funciona</a><a href="#confianza">Confianza</a></nav>
-    <a class="landing-nav-cta" href="/auth/github/login?next=/">Entrar con GitHub <span aria-hidden="true">↗</span></a>
+    <nav class="landing-nav-links" aria-label="Secciones de Foundstore"><a href="#como-funciona">{{ t('nav_how') }}</a><a href="#confianza">{{ t('nav_trust') }}</a></nav>
+    <a class="landing-nav-cta" href="/auth/github/login?next=/">{{ t('nav_login') }} <span aria-hidden="true">↗</span></a>
   </header>
   <main id="landing-main">
     <section class="landing-hero" aria-labelledby="landing-title">
       <div class="landing-copy">
-        <p class="landing-eyebrow"><span class="landing-pulse" aria-hidden="true"></span> ECOSISTEMA FLUTHIN</p>
-        <h1 id="landing-title">Encuentra software que <em>encaja</em> con tu DaneDesk.</h1>
-        <p class="landing-intro">Un catálogo con contexto para descubrir paquetes Fluthin, revisar su compatibilidad y enviar instalaciones a tus dispositivos vinculados.</p>
-        <div class="landing-actions"><a class="landing-primary" href="/auth/github/login?next=/">Explorar con GitHub <span aria-hidden="true">→</span></a><a class="landing-secondary" href="#como-funciona">Ver cómo funciona</a></div>
-        <ul class="landing-proof" aria-label="Características principales"><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 7 3v5c0 4.7-2.8 8.8-7 10-4.2-1.2-7-5.3-7-10V6l7-3Z"/><path d="m9 12 2 2 4-4"/></svg> Metadatos verificables</li><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M12 4l8 8-8 8"/></svg> Instalación autorizada</li></ul>
+        <p class="landing-eyebrow"><span class="landing-pulse" aria-hidden="true"></span> {{ t('hero_eyebrow') }}</p>
+        <h1 id="landing-title">{{ t('hero_title_before') }} <em>{{ t('hero_title_accent') }}</em> {{ t('hero_title_after') }}</h1>
+        <p class="landing-intro">{{ t('hero_intro') }}</p>
+        <div class="landing-actions"><a class="landing-primary" href="/auth/github/login?next=/">{{ t('hero_explore') }} <span aria-hidden="true">→</span></a><a class="landing-secondary" href="#como-funciona">{{ t('hero_how') }}</a></div>
+        <ul class="landing-proof" aria-label="Características principales"><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 7 3v5c0 4.7-2.8 8.8-7 10-4.2-1.2-7-5.3-7-10V6l7-3Z"/><path d="m9 12 2 2 4-4"/></svg> {{ t('proof_metadata') }}</li><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M12 4l8 8-8 8"/></svg> {{ t('proof_install') }}</li></ul>
       </div>
       <!-- Secuencia simulada de instalación de Foundstore: la aprobación sigue siendo local; reemplazada por una preview minimalista. -->
       <figure class="landing-visual" aria-label="Secuencia simulada de instalación de Foundstore; la aprobación sigue siendo local. Vista previa de la tienda Foundstore">
   <div class="store-preview">
     <div class="store-preview-top"><span class="store-preview-dot"></span><span>FOUNDSTORE / DESTACADOS</span><span class="store-preview-status">LIVE</span></div>
-    <div class="store-preview-heading"><span>Selección de la semana</span><strong>Paquetes que encajan</strong></div>
+    <div class="store-preview-heading"><span>{{ t('preview_week') }}</span><strong>{{ t('preview_title') }}</strong></div>
     <div class="store-preview-card"><div class="store-preview-icon">F</div><div><strong>PackageMaker</strong><span>por @JesusQuijada</span></div><b>→</b></div>
-    <div class="store-preview-card"><div class="store-preview-icon alt">D</div><div><strong>DaneDesk Tools</strong><span>destacado del creador</span></div><b>→</b></div>
-    <div class="store-preview-foot"><span>17 idiomas</span><span>•</span><span>aprobación local</span></div><p class="store-preview-note">Detección local · no se guarda ni se transmite.</p>
+    <div class="store-preview-card"><div class="store-preview-icon alt">D</div><div><strong>DaneDesk Tools</strong><span>{{ t('preview_featured') }}</span></div><b>→</b></div>
+    <div class="store-preview-foot"><span>17 idiomas</span><span>•</span><span>{{ t('preview_local') }}</span></div><p class="store-preview-note">{{ t('preview_privacy') }}</p>
   </div>
 </figure>
     </section>
-    <section class="landing-stats" aria-label="Principios de Foundstore"><div><span>01</span><strong>Paquetes con contexto</strong><p>Compatibilidad, origen y versiones antes de pedir una instalación.</p></div><div><span>02</span><strong>Decisiones en tu dispositivo</strong><p>La tienda solicita; DaneDesk conserva la aprobación local.</p></div><div><span>03</span><strong>Un acceso, tus dispositivos</strong><p>Vincula Danenone o Knosthalij con tu cuenta GitHub.</p></div></section>
-    <section class="landing-how" id="como-funciona" aria-labelledby="how-title"><div class="landing-section-heading"><p class="landing-eyebrow">UN RECORRIDO CLARO</p><h2 id="how-title">Descubrir no debería ser <em>adivinar.</em></h2><p>Foundstore separa explorar, comprobar y solicitar para que siempre sepas qué ocurrirá antes de tocar tu sistema.</p></div><ol class="landing-steps"><li><span>01</span><div><h3>Conecta tu cuenta</h3><p>GitHub identifica tu perfil y mantiene el catálogo web separado de las APIs de tus agentes.</p></div></li><li><span>02</span><div><h3>Revisa el paquete</h3><p>Consulta plataforma, autor, versión y documentación del Fluthin antes de continuar.</p></div></li><li><span>03</span><div><h3>Aprueba la acción</h3><p>El dispositivo vinculado recibe una solicitud y confirma la instalación de forma local.</p></div></li></ol></section>
-    <section class="landing-trust" id="confianza" aria-labelledby="trust-title"><div><p class="landing-eyebrow">DISEÑADO PARA EL CONTROL</p><h2 id="trust-title">Tu catálogo no es una carpeta de enlaces.</h2><p>El diseño público explica el servicio sin revelar perfiles, fichas privadas ni dispositivos. Al entrar, accedes a la experiencia completa de Foundstore.</p><a class="landing-secondary" href="/auth/github/login?next=/">Abrir Foundstore <span aria-hidden="true">→</span></a></div><div class="trust-terminal" aria-label="Resumen de seguridad"><div class="terminal-bar"><span></span><span></span><span></span><b>foundstore / resumen</b></div><p><i>✓</i> Manifiesto Fluthin reconocido</p><p><i>✓</i> Compatibilidad visible antes de solicitar</p><p><i>✓</i> Aprobación local requerida</p><div class="terminal-line"><span>estado</span><strong>listo para explorar</strong></div></div></section>
-    <section class="landing-final"><p class="landing-eyebrow">EMPIEZA CON UNA CUENTA</p><h2>Tu próximo paquete merece<br>un lugar <em>claro.</em></h2><p>Entra para explorar el catálogo, gestionar tu perfil y conectar un DaneDesk.</p><a class="landing-primary" href="/auth/github/login?next=/">Continuar con GitHub <span aria-hidden="true">→</span></a></section>
+    <section class="landing-stats" aria-label="Principios de Foundstore"><div><span>01</span><strong>{{ t('stats_context') }}</strong><p>{{ t('stats_context_text') }}</p></div><div><span>02</span><strong>{{ t('stats_device') }}</strong><p>{{ t('stats_device_text') }}</p></div><div><span>03</span><strong>{{ t('stats_access') }}</strong><p>{{ t('stats_access_text') }}</p></div></section>
+    <section class="landing-how" id="como-funciona" aria-labelledby="how-title"><div class="landing-section-heading"><p class="landing-eyebrow">{{ t('how_eyebrow') }}</p><h2 id="how-title">{{ t('how_title') }}</h2><p>{{ t('how_text') }}</p></div><ol class="landing-steps"><li><span>01</span><div><h3>Conecta tu cuenta</h3><p>GitHub identifica tu perfil y mantiene el catálogo web separado de las APIs de tus agentes.</p></div></li><li><span>02</span><div><h3>Revisa el paquete</h3><p>Consulta plataforma, autor, versión y documentación del Fluthin antes de continuar.</p></div></li><li><span>03</span><div><h3>Aprueba la acción</h3><p>El dispositivo vinculado recibe una solicitud y confirma la instalación de forma local.</p></div></li></ol></section>
+    <section class="landing-trust" id="confianza" aria-labelledby="trust-title"><div><p class="landing-eyebrow">DISEÑADO PARA EL CONTROL</p><h2 id="trust-title">{{ t('trust_title') }}</h2><p>{{ t('trust_text') }}</p><a class="landing-secondary" href="/auth/github/login?next=/">{{ t('trust_open') }} <span aria-hidden="true">→</span></a></div><div class="trust-terminal" aria-label="Resumen de seguridad"><div class="terminal-bar"><span></span><span></span><span></span><b>foundstore / resumen</b></div><p><i>✓</i> Manifiesto Fluthin reconocido</p><p><i>✓</i> Compatibilidad visible antes de solicitar</p><p><i>✓</i> Aprobación local requerida</p><div class="terminal-line"><span>estado</span><strong>{{ t('status_ready') }}</strong></div></div></section>
+    <section class="landing-final"><p class="landing-eyebrow">{{ t('final_eyebrow') }}</p><h2>{{ t('final_title') }}</h2><p>{{ t('final_text') }}</p><a class="landing-primary" href="/auth/github/login?next=/">{{ t('final_cta') }} <span aria-hidden="true">→</span></a></section>
   </main>
   <footer class="landing-footer"><span>Foundstore · Ecosistema Fluthin</span><span>Danenone · Knosthalij</span></footer>
 </body>
