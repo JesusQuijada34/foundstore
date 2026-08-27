@@ -40,6 +40,7 @@ PACKAGE_METADATA_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 CATALOG_SNAPSHOT_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 GITHUB_STAR_CACHE: dict[str, tuple[float, int | None]] = {}
 GITHUB_USER_SEARCH_CACHE: dict[str, tuple[float, list[dict[str, str]]]] = {}
+GITHUB_PROFILE_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 PAIRING_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 LICENSE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
@@ -1597,27 +1598,68 @@ def valid_github_login(value: str) -> bool:
     return bool(re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?", value))
 
 
-def github_public_profile(github_login: str) -> dict[str, str]:
-    """Read only GitHub's public identity fields; never keep an OAuth token."""
+def github_public_profile(github_login: str) -> dict[str, Any]:
+    """Read public GitHub identity and social fields; never keep an OAuth token."""
+    fallback: dict[str, Any] = {
+        "githubLogin": github_login,
+        "githubName": github_login,
+        "avatarUrl": f"https://github.com/{quote(github_login)}.png?size=176",
+        "githubUrl": f"https://github.com/{github_login}",
+        "githubBio": "",
+        "company": "",
+        "location": "",
+        "githubFollowersCount": None,
+        "githubFollowingCount": None,
+        "githubPublicReposCount": None,
+        "githubFollowers": [],
+        "githubFollowing": [],
+    }
     if not valid_github_login(github_login):
-        return {"githubLogin": github_login, "githubName": github_login, "avatarUrl": f"https://github.com/{quote(github_login)}.png?size=176", "githubUrl": ""}
+        return fallback
+    cache_key = github_login.casefold()
+    cached = GITHUB_PROFILE_CACHE.get(cache_key)
+    if cached and cached[0] > time.time():
+        return dict(cached[1])
+    headers = {"Accept": "application/vnd.github+json", "User-Agent": "Foundstore-Flask-Render"}
     try:
-        response = requests.get(
-            f"https://api.github.com/users/{quote(github_login)}",
-            headers={"Accept": "application/vnd.github+json", "User-Agent": "Foundstore-Flask-Render"},
-            timeout=6,
-        )
-        if response.ok:
-            data = response.json()
-            return {
-                "githubLogin": str(data.get("login") or github_login),
-                "githubName": str(data.get("name") or data.get("login") or github_login),
-                "avatarUrl": str(data.get("avatar_url") or f"https://github.com/{quote(github_login)}.png?size=176"),
-                "githubUrl": str(data.get("html_url") or f"https://github.com/{github_login}"),
-            }
-    except requests.RequestException:
-        pass
-    return {"githubLogin": github_login, "githubName": github_login, "avatarUrl": f"https://github.com/{quote(github_login)}.png?size=176", "githubUrl": f"https://github.com/{github_login}"}
+        response = requests.get(f"https://api.github.com/users/{quote(github_login)}", headers=headers, timeout=6)
+        if not response.ok:
+            return fallback
+        data = response.json()
+        resolved_login = str(data.get("login") or github_login)
+        profile: dict[str, Any] = {
+            **fallback,
+            "githubLogin": resolved_login,
+            "githubName": str(data.get("name") or resolved_login),
+            "avatarUrl": str(data.get("avatar_url") or fallback["avatarUrl"]),
+            "githubUrl": str(data.get("html_url") or fallback["githubUrl"]),
+            "githubBio": str(data.get("bio") or ""),
+            "company": str(data.get("company") or "").lstrip("@"),
+            "location": str(data.get("location") or ""),
+            "githubFollowersCount": int(data["followers"]) if isinstance(data.get("followers"), int) else None,
+            "githubFollowingCount": int(data["following"]) if isinstance(data.get("following"), int) else None,
+            "githubPublicReposCount": int(data["public_repos"]) if isinstance(data.get("public_repos"), int) else None,
+            "githubJoinedAt": str(data.get("created_at") or ""),
+        }
+        for endpoint, key in (("followers", "githubFollowers"), ("following", "githubFollowing")):
+            try:
+                people_response = requests.get(f"https://api.github.com/users/{quote(resolved_login)}/{endpoint}", params={"per_page": 12}, headers=headers, timeout=6)
+                people = people_response.json() if people_response.ok else []
+                profile[key] = [
+                    {
+                        "githubLogin": str(person.get("login") or ""),
+                        "githubName": str(person.get("login") or ""),
+                        "avatarUrl": str(person.get("avatar_url") or ""),
+                        "githubUrl": str(person.get("html_url") or ""),
+                    }
+                    for person in people if isinstance(person, dict) and valid_github_login(str(person.get("login") or ""))
+                ]
+            except (requests.RequestException, ValueError, TypeError):
+                profile[key] = []
+        GITHUB_PROFILE_CACHE[cache_key] = (time.time() + 300, profile)
+        return dict(profile)
+    except (requests.RequestException, ValueError, TypeError):
+        return fallback
 
 
 def github_user_search(query: str, limit: int = 8) -> list[dict[str, str]]:
@@ -1776,7 +1818,9 @@ def developer_profile(store: DeviceStore, github_login: str) -> dict[str, Any]:
     saved = store.get_developer_profile(github_login) or {}
     profile = github_public_profile(github_login)
     profile["displayName"] = str(saved.get("displayName") or saved.get("display_name") or profile["githubName"])
-    profile["bio"] = str(saved.get("bio") or "")
+    saved_bio = str(saved.get("bio") or "")
+    profile["bio"] = saved_bio or str(profile.get("githubBio") or "")
+    profile["bioSource"] = "foundstore" if saved_bio else ("github" if profile.get("githubBio") else "")
     profile["website"] = str(saved.get("website") or "")
     profile["catalogRepository"] = str(saved.get("catalogRepository") or saved.get("catalog_repository") or "catalog")
     profile["privacy"] = normalize_privacy(saved.get("privacy"))
@@ -2220,7 +2264,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return blocked
         if not valid_github_login(github_login):
             return jsonify({"error": "Desarrollador no encontrado"}), 404
-        response = Response(render_template("developer.html", github_login=github_login, visitor_country=request.headers.get("CF-IPCountry", "")), content_type="text/html; charset=utf-8")
+        profile_preview = developer_profile(app.extensions["device_store"], github_login)
+        preview_bio = str(profile_preview.get("bio") or profile_preview.get("githubBio") or "").strip()
+        response = Response(render_template("developer.html", github_login=github_login, profile_preview=profile_preview, meta_description=preview_bio or f"Perfil de {github_login} y sus paquetes Fluthin verificados en Foundstore.", visitor_country=request.headers.get("CF-IPCountry", "")), content_type="text/html; charset=utf-8")
         response.headers["Cache-Control"] = "no-store, max-age=0"
         response.headers["Pragma"] = "no-cache"
         response.headers["Vary"] = "Cookie"
@@ -2363,18 +2409,25 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         store = app.extensions["device_store"]
         own_profile = bool(viewer and str(viewer).lower() == github_login.lower())
         privacy = normalize_privacy(profile_data.get("privacy"))
+        visibility = {field: own_profile or privacy[field] == "public" for field in DEFAULT_PROFILE_PRIVACY}
         public_profile = dict(profile_data)
         public_profile.pop("privacy", None)
-        if not own_profile and privacy["avatar"] == "private":
+        if not visibility["avatar"]:
             public_profile["avatarUrl"] = ""
-        if not own_profile and privacy["bio"] == "private":
+        if not visibility["bio"]:
             public_profile["bio"] = ""
+            public_profile["githubBio"] = ""
+        if not visibility["followers"]:
+            public_profile["githubFollowersCount"] = None
+            public_profile["githubFollowers"] = []
+        if not visibility["following"]:
+            public_profile["githubFollowingCount"] = None
+            public_profile["githubFollowing"] = []
         public_catalog = snapshot
-        if not own_profile and privacy["repositories"] == "private":
+        if not visibility["repositories"]:
             public_catalog = {**(snapshot or {}), "packages": []} if snapshot else snapshot
         followers = store.developer_follower_count(github_login)
         following_count = store.developer_following_count(github_login)
-        visibility = {field: own_profile or privacy[field] == "public" for field in DEFAULT_PROFILE_PRIVACY}
         response = jsonify({"profile": public_profile, "catalog": public_catalog, "catalogAvailable": bool(public_catalog and public_catalog.get("packages")), "visibility": visibility, "followerCount": followers if visibility["followers"] else None, "followingCount": following_count if visibility["following"] else None, "following": bool(viewer and store.is_following_developer(str(viewer), github_login)), "isOwnProfile": own_profile})
         response.headers["Cache-Control"] = "no-store, max-age=0"
         response.headers["Vary"] = "Cookie"

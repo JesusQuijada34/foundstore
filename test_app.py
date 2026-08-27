@@ -8,7 +8,7 @@ from datetime import timedelta
 from unittest.mock import patch
 
 from cryptography.hazmat.primitives.asymmetric import ec
-from app import MongoStore, base64url_encode, canonical_e2e_aad, canonical_e2e_report_aad, catalog_references, create_app, github_public_repositories, github_public_star_count, package_revision, raw_github_text, utc_now
+from app import MongoStore, base64url_encode, canonical_e2e_aad, canonical_e2e_report_aad, catalog_references, create_app, github_public_profile, github_public_repositories, github_public_star_count, package_revision, raw_github_text, utc_now
 
 
 class FlaskRenderAppTests(unittest.TestCase):
@@ -47,6 +47,34 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json["users"], users)
         search.assert_called_once_with("@JesusQuijada34")
+
+    def test_github_public_profile_reads_real_social_fields_from_public_endpoints(self) -> None:
+        class ApiResponse:
+            ok = True
+
+            def __init__(self, payload: object) -> None:
+                self._payload = payload
+
+            def json(self) -> object:
+                return self._payload
+
+        def fake_get(url: str, **_: object) -> ApiResponse:
+            if url.endswith("/users/octocat"):
+                return ApiResponse({"login": "octocat", "name": "The Octocat", "bio": "GitHub mascot", "company": "@github", "location": "San Francisco", "followers": 4, "following": 2, "public_repos": 8, "created_at": "2011-01-25T18:44:36Z", "avatar_url": "https://github.example/octocat.png", "html_url": "https://github.com/octocat"})
+            if url.endswith("/followers"):
+                return ApiResponse([{"login": "follower-one", "avatar_url": "https://github.example/follower.png", "html_url": "https://github.com/follower-one"}])
+            if url.endswith("/following"):
+                return ApiResponse([{"login": "following-one", "avatar_url": "https://github.example/following.png", "html_url": "https://github.com/following-one"}])
+            raise AssertionError(url)
+
+        with patch("app.GITHUB_PROFILE_CACHE", {}), patch("app.requests.get", side_effect=fake_get):
+            profile = github_public_profile("octocat")
+        self.assertEqual(profile["githubBio"], "GitHub mascot")
+        self.assertEqual(profile["githubFollowersCount"], 4)
+        self.assertEqual(profile["githubFollowingCount"], 2)
+        self.assertEqual(profile["githubPublicReposCount"], 8)
+        self.assertEqual(profile["githubFollowers"][0]["githubLogin"], "follower-one")
+        self.assertEqual(profile["githubFollowing"][0]["githubLogin"], "following-one")
 
     def test_social_preview_crawler_can_read_public_metadata_without_browser_session(self) -> None:
         response = self.client.get("/", headers={"User-Agent": "TelegramBot (like TwitterBot)"})
@@ -685,7 +713,8 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertTrue(repositories.json["privateRepositoriesRequireConsent"])
         self.assertEqual(repositories.json["repositories"], public_repositories)
         self.assertTrue(profile.json["isOwnProfile"])
-        self.assertIn('id="ownerStatus"', page.get_data(as_text=True))
+        self.assertIn('id="profileOwn"', page.get_data(as_text=True))
+        self.assertIn('id="profileTitle"', page.get_data(as_text=True))
         invalid_packages = self.client.get("/account/packages/invalid").get_data(as_text=True)
         self.assertIn("Paquetes inválidos", invalid_packages)
         self.assertIn("invalid-packages", invalid_packages)
@@ -727,13 +756,13 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertTrue(after.json["following"])
         self.assertEqual(after.json["followerCount"], 1)
         self.assertFalse(removed.json["following"])
-        self.assertIn('id="avatarFallback"', page.get_data(as_text=True))
-        self.assertIn('id="follow"', page.get_data(as_text=True))
-        self.assertIn("function updateCount()", page.get_data(as_text=True))
-        self.assertIn("followerCount=Number(data.followerCount)||0;updateCount()", page.get_data(as_text=True))
-        self.assertIn("@media(max-width:700px)", page.get_data(as_text=True))
-        self.assertIn(".hero .follow{grid-column:1/-1;width:100%;text-align:center}", page.get_data(as_text=True))
-        self.assertIn(".grid{grid-template-columns:1fr}", page.get_data(as_text=True))
+        self.assertIn('id="profileAvatarFallback"', page.get_data(as_text=True))
+        self.assertIn('id="profileFollow"', page.get_data(as_text=True))
+        self.assertIn("githubFollowersCount", page.get_data(as_text=True))
+        self.assertIn("profile-layout", page.get_data(as_text=True))
+        self.assertIn("foundstore-profile.css", page.get_data(as_text=True))
+        self.assertIn("profile-stats", page.get_data(as_text=True))
+        self.assertIn("profile-package-list", page.get_data(as_text=True))
 
     def test_catalog_install_rejects_platform_incompatible_device(self) -> None:
         with self.client.session_transaction() as browser_session:
