@@ -1979,6 +1979,12 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     def oauth_callback_url() -> str:
         configured = str(app.config.get("GITHUB_OAUTH_REDIRECT_URI") or "").rstrip("/")
+        legacy_callbacks = {
+            "https://hifoundstore.onrender.com/auth/github/callback",
+            "https://imfoundstore.onrender.com/auth/github/callback",
+        }
+        if configured in legacy_callbacks:
+            return f"{public_origin()}/auth/github/callback"
         return configured or f"{public_origin()}/auth/github/callback"
 
     def safe_next_path(value: str) -> str:
