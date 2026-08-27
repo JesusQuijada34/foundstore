@@ -23,7 +23,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Protocol
-from urllib.parse import quote, urlencode
+from urllib.parse import quote, urlencode, urlparse
 
 import requests
 from cryptography.fernet import Fernet, InvalidToken
@@ -40,6 +40,7 @@ PACKAGE_METADATA_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 CATALOG_SNAPSHOT_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 GITHUB_STAR_CACHE: dict[str, tuple[float, int | None]] = {}
 GITHUB_USER_SEARCH_CACHE: dict[str, tuple[float, list[dict[str, str]]]] = {}
+GITHUB_RELEASE_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 GITHUB_PROFILE_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 PAIRING_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 LICENSE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -1661,6 +1662,10 @@ def catalog_snapshot(catalog_owner: str = CATALOG_OWNER, catalog_repository: str
             "updatedAt": repository.get("updatedAt", repository.get("updated_at")),
             "stars": stars if isinstance(stars, int) else None,
             "branch": branch,
+            "version": metadata.get("version", ""),
+            "publisher": metadata.get("publisher", ""),
+            "platform": metadata.get("platform", ""),
+            "platformTargets": metadata.get("platformTargets", []),
             "visuals": {
                 "icon": f"{asset_base}/product_logo.png",
                 "splash": f"{asset_base}/splash.png",
@@ -1799,6 +1804,75 @@ def github_public_star_count(author: str, slug: str) -> int | None:
             pass
     GITHUB_STAR_CACHE[cache_key] = (time.time() + 300, count)
     return count
+
+
+def github_latest_release(author: str, slug: str) -> dict[str, Any]:
+    """Read the latest public GitHub release without following arbitrary asset URLs."""
+    cache_key = f"{author.lower()}/{slug.lower()}"
+    cached = GITHUB_RELEASE_CACHE.get(cache_key)
+    if cached and cached[0] > time.time():
+        return dict(cached[1])
+    release: dict[str, Any] = {}
+    if valid_github_login(author) and valid_repository_name(slug):
+        try:
+            response = requests.get(
+                f"https://api.github.com/repos/{quote(author)}/{quote(slug)}/releases/latest",
+                headers={"Accept": "application/vnd.github+json", "User-Agent": "Foundstore-Flask-Render"},
+                timeout=8,
+            )
+            if response.ok and isinstance(response.json(), dict):
+                release = response.json()
+        except (requests.RequestException, ValueError, TypeError):
+            release = {}
+    GITHUB_RELEASE_CACHE[cache_key] = (time.time() + 120, release)
+    return dict(release)
+
+
+def safe_release_assets(release: dict[str, Any], platform: str, allow_neutral: bool = True) -> list[dict[str, Any]]:
+    """Return only downloadable release assets hosted by GitHub for the requested platform."""
+    wanted = canonical_platform(platform)
+    candidates: list[dict[str, Any]] = []
+    for asset in release.get("assets", []) if isinstance(release.get("assets"), list) else []:
+        if not isinstance(asset, dict):
+            continue
+        name = str(asset.get("name") or "")
+        lower = name.lower()
+        if not lower.endswith((".iflapp", ".zip", ".exe", ".deb")):
+            continue
+        url = str(asset.get("browser_download_url") or "")
+        parsed = urlparse(url)
+        if parsed.scheme != "https" or parsed.netloc not in {"github.com", "objects.githubusercontent.com", "github-releases.githubusercontent.com"}:
+            continue
+        score = 1
+        if ".iflapp" in lower:
+            score += 4
+        platform_marker = False
+        if wanted == "Danenone" and any(token in lower for token in ("danenone", "linux", "ubuntu", ".deb")):
+            score += 10
+            platform_marker = True
+        if wanted == "Knosthalij" and any(token in lower for token in ("knosthalij", "windows", ".exe")):
+            score += 10
+            platform_marker = True
+        if not allow_neutral and not platform_marker:
+            continue
+        if wanted == "Danenone" and (lower.endswith(".exe") or any(token in lower for token in ("windows", "knosthalij"))):
+            score -= 10
+        if wanted == "Knosthalij" and (lower.endswith(".deb") or any(token in lower for token in ("danenone", "linux", "ubuntu"))):
+            score -= 10
+        if score <= 0:
+            continue
+        candidates.append({"name": name, "url": url, "size": asset.get("size"), "score": score})
+    return sorted(candidates, key=lambda item: (-int(item["score"]), item["name"].lower()))
+
+
+def package_source_options(author: str, slug: str, branch: str, platform: str) -> dict[str, Any]:
+    clone = f"https://github.com/{quote(author)}/{quote(slug)}.git"
+    packagemaker = "https://github.com/JesusQuijada34/packagemaker"
+    if platform == "Knosthalij":
+        commands = [f"git clone {clone}", f"cd {slug}", "py packagemaker.py --buildthis ."]
+    else:
+        commands = [f"git clone {clone}", f"cd {slug}", "python3 packagemaker.py --buildthis ."]
+    return {"repositoryUrl": f"https://github.com/{quote(author)}/{quote(slug)}", "cloneUrl": clone, "branch": branch, "packagemakerUrl": packagemaker, "commands": commands, "platform": platform}
 
 
 def github_public_repositories(github_login: str) -> list[dict[str, Any]]:
@@ -2173,6 +2247,41 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return Response("Enlace no encontrado", status=404, mimetype="text/plain")
         return redirect(f"/{quote(author)}/{quote(slug)}", code=302)
 
+    @app.get("/api/v1/packages/<author>/<slug>/delivery")
+    def package_delivery(author: str, slug: str) -> Response:
+        package = public_catalog_package(author, slug)
+        if not package:
+            return jsonify({"error": "Aplicación no encontrada en el catálogo público"}), 404
+        branch = str(package.get("branch") or "main")
+        release = github_latest_release(author, slug)
+        release_tag = str(release.get("tag_name") or package.get("version") or "")
+        platforms: dict[str, Any] = {}
+        declared_targets = {canonical_platform(str(value)) for value in (package.get("platformTargets") or []) if str(value).strip()}
+        for platform in ("Danenone", "Knosthalij"):
+            assets = safe_release_assets(release, platform, allow_neutral=bool(declared_targets)) if not declared_targets or platform in declared_targets else []
+            selected = assets[0] if assets else None
+            platforms[platform] = {
+                "available": bool(selected),
+                "asset": {"name": selected["name"], "size": selected.get("size")} if selected else None,
+                "downloadUrl": f"/download/{quote(author)}/{quote(slug)}/{platform}" if selected else None,
+                "source": package_source_options(author, slug, branch, platform),
+            }
+        return jsonify({"package": {"author": author, "slug": slug, "name": package.get("name"), "version": package.get("version"), "publisher": package.get("publisher")}, "release": {"tag": release_tag, "url": str(release.get("html_url") or "")}, "platforms": platforms})
+
+    @app.get("/download/<author>/<slug>/<platform>")
+    def package_download(author: str, slug: str, platform: str) -> Response:
+        package = public_catalog_package(author, slug)
+        target = canonical_platform(platform)
+        if not package or target not in {"Danenone", "Knosthalij"}:
+            return jsonify({"error": "Paquete o plataforma no disponible"}), 404
+        declared_targets = {canonical_platform(str(value)) for value in (package.get("platformTargets") or []) if str(value).strip()}
+        if declared_targets and target not in declared_targets:
+            return jsonify({"error": f"El paquete no declara compatibilidad con {target}"}), 404
+        assets = safe_release_assets(github_latest_release(author, slug), target, allow_neutral=bool(declared_targets))
+        if not assets:
+            return jsonify({"error": f"No hay un artefacto disponible para {target}; usa la alternativa de código fuente"}), 404
+        return redirect(assets[0]["url"], code=302)
+
     @app.get("/<author>/<slug>")
     def package_detail(author: str, slug: str) -> Response | str:
         blocked = web_session_or_login()
@@ -2433,7 +2542,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     @app.get("/manifest.webmanifest")
     def manifest() -> Response:
         return Response(
-            json.dumps({"name": "Foundstore for Influent Danenone", "short_name": "Foundstore", "start_url": "/", "display": "standalone", "background_color": "#07131a", "theme_color": "#39e6a0", "prefer_related_applications": False, "icons": [{"src": "/static/pwa/foundstore-favicon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"}, {"src": "/static/pwa/foundstore-favicon.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}], "splash_screens": [{"src": "/static/pwa/splash-light.png", "sizes": "1125x2436", "type": "image/png", "media": "(prefers-color-scheme: light)"}, {"src": "/static/pwa/splash-dark.png", "sizes": "1125x2436", "type": "image/png", "media": "(prefers-color-scheme: dark)"}]}),
+            json.dumps({"name": "Foundstore for Influent Danenone", "short_name": "Foundstore", "start_url": "/", "display": "standalone", "background_color": "#07131a", "theme_color": "#0b7a4b", "prefer_related_applications": False, "icons": [{"src": "/static/pwa/foundstore-favicon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"}, {"src": "/static/pwa/foundstore-favicon.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}], "splash_screens": [{"src": "/static/pwa/splash-light.png", "sizes": "1125x2436", "type": "image/png", "media": "(prefers-color-scheme: light)"}, {"src": "/static/pwa/splash-dark.png", "sizes": "1125x2436", "type": "image/png", "media": "(prefers-color-scheme: dark)"}]}),
             content_type="application/manifest+json",
             headers={"Cache-Control": "public, max-age=3600"},
         )
@@ -2450,7 +2559,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         favicon_path = Path(app.static_folder or "static") / "pwa" / "foundstore-favicon.png"
         if favicon_path.is_file():
             return send_file(favicon_path, mimetype="image/png", max_age=86400)
-        icon = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='#07131a'/><path d='M16 20 32 11l16 9v20L32 53 16 40Z' fill='#39e6a0'/><path d='m32 11 16 9-16 10-16-10Z' fill='#e8fff4'/></svg>"
+        icon = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='#07131a'/><path d='M16 20 32 11l16 9v20L32 53 16 40Z' fill='#0b7a4b'/><path d='m32 11 16 9-16 10-16-10Z' fill='#e8fff4'/></svg>"
         return Response(icon, content_type="image/svg+xml", headers={"Cache-Control": "public, max-age=86400"})
 
     @app.get("/assets/github-avatar/<github_login>.png")

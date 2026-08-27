@@ -951,3 +951,25 @@ class FlaskRenderAppTests(unittest.TestCase):
         manifest = self.client.get("/manifest.webmanifest")
         self.assertIn("foundstore-favicon-192.png", manifest.get_data(as_text=True))
         self.assertIn("foundstore-favicon.png", manifest.get_data(as_text=True))
+
+    def test_package_delivery_exposes_only_verified_platform_assets_and_source_fallback(self) -> None:
+        package = {"author": "JesusQuijada34", "slug": "foundstore", "name": "Foundstore Fluthin Store", "branch": "main", "version": "Influent.foundstore.v1.2-26.08-22.20", "publisher": "Influent", "revision": "delivery-r1"}
+        release = {
+            "tag_name": "v1.2-26.08-22.20",
+            "html_url": "https://github.com/JesusQuijada34/foundstore/releases/tag/v1.2-26.08-22.20",
+            "assets": [
+                {"name": "Influent.foundstore.v1.2-26.08-22.20-danenone.iflapp", "browser_download_url": "https://github.com/JesusQuijada34/foundstore/releases/download/v1.2-26.08-22.20/app.iflapp", "size": 1234},
+                {"name": "notes.txt", "browser_download_url": "https://github.com/JesusQuijada34/foundstore/releases/download/v1.2-26.08-22.20/notes.txt", "size": 20},
+            ],
+        }
+        snapshot = {"packages": [package], "catalogVersion": "delivery-v1", "fetchedAt": "2026-01-01T00:00:00+00:00"}
+        with patch("app.catalog_snapshot", return_value=snapshot), patch("app.github_latest_release", return_value=release):
+            response = self.client.get("/api/v1/packages/JesusQuijada34/foundstore/delivery")
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(response.json["platforms"]["Danenone"]["available"])
+            self.assertFalse(response.json["platforms"]["Knosthalij"]["available"])
+            source = response.json["platforms"]["Knosthalij"]["source"]
+            self.assertIn("packagemaker.py --buildthis .", " ".join(source["commands"]))
+            download = self.client.get("/download/JesusQuijada34/foundstore/Danenone", follow_redirects=False)
+            self.assertEqual(download.status_code, 302)
+            self.assertEqual(download.location, release["assets"][0]["browser_download_url"])
