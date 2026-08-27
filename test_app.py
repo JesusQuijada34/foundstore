@@ -714,6 +714,7 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(repositories.json["repositories"], public_repositories)
         self.assertTrue(profile.json["isOwnProfile"])
         self.assertIn('id="profileOwn"', page.get_data(as_text=True))
+        self.assertIn('id="profileFollow" type="button" hidden aria-hidden="true"', page.get_data(as_text=True))
         self.assertIn('id="profileTitle"', page.get_data(as_text=True))
         invalid_packages = self.client.get("/account/packages/invalid").get_data(as_text=True)
         self.assertIn("Paquetes inválidos", invalid_packages)

@@ -2399,16 +2399,17 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     def account_invalid_packages() -> Response | str:
         return account_page("invalid")
 
-    @app.get("/developer/<github_login>")
-    def developer_page(github_login: str) -> Response | str:
+    @app.get("/developer/<profile_login>")
+    def developer_page(profile_login: str) -> Response | str:
         blocked = web_session_or_login()
         if blocked:
             return blocked
-        if not valid_github_login(github_login):
+        if not valid_github_login(profile_login):
             return jsonify({"error": "Desarrollador no encontrado"}), 404
-        profile_preview = developer_profile(app.extensions["device_store"], github_login)
+        profile_preview = developer_profile(app.extensions["device_store"], profile_login)
         preview_bio = str(profile_preview.get("bio") or profile_preview.get("githubBio") or "").strip()
-        response = Response(render_template("developer.html", github_login=github_login, profile_preview=profile_preview, meta_description=preview_bio or f"Perfil de {github_login} y sus paquetes Fluthin verificados en Foundstore.", visitor_country=request.headers.get("CF-IPCountry", "")), content_type="text/html; charset=utf-8")
+        is_own_profile = bool(github_login() and str(github_login()).lower() == profile_login.lower())
+        response = Response(render_template("developer.html", github_login=profile_login, is_own_profile=is_own_profile, profile_preview=profile_preview, meta_description=preview_bio or f"Perfil de {profile_login} y sus paquetes Fluthin verificados en Foundstore.", visitor_country=request.headers.get("CF-IPCountry", "")), content_type="text/html; charset=utf-8")
         response.headers["Cache-Control"] = "no-store, max-age=0"
         response.headers["Pragma"] = "no-cache"
         response.headers["Vary"] = "Cookie"

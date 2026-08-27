@@ -57,8 +57,8 @@
         </div>
         <div class="profile-hero-actions">
           <a class="profile-action" id="profileGitHub" href="https://github.com/{{ github_login }}" target="_blank" rel="noopener noreferrer"><span data-i18n="profileGitHub">Abrir GitHub</span></a>
-          <button class="profile-follow" id="profileFollow" type="button" disabled>Cargando…</button>
-          <span class="profile-action" id="profileOwn" hidden data-i18n="profileOwn">Tu perfil</span>
+          <button class="profile-follow" id="profileFollow" type="button"{% if is_own_profile %} hidden aria-hidden="true"{% else %} disabled{% endif %}>Cargando…</button>
+          <span class="profile-action" id="profileOwn"{% if not is_own_profile %} hidden{% endif %} data-i18n="profileOwn">Tu perfil</span>
         </div>
       </section>
 
@@ -95,8 +95,8 @@
     <script src="{{ url_for('static', filename='js/foundstore-components.js') }}"></script>
     <script src="{{ url_for('static', filename='js/foundstore-share.js') }}?v=share1"></script>
     <script>
-      const login={{ github_login|tojson }},catalog=document.getElementById('profileCatalog'),catalogCount=document.getElementById('catalogCount'),follow=document.getElementById('profileFollow'),ownProfile=document.getElementById('profileOwn'),myProfileLink=document.getElementById('myProfileLink'),avatar=document.getElementById('profileAvatar'),avatarFallback=document.getElementById('profileAvatarFallback'),labels=window.FoundstoreTranslations?.[document.documentElement.lang]||window.FoundstoreTranslations?.es||{},label=(key,fallback)=>labels[key]||fallback,esc=value=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
-      let signedIn=false,following=false,packageCount=0;
+      const login={{ github_login|tojson }},initialOwnProfile={{ is_own_profile|tojson }},catalog=document.getElementById('profileCatalog'),catalogCount=document.getElementById('catalogCount'),follow=document.getElementById('profileFollow'),ownProfile=document.getElementById('profileOwn'),myProfileLink=document.getElementById('myProfileLink'),avatar=document.getElementById('profileAvatar'),avatarFallback=document.getElementById('profileAvatarFallback'),labels=window.FoundstoreTranslations?.[document.documentElement.lang]||window.FoundstoreTranslations?.es||{},label=(key,fallback)=>labels[key]||fallback,esc=value=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+      let signedIn=false,following=false,packageCount=0;renderFollow(initialOwnProfile);
       const number=value=>value===null||value===undefined?'—':new Intl.NumberFormat(document.documentElement.lang||'es').format(Number(value)||0);
       function setStat(id,value){document.getElementById(id).textContent=number(value)}
       function personCard(person){const personLogin=String(person.githubLogin||'').trim();if(!personLogin)return '';const personName=person.githubName||personLogin,personAvatar=person.avatarUrl||`https://github.com/${encodeURIComponent(personLogin)}.png?size=64`;return `<a class="profile-person" href="/developer/${encodeURIComponent(personLogin)}"><img src="${esc(personAvatar)}" alt="" loading="lazy" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="profile-person-fallback" hidden>${esc(personName.slice(0,1).toUpperCase()||'?')}</span><span class="profile-person-copy"><strong>${esc(personName)}</strong><small>@${esc(personLogin)}</small></span></a>`}
