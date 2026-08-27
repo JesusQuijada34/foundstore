@@ -8,14 +8,14 @@ BLOCK "StringFileInfo"
 {
 	BLOCK "040904B0"
 	{
-		VALUE "CompanyName", "Jesusquijada34"
-		VALUE "FileDescription", "Jesusquijada34 FoundStore by JesusQuijada34"
-			VALUE "FileVersion", "v1.2-26.08-22.20-AlphaCube built by: JesusQuijada34"
+		VALUE "CompanyName", "Influent"
+		VALUE "FileDescription", "Foundstore Fluthin Store"
+			VALUE "FileVersion", "v1.2-26.08-22.20"
 		VALUE "InternalName", "foundstore"
-		VALUE "LegalCopyright", "(c) Jesusquijada34. All rights reserved."
+		VALUE "LegalCopyright", "(c) Influent. All rights reserved."
 		VALUE "OriginalFilename", "foundstore.exe"
-			VALUE "ProductName", "Influent Foundstore v1.2-26.08-22.20-AlphaCube"
-			VALUE "ProductVersion", "1.2"
+			VALUE "ProductName", "Foundstore Fluthin Store"
+			VALUE "ProductVersion", "v1.2-26.08-22.20"
 	}
 }}
 

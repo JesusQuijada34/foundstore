@@ -1,6 +1,6 @@
 # FoundStore
 
-**Identidad del paquete:** `Influent.foundstore.v1.1-26.08-22.31`
+**Identidad del paquete:** `Influent.foundstore.v1.2-26.08-22.20`
 **Autor:** `JesusQuijada34`
 **Plataforma:** `AlphaCube`
 **Descripción:** Tienda Fluthin para Danenone con catálogo GitHub, actualizaciones y gestor flut.
@@ -15,11 +15,11 @@ Instala las dependencias declaradas en `lib/requirements.txt` cuando exista y ej
 
 ## Validación
 
-La fuente debe pasar compilación sintáctica, pruebas funcionales disponibles, comprobación de identidad XML, protección contra traversal en ZIP y llamadas seguras a subprocess. Los artefactos `.iflapp` deben ser generados por PackageMaker; los paquetes Debian deben usar el nombre canónico `Influent.foundstore.v1.1-26.08-22.31_ARCH.deb`.
+La fuente debe pasar compilación sintáctica, pruebas funcionales disponibles, comprobación de identidad XML, protección contra traversal en ZIP y llamadas seguras a subprocess. Los artefactos `.iflapp` deben ser generados por PackageMaker; los paquetes Debian deben usar el nombre canónico `Influent.foundstore.v1.2-26.08-22.20_ARCH.deb`.
 
 ## Release
 
-El tag y el título del release de esta iteración deben ser exactamente `v1.1-26.08-22.31`. Los assets deben usar el nombre canónico del paquete y una extensión objetiva. No se permite publicar un release AlphaCube que contenga únicamente el build Linux.
+El tag y el título del release de esta iteración deben ser exactamente `v1.2-26.08-22.20`. Los assets deben usar el nombre canónico del paquete y una extensión objetiva. No se permite publicar un release AlphaCube que contenga únicamente el build Linux.
 
 ## Referencia original
 
