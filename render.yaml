@@ -8,11 +8,12 @@ services:
     startCommand: python app.py
     autoDeployTrigger: commit
     healthCheckPath: /healthz
-    envVars:
-      - key: PUBLIC_ORIGIN
-        value: https://hifoundstore.onrender.com
     maxShutdownDelaySeconds: 45
     envVars:
+      - key: PUBLIC_ORIGIN
+        value: https://myfoundstore.onrender.com
+      - key: GITHUB_OAUTH_REDIRECT_URI
+        value: https://myfoundstore.onrender.com/auth/github/callback
       - key: MONGO_DATABASE
         value: foundstore
       - key: MONGO_URI

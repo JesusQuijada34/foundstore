@@ -26,6 +26,7 @@
     <meta name="twitter:image" content="{{ public_origin }}/assets/github-avatar/{{ github_login }}.png">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-components.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-profile.css') }}?v=profile2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-flat.css') }}?v=flat1">
   </head>
   <body class="foundstore-public-developer">
     <main class="profile-shell">
@@ -35,6 +36,7 @@
           <a class="profile-nav-link" href="/" data-i18n="Back">← Catálogo</a>
           <a class="profile-nav-link" id="myProfileLink" href="#" hidden><span data-i18n="profileOwn">Mi perfil</span></a>
           <a class="profile-nav-link" id="profileGitHubNav" href="https://github.com/{{ github_login }}" target="_blank" rel="noopener noreferrer"><span data-i18n="profileGitHub">Abrir GitHub</span></a>
+          <button class="foundstore-share-button" type="button" data-share-endpoint="/api/v1/share/profile/{{ github_login }}" data-share-title="{{ profile_name }} · Foundstore" aria-label="Compartir perfil"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="2.2"/><circle cx="6" cy="12" r="2.2"/><circle cx="18" cy="19" r="2.2"/><path d="m8 11 7.8-4.5M8 13l7.8 4.5"/></svg><span>Compartir</span></button>
         </div>
       </nav>
 
@@ -91,6 +93,7 @@
 
     <script src="{{ url_for('static', filename='js/foundstore-translations.js') }}"></script>
     <script src="{{ url_for('static', filename='js/foundstore-components.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/foundstore-share.js') }}?v=share1"></script>
     <script>
       const login={{ github_login|tojson }},catalog=document.getElementById('profileCatalog'),catalogCount=document.getElementById('catalogCount'),follow=document.getElementById('profileFollow'),ownProfile=document.getElementById('profileOwn'),myProfileLink=document.getElementById('myProfileLink'),avatar=document.getElementById('profileAvatar'),avatarFallback=document.getElementById('profileAvatarFallback'),labels=window.FoundstoreTranslations?.[document.documentElement.lang]||window.FoundstoreTranslations?.es||{},label=(key,fallback)=>labels[key]||fallback,esc=value=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
       let signedIn=false,following=false,packageCount=0;

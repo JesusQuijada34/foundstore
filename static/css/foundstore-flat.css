@@ -1,0 +1,133 @@
+/* Foundstore Flat UI — UWP/GitHub-inspired, own visual language. */
+:root{
+  --fs-flat-ink:#15231d;
+  --fs-flat-muted:#5d6c65;
+  --fs-flat-line:#d5ded9;
+  --fs-flat-surface:#fff;
+  --fs-flat-surface-2:#f4f8f5;
+  --fs-flat-green:#0b8b57;
+  --fs-flat-green-strong:#087346;
+  --fs-flat-green-soft:#e4f5ec;
+  --fs-flat-radius:3px;
+  --fs-flat-shadow:0 2px 9px rgba(20,48,35,.10);
+}
+html[data-theme="dark"]{
+  --fs-flat-ink:#f1f7f3;
+  --fs-flat-muted:#a5b4ab;
+  --fs-flat-line:#304039;
+  --fs-flat-surface:#101713;
+  --fs-flat-surface-2:#17211b;
+  --fs-flat-green:#55dfa0;
+  --fs-flat-green-strong:#77edb5;
+  --fs-flat-green-soft:#173c2a;
+  --fs-flat-shadow:0 2px 12px rgba(0,0,0,.24);
+}
+button,.button,.back,.profile-action,.profile-follow,.pwa-button,.signin,.landing-primary,.landing-secondary,.landing-nav-cta,.chip,.foundstore-explore-close,.foundstore-share-button,.foundstore-notification-button,.foundstore-notification-panel,.foundstore-store-card,.panel,.nav-card,.item,.notice{border-radius:var(--fs-flat-radius)!important}
+button,a,input,select,textarea{touch-action:manipulation}
+button,.button,.back,.profile-action,.profile-follow,.pwa-button,.signin,.landing-primary,.landing-secondary,.landing-nav-cta,.chip,.foundstore-explore-close,.foundstore-share-button{
+  border-radius:var(--fs-flat-radius)!important;
+  box-shadow:none!important;
+  transition:background-color 150ms ease,color 150ms ease,border-color 150ms ease,box-shadow 150ms ease,transform 100ms ease!important;
+}
+button:active,.button:active,.back:active,.profile-action:active,.profile-follow:active,.pwa-button:active,.signin:active,.landing-primary:active,.landing-secondary:active,.landing-nav-cta:active,.chip:active,.foundstore-share-button:active{transform:translateY(1px)!important}
+button:hover,.button:hover,.back:hover,.profile-action:hover,.profile-follow:hover,.pwa-button:hover,.signin:hover,.landing-primary:hover,.landing-secondary:hover,.landing-nav-cta:hover,.chip:hover,.foundstore-share-button:hover{box-shadow:inset 0 -2px 0 var(--fs-flat-green)!important}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--fs-flat-green)!important;outline-offset:2px!important}
+
+/* Public landing: flat navigation and automatic monochrome theme */
+body.foundstore-public-landing{background:var(--fs-flat-surface)!important;color:var(--fs-flat-ink)!important}
+body.foundstore-public-landing .landing-nav{width:min(1160px,calc(100% - 32px))!important;margin:16px auto!important;padding:10px 0!important;border:0!important;border-bottom:1px solid var(--fs-flat-line)!important;border-radius:var(--fs-flat-radius)!important;background:var(--fs-flat-surface)!important;box-shadow:var(--fs-flat-shadow)!important;backdrop-filter:none!important}
+body.foundstore-public-landing .landing-brand,body.foundstore-public-landing .landing-nav-links a{color:var(--fs-flat-ink)!important}
+body.foundstore-public-landing .landing-nav-links{gap:22px!important}
+body.foundstore-public-landing .landing-nav-links a{position:relative;padding:10px 2px;border-bottom:2px solid transparent;text-decoration:none!important}
+body.foundstore-public-landing .landing-nav-links a:hover,body.foundstore-public-landing .landing-nav-links a:active{color:var(--fs-flat-green-strong)!important;border-bottom-color:var(--fs-flat-green)!important}
+body.foundstore-public-landing .landing-nav-cta{min-height:42px!important;padding:0 13px!important;border:1px solid var(--fs-flat-line)!important;border-bottom:2px solid transparent!important;border-radius:var(--fs-flat-radius)!important;background:var(--fs-flat-surface)!important;color:var(--fs-flat-green-strong)!important}
+body.foundstore-public-landing .landing-nav-cta:hover,body.foundstore-public-landing .landing-nav-cta:active{border-bottom-color:var(--fs-flat-green)!important;background:var(--fs-flat-green-soft)!important}
+body.foundstore-public-landing .landing-copy h1,body.foundstore-public-landing .landing-section-heading h2,body.foundstore-public-landing .landing-trust h2,body.foundstore-public-landing .landing-final h2{color:var(--fs-flat-ink)!important}
+body.foundstore-public-landing .landing-intro,body.foundstore-public-landing .landing-copy p,body.foundstore-public-landing .landing-section-heading>p:not(.landing-eyebrow),body.foundstore-public-landing .landing-trust p,body.foundstore-public-landing .landing-final p{color:var(--fs-flat-muted)!important}
+body.foundstore-public-landing .landing-primary{background:var(--fs-flat-green)!important;border:1px solid var(--fs-flat-green)!important;color:#fff!important;box-shadow:var(--fs-flat-shadow)!important}
+body.foundstore-public-landing .landing-secondary{background:var(--fs-flat-surface)!important;border:1px solid var(--fs-flat-line)!important;color:var(--fs-flat-ink)!important}
+body.foundstore-public-landing .landing-stats,body.foundstore-public-landing .landing-trust{background:var(--fs-flat-surface-2)!important;border:1px solid var(--fs-flat-line)!important;border-radius:var(--fs-flat-radius)!important;box-shadow:var(--fs-flat-shadow)!important}
+body.foundstore-public-landing .store-preview{border:1px solid var(--fs-flat-line)!important;border-radius:var(--fs-flat-radius)!important;background:var(--fs-flat-surface-2)!important;box-shadow:var(--fs-flat-shadow)!important;backdrop-filter:none!important}
+body.foundstore-public-landing .store-preview-card{border:1px solid var(--fs-flat-line)!important;border-radius:var(--fs-flat-radius)!important;background:var(--fs-flat-surface)!important}
+body.foundstore-public-landing .store-preview-heading strong,body.foundstore-public-landing .store-preview-card strong{color:var(--fs-flat-ink)!important}
+body.foundstore-public-landing .store-preview-top,body.foundstore-public-landing .store-preview-heading span,body.foundstore-public-landing .store-preview-card span,body.foundstore-public-landing .store-preview-foot,body.foundstore-public-landing .store-preview-note{color:var(--fs-flat-muted)!important}
+
+/* Catalog chrome */
+body.foundstore-public-catalog .sidebar{background:var(--fs-flat-surface)!important;border-bottom:1px solid var(--fs-flat-line)!important;box-shadow:0 1px 0 rgba(0,0,0,.04)!important;backdrop-filter:none!important}
+body.foundstore-public-catalog .sidebar .search{border:1px solid var(--fs-flat-line)!important;background:var(--fs-flat-surface-2)!important;border-radius:var(--fs-flat-radius)!important}
+body.foundstore-public-catalog .sidebar .search:focus-within{border-color:var(--fs-flat-green)!important;box-shadow:inset 0 -2px 0 var(--fs-flat-green)!important}
+body.foundstore-public-catalog .sidebar .search input{color:var(--fs-flat-ink)!important}
+body.foundstore-public-catalog .topline-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+body.foundstore-public-catalog .profile-quick-link{display:inline-flex;align-items:center;gap:7px;min-height:40px;padding:8px 11px;border:1px solid var(--fs-flat-line);border-bottom:2px solid transparent;background:var(--fs-flat-surface);color:var(--fs-flat-green-strong);text-decoration:none;font-weight:800}
+body.foundstore-public-catalog .profile-quick-link:hover{border-bottom-color:var(--fs-flat-green)}
+body.foundstore-public-catalog .profile-quick-link svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8}
+body.foundstore-public-catalog .pwa-button{border:1px solid var(--fs-flat-line)!important;background:var(--fs-flat-surface)!important;color:var(--fs-flat-green-strong)!important}
+body.foundstore-public-catalog .pwa-button.primary{background:var(--fs-flat-green)!important;border-color:var(--fs-flat-green)!important;color:#fff!important}
+body.foundstore-public-catalog .chip{border:1px solid var(--fs-flat-line)!important;background:var(--fs-flat-surface)!important;color:var(--fs-flat-ink)!important}
+body.foundstore-public-catalog .chip.active{background:var(--fs-flat-green)!important;border-color:var(--fs-flat-green)!important;color:#fff!important}
+body.foundstore-public-catalog .grid#catalog{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:16px!important}
+body.foundstore-public-catalog .foundstore-store-card{border:1px solid var(--fs-flat-line)!important;border-bottom:2px solid var(--fs-flat-line)!important;border-radius:var(--fs-flat-radius)!important;background:var(--fs-flat-surface)!important;box-shadow:var(--fs-flat-shadow)!important;color:var(--fs-flat-ink)!important}
+body.foundstore-public-catalog .foundstore-store-card:hover{border-color:var(--fs-flat-green)!important;border-bottom-color:var(--fs-flat-green)!important;transform:none!important}
+body.foundstore-public-catalog .foundstore-store-card:active{transform:translateY(1px)!important}
+body.foundstore-public-catalog .foundstore-store-card-name{color:var(--fs-flat-ink)!important}
+body.foundstore-public-catalog .foundstore-store-card-publisher{color:var(--fs-flat-muted)!important}
+body.foundstore-public-catalog .foundstore-store-card-icon{border-radius:var(--fs-flat-radius)!important;box-shadow:none!important}
+
+/* Account pages */
+body:not(.foundstore-public-catalog):not(.foundstore-public-landing) .back,
+body:not(.foundstore-public-catalog):not(.foundstore-public-landing) .button{border-radius:var(--fs-flat-radius)!important}
+body:not(.foundstore-public-catalog):not(.foundstore-public-landing) .panel,
+body:not(.foundstore-public-catalog):not(.foundstore-public-landing) .nav-card,
+body:not(.foundstore-public-catalog):not(.foundstore-public-landing) .item,
+body:not(.foundstore-public-catalog):not(.foundstore-public-landing) .notice{border-radius:var(--fs-flat-radius)!important;box-shadow:var(--fs-flat-shadow)!important}
+body:not(.foundstore-public-catalog):not(.foundstore-public-landing) .nav-card a{border-radius:var(--fs-flat-radius)!important;border-bottom:2px solid transparent}
+body:not(.foundstore-public-catalog):not(.foundstore-public-landing) .nav-card a:hover{background:var(--fs-flat-surface-2)!important;border-bottom-color:var(--fs-flat-green)!important}
+body:not(.foundstore-public-catalog):not(.foundstore-public-landing) .nav-card a[aria-current="page"]{background:var(--fs-flat-green-soft)!important;border-bottom-color:var(--fs-flat-green)!important}
+
+/* Developer and package surfaces */
+body.foundstore-public-developer .profile-nav,
+body.foundstore-public-developer .profile-hero,
+body.foundstore-public-developer .profile-stat,
+body.foundstore-public-developer .profile-section,
+body.foundstore-public-developer .profile-community-card,
+body.foundstore-public-developer .profile-person,
+body.foundstore-public-developer .foundstore-store-card{border-radius:var(--fs-flat-radius)!important;box-shadow:var(--fs-flat-shadow)!important}
+body.foundstore-public-developer .profile-nav-link,
+body.foundstore-public-developer .profile-action,
+body.foundstore-public-developer .profile-follow{border-radius:var(--fs-flat-radius)!important;border-bottom:2px solid transparent}
+body.foundstore-public-developer .profile-nav-link:hover,
+body.foundstore-public-developer .profile-action:hover,
+body.foundstore-public-developer .profile-follow:hover{border-bottom-color:var(--fs-flat-green)!important}
+body.foundstore-public-developer .profile-follow:active{transform:translateY(1px)!important}
+body .foundstore-share-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-width:44px;min-height:44px;padding:8px 10px;border:1px solid var(--fs-flat-line)!important;border-bottom:2px solid transparent!important;background:var(--fs-flat-surface)!important;color:var(--fs-flat-green-strong)!important;cursor:pointer}
+body .foundstore-share-button svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+body .foundstore-share-button span{font-size:12px;font-weight:800}
+body .foundstore-share-button:hover{border-bottom-color:var(--fs-flat-green)!important}
+body .foundstore-share-button:active{transform:translateY(1px)!important}
+body .foundstore-flat-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+body.foundstore-flat-share-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+body.foundstore-flat-share-row .foundstore-share-button{margin-left:auto}
+
+body:not(.foundstore-public-catalog):not(.foundstore-public-landing) .profile-nav,
+body:not(.foundstore-public-catalog):not(.foundstore-public-landing) .bar{border-bottom:1px solid var(--fs-flat-line)!important;box-shadow:none!important;backdrop-filter:none!important}
+body:not(.foundstore-public-catalog):not(.foundstore-public-landing) .bar .back:hover{border-bottom-color:var(--fs-flat-green)!important}
+
+@media(max-width:1024px){body.foundstore-public-catalog .grid#catalog{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
+@media(max-width:680px){body.foundstore-public-catalog .grid#catalog{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:10px!important}body.foundstore-public-catalog .foundstore-store-card{padding:9px!important}body.foundstore-public-catalog .foundstore-store-card-icon{width:56px!important;height:56px!important}body.foundstore-public-catalog .foundstore-store-card-name{font-size:12px!important}body.foundstore-public-catalog .foundstore-store-card-publisher,body.foundstore-public-catalog .foundstore-store-card-stars{font-size:10px!important}}
+@media(max-width:430px){body.foundstore-public-catalog .grid#catalog{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}body.foundstore-public-catalog .foundstore-store-card-icon{width:60px!important;height:60px!important}body.foundstore-public-catalog .foundstore-store-card-name{font-size:13px!important}}
+@media(max-width:560px){body.foundstore-public-developer .profile-nav{align-items:flex-start!important;flex-wrap:wrap!important}body.foundstore-public-developer .profile-nav-actions{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}body.foundstore-public-developer .profile-nav-link{min-width:0;text-align:center;padding-inline:6px!important;font-size:11px!important}body .foundstore-flat-share-row .foundstore-share-button{margin-left:0}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important}}
+
+/* Notification center */
+body.foundstore-public-catalog .topline-actions{position:relative}
+body.foundstore-public-catalog .foundstore-notification-button{position:relative;display:inline-grid;place-items:center;width:40px;height:40px;padding:0;border:1px solid var(--fs-flat-line);border-bottom:2px solid transparent;background:var(--fs-flat-surface);color:var(--fs-flat-green-strong);cursor:pointer}
+body.foundstore-public-catalog .foundstore-notification-button:hover{border-bottom-color:var(--fs-flat-green)}
+body.foundstore-public-catalog .foundstore-notification-button svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+body.foundstore-public-catalog .foundstore-notification-badge{position:absolute;right:-5px;top:-6px;display:grid;place-items:center;min-width:18px;height:18px;padding:0 4px;border:2px solid var(--fs-flat-surface);border-radius:99px!important;background:#c93245;color:#fff;font-size:10px;font-weight:800;line-height:1}
+body.foundstore-public-catalog .foundstore-notification-panel{position:absolute;right:0;top:calc(100% + 8px);z-index:40;width:min(340px,calc(100vw - 28px));max-height:min(420px,70vh);overflow:auto;padding:14px;border:1px solid var(--fs-flat-line);background:var(--fs-flat-surface);color:var(--fs-flat-ink);box-shadow:0 8px 24px rgba(22,49,37,.16)}
+body.foundstore-public-catalog .foundstore-notification-panel[hidden]{display:none}
+body.foundstore-public-catalog .foundstore-notification-panel strong{display:block;padding-bottom:10px;border-bottom:1px solid var(--fs-flat-line);font-size:13px}
+body.foundstore-public-catalog .foundstore-notification-panel p{margin:10px 0 0;color:var(--fs-flat-muted);font-size:12px;line-height:1.45}
+body.foundstore-public-catalog .foundstore-notification-item{padding:10px 0;border-bottom:1px solid var(--fs-flat-line);font-size:12px;line-height:1.4}
+body.foundstore-public-catalog .foundstore-notification-item:last-child{border-bottom:0}
+@media(max-width:560px){body.foundstore-public-catalog .foundstore-notification-panel{position:fixed;right:12px;top:72px}body.foundstore-public-catalog .topline-actions{width:100%}body.foundstore-public-catalog .foundstore-notification-button{margin-left:auto}}

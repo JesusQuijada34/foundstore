@@ -219,6 +219,14 @@ def valid_repository_name(value: str) -> bool:
     return bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}", value))
 
 
+def valid_share_target(kind: str, target: Any) -> bool:
+    if not isinstance(target, dict) or kind not in {"profile", "package"}:
+        return False
+    if kind == "profile":
+        return isinstance(target.get("login"), str) and valid_github_login(target["login"])
+    return isinstance(target.get("author"), str) and valid_github_login(target["author"]) and isinstance(target.get("slug"), str) and valid_repository_name(target["slug"])
+
+
 def catalog_references(source_text: str, default_owner: str) -> list[tuple[str, str]]:
     """Parse public repo.list entries without trusting stale or malformed references."""
     references: list[tuple[str, str]] = []
@@ -310,6 +318,9 @@ class DeviceStore(Protocol):
     def create_pairing_code(self, display_name: str, restore_apps: list[dict[str, str]]) -> dict[str, Any]: ...
     def claim_device(self, code: str, display_name: str) -> dict[str, Any] | None: ...
     def create_license(self, restore_apps: list[dict[str, str]], owner_login: str = "") -> dict[str, Any]: ...
+    def validate_license(self, license_code: str, owner_login: str | None = None) -> bool: ...
+    def create_share_link(self, kind: str, target: dict[str, str]) -> str: ...
+    def resolve_share_link(self, code: str) -> dict[str, str] | None: ...
     def begin_license_link(self, license_code: str, display_name: str, platform: str = "Danenone") -> dict[str, Any] | None: ...
     def license_link_status(self, link_id: str, link_token: str) -> dict[str, Any] | None: ...
     def approve_license_link(self, link_id: str, user_code: str, github_login: str) -> bool: ...
@@ -501,6 +512,11 @@ class LocalStore:
                   expires_at TEXT NOT NULL,
                   created_at TEXT NOT NULL,
                   last_used_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS share_links (
+                  code TEXT PRIMARY KEY,
+                  payload TEXT NOT NULL,
+                  created_at TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS developer_profiles (
                   github_login TEXT PRIMARY KEY,
@@ -957,7 +973,7 @@ class LocalStore:
             rows = conn.execute(
                 """SELECT l.status, l.issued_at, l.license_ciphertext, d.display_name, d.platform
                    FROM device_licenses l LEFT JOIN devices d ON d.id = l.device_id
-                   WHERE l.owner_login = ? ORDER BY l.issued_at DESC""",
+                   WHERE l.owner_login = ? AND l.status = 'active' ORDER BY l.issued_at DESC""",
                 (github_login,),
             ).fetchall()
         licenses = []
@@ -968,6 +984,44 @@ class LocalStore:
                 code = None
             licenses.append({"license": code, "status": row["status"], "issuedAt": row["issued_at"], "deviceName": row["display_name"], "platform": row["platform"]})
         return licenses
+
+    def validate_license(self, license_code: str, owner_login: str | None = None) -> bool:
+        license_hash = token_hash(normalize_license(license_code))
+        query = "SELECT 1 FROM device_licenses WHERE code_hash = ? AND status = 'active'"
+        values: tuple[Any, ...] = (license_hash,)
+        if owner_login:
+            query += " AND owner_login = ?"
+            values += (owner_login,)
+        with self._connect() as conn:
+            return bool(conn.execute(query, values).fetchone())
+
+    def create_share_link(self, kind: str, target: dict[str, str]) -> str:
+        if not valid_share_target(kind, target):
+            raise ValueError("Target de enlace no permitido")
+        encrypted = self.license_fernet.encrypt(json.dumps({"kind": kind, **target}, separators=(",", ":")).encode("utf-8")).decode("ascii")
+        for _ in range(8):
+            code = "".join(secrets.choice(PAIRING_ALPHABET) for _ in range(8))
+            try:
+                with self._connect() as conn:
+                    conn.execute("INSERT INTO share_links(code, payload, created_at) VALUES (?, ?, ?)", (code, encrypted, iso_now()))
+                return code
+            except sqlite3.IntegrityError:
+                continue
+        raise RuntimeError("No se pudo reservar un código de enlace único")
+
+    def resolve_share_link(self, code: str) -> dict[str, str] | None:
+        with self._connect() as conn:
+            row = conn.execute("SELECT payload FROM share_links WHERE code = ?", (code,)).fetchone()
+        if not row:
+            return None
+        try:
+            payload = json.loads(self.license_fernet.decrypt(row["payload"].encode("ascii")).decode("utf-8"))
+        except (InvalidToken, json.JSONDecodeError, UnicodeDecodeError):
+            return None
+        if not isinstance(payload, dict) or not isinstance(payload.get("kind"), str):
+            return None
+        target = {key: value for key, value in payload.items() if key != "kind"}
+        return payload if valid_share_target(payload["kind"], target) else None
 
     def get_developer_profile(self, github_login: str) -> dict[str, Any] | None:
         with self._connect() as conn:
@@ -1112,6 +1166,7 @@ class MongoStore:
         self.db.developer_follows.create_index([("followerLogin", 1), ("developerLogin", 1)], unique=True)
         self.db.developer_follows.create_index("developerLogin")
         self.db.repository_scans.create_index([("author", 1), ("slug", 1), ("branch", 1)], unique=True)
+        self.db.share_links.create_index("code", unique=True)
         self.db.devices.update_many({"platform": "Windows"}, {"$set": {"platform": "Knosthalij"}})
         self.db.license_links.update_many({"platform": "Windows"}, {"$set": {"platform": "Knosthalij"}})
 
@@ -1440,7 +1495,7 @@ class MongoStore:
         return [{**row, "lastSeenAt": row["lastSeenAt"].isoformat()} for row in rows]
 
     def list_licenses_for_owner(self, github_login: str) -> list[dict[str, Any]]:
-        rows = self.db.device_licenses.find({"ownerLogin": github_login}, {"_id": 0}).sort("issuedAt", -1)
+        rows = self.db.device_licenses.find({"ownerLogin": github_login, "status": "active"}, {"_id": 0}).sort("issuedAt", -1)
         licenses = []
         for row in rows:
             try:
@@ -1450,6 +1505,39 @@ class MongoStore:
             device = self.db.devices.find_one({"id": row.get("deviceId")}, {"_id": 0, "displayName": 1, "platform": 1}) if row.get("deviceId") else None
             licenses.append({"license": code, "status": row["status"], "issuedAt": row["issuedAt"].isoformat(), "deviceName": device.get("displayName") if device else None, "platform": device.get("platform") if device else None})
         return licenses
+
+    def validate_license(self, license_code: str, owner_login: str | None = None) -> bool:
+        criteria: dict[str, Any] = {"codeHash": token_hash(normalize_license(license_code)), "status": "active"}
+        if owner_login:
+            criteria["ownerLogin"] = owner_login
+        return bool(self.db.device_licenses.find_one(criteria, {"_id": 1}))
+
+    def create_share_link(self, kind: str, target: dict[str, str]) -> str:
+        if not valid_share_target(kind, target):
+            raise ValueError("Target de enlace no permitido")
+        from pymongo.errors import DuplicateKeyError
+        encrypted = self.license_fernet.encrypt(json.dumps({"kind": kind, **target}, separators=(",", ":")).encode("utf-8")).decode("ascii")
+        for _ in range(8):
+            code = "".join(secrets.choice(PAIRING_ALPHABET) for _ in range(8))
+            try:
+                self.db.share_links.insert_one({"code": code, "payload": encrypted, "createdAt": utc_now()})
+                return code
+            except DuplicateKeyError:
+                continue
+        raise RuntimeError("No se pudo reservar un código de enlace único")
+
+    def resolve_share_link(self, code: str) -> dict[str, str] | None:
+        row = self.db.share_links.find_one({"code": code}, {"_id": 0, "payload": 1})
+        if not row:
+            return None
+        try:
+            payload = json.loads(self.license_fernet.decrypt(str(row.get("payload", "")).encode("ascii")).decode("utf-8"))
+        except (InvalidToken, json.JSONDecodeError, UnicodeDecodeError):
+            return None
+        if not isinstance(payload, dict) or not isinstance(payload.get("kind"), str):
+            return None
+        target = {key: value for key, value in payload.items() if key != "kind"}
+        return payload if valid_share_target(payload["kind"], target) else None
 
     def get_developer_profile(self, github_login: str) -> dict[str, Any] | None:
         return self.db.developer_profiles.find_one({"githubLogin": github_login}, {"_id": 0})
@@ -2047,6 +2135,44 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         response.headers["Vary"] = "Cookie"
         return response
 
+    @app.post("/api/v1/share/profile/<profile_login>")
+    def create_profile_share(profile_login: str) -> Response:
+        if not github_login():
+            return jsonify({"error": "Se requiere una sesión GitHub para crear un enlace"}), 401
+        if not valid_github_login(profile_login):
+            return jsonify({"error": "Perfil no válido"}), 404
+        code = app.extensions["device_store"].create_share_link("profile", {"login": profile_login})
+        return jsonify({"code": code, "url": f"{public_origin()}/me/qr/{code}", "kind": "profile"})
+
+    @app.post("/api/v1/share/package/<author>/<slug>")
+    def create_package_share(author: str, slug: str) -> Response:
+        if not github_login():
+            return jsonify({"error": "Se requiere una sesión GitHub para crear un enlace"}), 401
+        if not valid_github_login(author) or not valid_repository_name(slug) or not public_catalog_package(author, slug):
+            return jsonify({"error": "Paquete no encontrado en el catálogo válido"}), 404
+        code = app.extensions["device_store"].create_share_link("package", {"author": author, "slug": slug})
+        return jsonify({"code": code, "url": f"{public_origin()}/linkdo/{code}", "kind": "package"})
+
+    @app.get("/me/qr/<code>")
+    def profile_share_redirect(code: str) -> Response:
+        if not re.fullmatch(r"[A-Za-z0-9]{8}", code):
+            return Response("Enlace no válido", status=404, mimetype="text/plain")
+        payload = app.extensions["device_store"].resolve_share_link(code)
+        if not payload or payload.get("kind") != "profile" or not valid_github_login(str(payload.get("login", ""))):
+            return Response("Enlace no encontrado", status=404, mimetype="text/plain")
+        return redirect(f"/developer/{quote(str(payload['login']))}", code=302)
+
+    @app.get("/linkdo/<code>")
+    def package_share_redirect(code: str) -> Response:
+        if not re.fullmatch(r"[A-Za-z0-9]{8}", code):
+            return Response("Enlace no válido", status=404, mimetype="text/plain")
+        payload = app.extensions["device_store"].resolve_share_link(code)
+        author = str(payload.get("author", "")) if payload else ""
+        slug = str(payload.get("slug", "")) if payload else ""
+        if not payload or payload.get("kind") != "package" or not valid_github_login(author) or not valid_repository_name(slug) or not public_catalog_package(author, slug):
+            return Response("Enlace no encontrado", status=404, mimetype="text/plain")
+        return redirect(f"/{quote(author)}/{quote(slug)}", code=302)
+
     @app.get("/<author>/<slug>")
     def package_detail(author: str, slug: str) -> Response | str:
         blocked = web_session_or_login()
@@ -2371,6 +2497,39 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         except Exception as error:
             return jsonify({"error": "No se pudo obtener el catálogo de GitHub", "detail": type(error).__name__}), 502
 
+    @app.get("/api/v1/developer-api")
+    def developer_api_docs() -> Response:
+        return jsonify({
+            "name": "Foundstore Developer API",
+            "version": "1",
+            "diffEndpoint": "/api/v1/developer/catalog/diff",
+            "authentication": "X-Foundstore-License header; never put a license in a URL or query string",
+            "request": {"known": {"JesusQuijada34/packagemaker": "revision-from-previous-response"}},
+            "response": {"packages": "changed or new valid packages", "removed": "package references no longer valid", "catalogVersion": "current snapshot identifier"},
+            "source": "GitHub public repositories + Packagemaker audit",
+        })
+
+    @app.post("/api/v1/developer/catalog/diff")
+    def developer_catalog_diff() -> Response:
+        license_code = request.headers.get("X-Foundstore-License", "").strip()
+        if not license_code:
+            return jsonify({"error": "Falta X-Foundstore-License; no envíes licencias en la URL"}), 401
+        owner = owner_login()
+        if not app.extensions["device_store"].validate_license(license_code, owner if owner else None):
+            return jsonify({"error": "La licencia no es válida, está revocada o no pertenece a la sesión"}), 401
+        payload = request.get_json(silent=True) or {}
+        known = payload.get("known", {})
+        if not isinstance(known, dict) or len(known) > 500 or any(not isinstance(key, str) or not isinstance(value, str) or len(key) > 160 or len(value) > 64 for key, value in known.items()):
+            return jsonify({"error": "El estado de catálogo no es válido"}), 400
+        try:
+            snapshot = catalog_snapshot()
+            current = {f"{item['author']}/{item['slug']}": item for item in snapshot["packages"]}
+            changed = [{**package, **package_metadata(package["slug"], package.get("branch", "main"), package["author"])} for key, package in current.items() if known.get(key) != package["revision"]]
+            removed = sorted(key for key in known if key not in current)
+            return jsonify({"packages": changed, "removed": removed, "catalogVersion": snapshot["catalogVersion"], "fetchedAt": snapshot["fetchedAt"], "licenseScope": "active"})
+        except Exception as error:
+            return jsonify({"error": "No se pudo actualizar el catálogo de GitHub", "detail": type(error).__name__}), 502
+
     @app.post("/api/v1/catalog/changes")
     def catalog_changes() -> Response:
         payload = request.get_json(silent=True) or {}
@@ -2495,6 +2654,23 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return jsonify({"error": "Inicia sesión con GitHub para descubrir repositorios públicos"}), 401
         return jsonify({"repositories": github_public_repositories(login), "scope": "public_only", "privateRepositoriesRequireConsent": True})
 
+    @app.get("/api/v1/me/packages")
+    def my_valid_packages() -> Response:
+        login = github_login()
+        if not login:
+            return jsonify({"error": "Inicia sesión con GitHub para ver tus paquetes válidos"}), 401
+        _, snapshot = developer_catalog(login, include_diagnostics=True)
+        if snapshot is None:
+            return jsonify({"error": "No se pudo auditar el catálogo público"}), 503
+        return jsonify({
+            "packages": snapshot.get("packages", []),
+            "validCount": len(snapshot.get("packages", [])),
+            "discoveredRepositoryCount": snapshot.get("discoveredRepositoryCount", 0),
+            "excludedRepositoryCount": snapshot.get("excludedRepositoryCount", 0),
+            "excluded": snapshot.get("excluded", []),
+            "source": "GitHub public repositories + Packagemaker audit",
+        })
+
     @app.route("/api/v1/me/following/<developer_login>", methods=["POST", "DELETE"])
     def following_developer(developer_login: str) -> Response:
         login = github_login()
@@ -2525,6 +2701,34 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if not login:
             return jsonify({"error": "Inicia sesión con GitHub para ver tus licencias"}), 401
         return jsonify({"licenses": app.extensions["device_store"].list_licenses_for_owner(login)})
+
+    @app.get("/api/v1/me/notifications")
+    def my_notifications() -> Response:
+        login = owner_login()
+        if not login:
+            return jsonify({"error": "Inicia sesión para recibir notificaciones"}), 401
+        wait_seconds = long_poll_seconds()
+        if wait_seconds is None:
+            return jsonify({"error": "wait debe ser un número entero"}), 400
+        after = request.args.get("after")
+        deadline = time.monotonic() + wait_seconds
+        while True:
+            notifications: list[dict[str, Any]] = []
+            for device in app.extensions["device_store"].list_devices_for_owner(login):
+                for event in app.extensions["device_store"].events_after(device["id"], after):
+                    notifications.append({
+                        "id": event.get("id"),
+                        "topic": event.get("topic"),
+                        "createdAt": event.get("createdAt"),
+                        "deviceId": device["id"],
+                        "deviceName": device.get("displayName"),
+                        "data": event.get("data") or {},
+                    })
+            notifications.sort(key=lambda item: str(item.get("createdAt") or ""))
+            if notifications or time.monotonic() >= deadline:
+                next_after = notifications[-1].get("createdAt") if notifications else after
+                return jsonify({"account": login, "notifications": notifications[-100:], "nextAfter": next_after, "retryAfterSeconds": 2 if notifications else 15})
+            time.sleep(1)
 
     @app.get("/api/v1/me/onboarding")
     def my_onboarding() -> Response:

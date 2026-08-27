@@ -859,3 +859,83 @@ class FlaskRenderAppTests(unittest.TestCase):
         observed = self.client.get(f"/api/v1/devices/{device['id']}/events/next?wait=0", headers=self.owner_headers())
         self.assertEqual(observed.status_code, 200)
         self.assertTrue(any(item["topic"] == "install.awaiting_approval" for item in observed.json["events"]))
+
+    def test_revoked_license_is_not_returned_by_owner_license_listing(self) -> None:
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "jq34"
+        created = self.client.post("/api/v1/me/licenses", json={})
+        self.assertEqual(created.status_code, 201)
+        license_code = created.json["license"]
+        self.assertEqual(self.client.get("/api/v1/me/licenses").json["licenses"][0]["license"], license_code)
+        revoked = self.client.post("/api/v1/me/licenses/revoke", json={"license": license_code, "reason": "Prueba"})
+        self.assertEqual(revoked.status_code, 200)
+        self.assertEqual(self.client.get("/api/v1/me/licenses").json["licenses"], [])
+
+    def test_authenticated_notifications_long_poll_reads_owned_device_events(self) -> None:
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "jq34"
+        license_code = self.client.post("/api/v1/me/licenses", json={}).json["license"]
+        link = self.client.post("/api/v1/license-links", json={"license": license_code, "displayName": "DaneDesk avisos"}).json
+        self.assertEqual(self.client.post(f"/link/{link['linkId']}", data={"code": link["userCode"]}).status_code, 200)
+        device = self.client.post(f"/api/v1/license-links/{link['linkId']}/claim", headers={"X-Foundstore-Link-Token": link["linkToken"]}).json
+        agent_headers = {"X-Danenone-Agent-Token": device["agentToken"]}
+        self.client.post(f"/api/v1/devices/{device['id']}/events", headers=agent_headers, json={"topic": "device.ring.started", "data": {}})
+        response = self.client.get("/api/v1/me/notifications?wait=0")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(any(item["topic"] == "device.ring.started" for item in response.json["notifications"]))
+
+    def test_profile_share_code_is_eight_characters_and_redirects_without_plain_payload(self) -> None:
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "jq34"
+        response = self.client.post("/api/v1/share/profile/JesusQuijada34")
+        self.assertEqual(response.status_code, 200)
+        code = response.json["code"]
+        self.assertRegex(code, r"^[A-Za-z0-9]{8}$")
+        self.assertNotIn("JesusQuijada34", response.json["url"])
+        redirected = self.client.get(f"/me/qr/{code}", follow_redirects=False)
+        self.assertEqual(redirected.status_code, 302)
+        self.assertEqual(redirected.location, "/developer/JesusQuijada34")
+
+    def test_package_share_requires_session_and_redirects_only_to_valid_package(self) -> None:
+        anonymous = self.client.post("/api/v1/share/package/JesusQuijada34/camera")
+        self.assertEqual(anonymous.status_code, 401)
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "jq34"
+        package = {"author": "JesusQuijada34", "slug": "camera", "branch": "main", "revision": "r1"}
+        with patch("app.catalog_snapshot", return_value={"packages": [package], "catalogVersion": "v1", "fetchedAt": "2026-01-01T00:00:00+00:00"}), patch("app.package_metadata", return_value={}):
+            response = self.client.post("/api/v1/share/package/JesusQuijada34/camera")
+            self.assertEqual(response.status_code, 200)
+            code = response.json["code"]
+            redirected = self.client.get(f"/linkdo/{code}", follow_redirects=False)
+        self.assertRegex(code, r"^[A-Za-z0-9]{8}$")
+        self.assertNotIn("JesusQuijada34", response.json["url"])
+        self.assertEqual(redirected.status_code, 302)
+        self.assertEqual(redirected.location, "/JesusQuijada34/camera")
+        self.assertEqual(self.client.post("/api/v1/share/package/JesusQuijada34/missing").status_code, 404)
+
+    def test_developer_catalog_diff_requires_active_license_header_and_never_echoes_it(self) -> None:
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "jq34"
+        missing = self.client.post("/api/v1/developer/catalog/diff", json={"known": {}})
+        self.assertEqual(missing.status_code, 401)
+        license_code = self.client.post("/api/v1/me/licenses", json={}).json["license"]
+        snapshot = {"packages": [{"author": "jq34", "slug": "camera", "revision": "new-revision", "branch": "main"}], "catalogVersion": "v3", "fetchedAt": "2026-01-01T00:00:00+00:00"}
+        with patch("app.catalog_snapshot", return_value=snapshot), patch("app.package_metadata", return_value={}):
+            active = self.client.post("/api/v1/developer/catalog/diff", headers={"X-Foundstore-License": license_code}, json={"known": {"jq34/camera": "old-revision"}})
+        self.assertEqual(active.status_code, 200)
+        self.assertEqual(active.json["packages"][0]["slug"], "camera")
+        self.assertNotIn(license_code, active.get_data(as_text=True))
+        self.assertEqual(self.client.post("/api/v1/me/licenses/revoke", json={"license": license_code}).status_code, 200)
+        revoked = self.client.post("/api/v1/developer/catalog/diff", headers={"X-Foundstore-License": license_code}, json={"known": {}})
+        self.assertEqual(revoked.status_code, 401)
+
+    def test_flat_ui_and_share_controls_are_loaded_by_active_pages(self) -> None:
+        landing = self.client.get("/")
+        self.assertIn("foundstore-flat.css?v=flat1", landing.get_data(as_text=True))
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "ExternalDev"
+        with patch("app.github_public_profile", return_value={"githubLogin": "ExternalDev", "githubName": "External Dev", "avatarUrl": "", "githubUrl": "https://github.com/ExternalDev"}), patch("app.catalog_snapshot", return_value={"packages": [], "fetchedAt": "2026-01-01T00:00:00+00:00"}):
+            profile = self.client.get("/developer/ExternalDev")
+        body = profile.get_data(as_text=True)
+        self.assertIn("foundstore-flat.css?v=flat1", body)
+        self.assertIn("data-share-endpoint=\"/api/v1/share/profile/ExternalDev\"", body)
