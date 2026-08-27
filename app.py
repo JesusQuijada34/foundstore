@@ -1983,7 +1983,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             "https://hifoundstore.onrender.com/auth/github/callback",
             "https://imfoundstore.onrender.com/auth/github/callback",
         }
-        if configured in legacy_callbacks:
+        if configured in legacy_callbacks or configured.endswith("/login/github/authorized"):
             return f"{public_origin()}/auth/github/callback"
         return configured or f"{public_origin()}/auth/github/callback"
 
