@@ -1981,7 +1981,11 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             except (OSError, requests.RequestException, TypeError, ValueError):
                 pass
             return render_template("landing.html", landing_stats=landing_stats)
-        return render_template("index.html", catalog_owner=CATALOG_OWNER, visitor_country=request.headers.get("CF-IPCountry", ""))
+        response = app.make_response(render_template("index.html", catalog_owner=CATALOG_OWNER, visitor_country=request.headers.get("CF-IPCountry", "")))
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Vary"] = "Cookie"
+        return response
 
     @app.get("/<author>/<slug>")
     def package_detail(author: str, slug: str) -> Response | str:
