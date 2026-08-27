@@ -38,7 +38,7 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(health.json["storage"], "sqlite-fallback")
         favicon = self.client.get("/favicon.ico")
         self.assertEqual(favicon.status_code, 200)
-        self.assertEqual(favicon.content_type, "image/svg+xml")
+        self.assertEqual(favicon.mimetype, "image/png")
 
     def test_developer_search_route_returns_public_users_before_dynamic_profile_route(self) -> None:
         users = [{"githubLogin": "JesusQuijada34", "githubName": "JesusQuijada34", "avatarUrl": "https://example.test/avatar.png", "githubUrl": "https://github.com/JesusQuijada34"}]
@@ -932,11 +932,22 @@ class FlaskRenderAppTests(unittest.TestCase):
 
     def test_flat_ui_and_share_controls_are_loaded_by_active_pages(self) -> None:
         landing = self.client.get("/")
-        self.assertIn("foundstore-flat.css?v=flat1", landing.get_data(as_text=True))
+        self.assertIn("foundstore-flat.css?v=flat3", landing.get_data(as_text=True))
         with self.client.session_transaction() as browser_session:
             browser_session["github_login"] = "ExternalDev"
         with patch("app.github_public_profile", return_value={"githubLogin": "ExternalDev", "githubName": "External Dev", "avatarUrl": "", "githubUrl": "https://github.com/ExternalDev"}), patch("app.catalog_snapshot", return_value={"packages": [], "fetchedAt": "2026-01-01T00:00:00+00:00"}):
             profile = self.client.get("/developer/ExternalDev")
         body = profile.get_data(as_text=True)
-        self.assertIn("foundstore-flat.css?v=flat1", body)
+        self.assertIn("foundstore-flat.css?v=flat3", body)
         self.assertIn("data-share-endpoint=\"/api/v1/share/profile/ExternalDev\"", body)
+        self.assertIn("foundstore-icons.svg", body)
+        self.assertIn("data-language-selector", body)
+        package_page = self.client.get("/JesusQuijada34/matchmeter")
+        self.assertEqual(package_page.status_code, 200)
+        self.assertEqual(len(re.findall(r"<select[^>]+data-language-selector\b", package_page.get_data(as_text=True))), 1)
+        favicon = self.client.get("/favicon.ico")
+        self.assertEqual(favicon.status_code, 200)
+        self.assertTrue(favicon.mimetype == "image/png")
+        manifest = self.client.get("/manifest.webmanifest")
+        self.assertIn("foundstore-favicon-192.png", manifest.get_data(as_text=True))
+        self.assertIn("foundstore-favicon.png", manifest.get_data(as_text=True))

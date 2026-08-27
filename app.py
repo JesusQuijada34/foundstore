@@ -28,7 +28,7 @@ from urllib.parse import quote, urlencode
 import requests
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives.asymmetric import ec
-from flask import Flask, Response, abort, jsonify, redirect, render_template, request, send_from_directory, session, url_for
+from flask import Flask, Response, abort, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for
 
 from i18n import COOKIE_NAME, SUPPORTED_LOCALES, catalog as locale_catalog, normalize_locale, resolve_locale, translate
 
@@ -2433,7 +2433,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     @app.get("/manifest.webmanifest")
     def manifest() -> Response:
         return Response(
-            json.dumps({"name": "Foundstore for Influent Danenone", "short_name": "Foundstore", "start_url": "/", "display": "standalone", "background_color": "#07131a", "theme_color": "#39e6a0", "prefer_related_applications": False, "icons": [{"src": "/static/pwa/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"}, {"src": "/static/pwa/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}], "splash_screens": [{"src": "/static/pwa/splash-light.png", "sizes": "1125x2436", "type": "image/png", "media": "(prefers-color-scheme: light)"}, {"src": "/static/pwa/splash-dark.png", "sizes": "1125x2436", "type": "image/png", "media": "(prefers-color-scheme: dark)"}]}),
+            json.dumps({"name": "Foundstore for Influent Danenone", "short_name": "Foundstore", "start_url": "/", "display": "standalone", "background_color": "#07131a", "theme_color": "#39e6a0", "prefer_related_applications": False, "icons": [{"src": "/static/pwa/foundstore-favicon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"}, {"src": "/static/pwa/foundstore-favicon.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}], "splash_screens": [{"src": "/static/pwa/splash-light.png", "sizes": "1125x2436", "type": "image/png", "media": "(prefers-color-scheme: light)"}, {"src": "/static/pwa/splash-dark.png", "sizes": "1125x2436", "type": "image/png", "media": "(prefers-color-scheme: dark)"}]}),
             content_type="application/manifest+json",
             headers={"Cache-Control": "public, max-age=3600"},
         )
@@ -2447,6 +2447,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.get("/favicon.ico")
     def favicon() -> Response:
+        favicon_path = Path(app.static_folder or "static") / "pwa" / "foundstore-favicon.png"
+        if favicon_path.is_file():
+            return send_file(favicon_path, mimetype="image/png", max_age=86400)
         icon = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='#07131a'/><path d='M16 20 32 11l16 9v20L32 53 16 40Z' fill='#39e6a0'/><path d='m32 11 16 9-16 10-16-10Z' fill='#e8fff4'/></svg>"
         return Response(icon, content_type="image/svg+xml", headers={"Cache-Control": "public, max-age=86400"})
 

@@ -131,3 +131,154 @@ body.foundstore-public-catalog .foundstore-notification-panel p{margin:10px 0 0;
 body.foundstore-public-catalog .foundstore-notification-item{padding:10px 0;border-bottom:1px solid var(--fs-flat-line);font-size:12px;line-height:1.4}
 body.foundstore-public-catalog .foundstore-notification-item:last-child{border-bottom:0}
 @media(max-width:560px){body.foundstore-public-catalog .foundstore-notification-panel{position:fixed;right:12px;top:72px}body.foundstore-public-catalog .topline-actions{width:100%}body.foundstore-public-catalog .foundstore-notification-button{margin-left:auto}}
+
+/* Compact control system: icons carry the visual action, labels remain available to assistive technology. */
+.fs-icon-label{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+body.foundstore-public-developer .profile-nav{min-height:44px;align-items:center}
+body.foundstore-public-developer .profile-nav-actions{display:flex;align-items:center;gap:6px;flex-wrap:nowrap}
+body.foundstore-public-developer .profile-nav-link,
+body.foundstore-public-developer .profile-follow,
+body.foundstore-public-developer .foundstore-share-button,
+body.foundstore-public-package .back,
+body.foundstore-public-package .foundstore-share-button{position:relative;width:44px!important;min-width:44px!important;height:44px!important;min-height:44px!important;padding:0!important;flex:0 0 44px;display:inline-grid;place-items:center;gap:0}
+body.foundstore-public-developer .profile-nav-link svg,
+body.foundstore-public-developer .profile-follow svg,
+body.foundstore-public-package .back svg{width:20px;height:20px}
+body.foundstore-public-developer .foundstore-share-button svg,
+body.foundstore-public-package .foundstore-share-button svg{width:20px;height:20px}
+body.foundstore-public-developer .profile-hero-actions:has(#profileFollow[hidden]){display:none}
+body.foundstore-public-developer .profile-hero-actions{justify-content:flex-start}
+body.foundstore-public-package{background:var(--fs-flat-surface)!important;color:var(--fs-flat-ink)!important}
+body.foundstore-public-package .bar{height:56px;padding:6px 12px;background:var(--fs-flat-surface)!important;border-bottom:1px solid var(--fs-flat-line)!important;box-shadow:none!important;backdrop-filter:none!important}
+body.foundstore-public-package .foundstore-brand-wrap{min-width:0;flex:1}
+body.foundstore-public-package .foundstore-flat-toolbar{flex:0 0 auto;gap:6px;flex-wrap:nowrap}
+body.foundstore-public-package .detail-body{color:var(--fs-flat-ink)}
+body.foundstore-public-package .desc,
+body.foundstore-public-package .developer-line,
+body.foundstore-public-package .facts{color:var(--fs-flat-muted)!important}
+body.foundstore-public-package .facts strong,
+body.foundstore-public-package .readme h2,
+body.foundstore-public-package .install h2,
+body.foundstore-public-package .security h2{color:var(--fs-flat-ink)!important}
+body.foundstore-public-package .install,
+body.foundstore-public-package .readme,
+body.foundstore-public-package .security{border-color:var(--fs-flat-line)!important;background:var(--fs-flat-surface-2)!important;box-shadow:var(--fs-flat-shadow)!important}
+body.foundstore-public-package .install p,
+body.foundstore-public-package .link-help,
+body.foundstore-public-package .security p,
+body.foundstore-public-package .readme pre{color:var(--fs-flat-muted)!important}
+body.foundstore-public-package select{border-color:var(--fs-flat-line)!important;background:var(--fs-flat-surface)!important;color:var(--fs-flat-ink)!important;border-radius:var(--fs-flat-radius)!important}
+body.foundstore-public-catalog .topline> .eyebrow{color:var(--fs-flat-muted)!important}
+body.foundstore-public-catalog .profile-quick-link{position:relative;width:44px;min-width:44px;height:44px;min-height:44px;padding:0;display:inline-grid;place-items:center;gap:0}
+body.foundstore-public-catalog .profile-quick-link span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+body.foundstore-public-catalog .profile-quick-link svg{width:20px;height:20px}
+body.foundstore-public-catalog .foundstore-notification-button{width:44px;height:44px}
+body.foundstore-public-catalog .foundstore-account{min-height:44px}
+body.foundstore-public-catalog .foundstore-account-trigger{width:44px;min-width:44px;height:44px;min-height:44px;padding:0;justify-content:center}
+body.foundstore-public-catalog .foundstore-account-chevron{display:none}
+@media(max-width:680px){
+  body.foundstore-public-developer .profile-shell{width:calc(100% - 20px);padding:10px 0 48px}
+  body.foundstore-public-developer .profile-nav{gap:8px}
+  body.foundstore-public-developer .profile-nav-actions{margin-left:auto}
+  body.foundstore-public-developer .profile-hero{margin-top:22px;padding:16px;gap:14px}
+  body.foundstore-public-developer .profile-hero-actions{margin-top:0}
+  body.foundstore-public-developer .profile-stats{gap:8px;margin-bottom:14px}
+  body.foundstore-public-developer .profile-stat{padding:12px}
+  body.foundstore-public-catalog .content{padding:14px 12px 52px!important}
+  body.foundstore-public-catalog .topline{margin-top:10px;align-items:center;justify-content:flex-end}
+  body.foundstore-public-catalog .topline>.eyebrow{display:none}
+  body.foundstore-public-catalog .topline-actions{width:auto;gap:6px;flex-wrap:nowrap}
+  body.foundstore-public-package .foundstore-brand-word{font-size:18px}
+}
+@media(max-width:390px){
+  body.foundstore-public-developer .profile-nav-link,
+  body.foundstore-public-developer .profile-follow,
+  body.foundstore-public-developer .foundstore-share-button,
+  body.foundstore-public-package .back,
+  body.foundstore-public-package .foundstore-share-button{width:42px!important;min-width:42px!important;height:42px!important;min-height:42px!important;flex-basis:42px}
+  body.foundstore-public-package .bar{padding-inline:9px}
+  body.foundstore-public-package .foundstore-brand-icon{width:32px!important;height:32px!important}
+  body.foundstore-public-package .foundstore-brand-word{font-size:16px}
+}
+
+/* Shared compact chrome across account and catalog. */
+body:not(.foundstore-public-catalog):not(.foundstore-public-landing) .top-actions{display:flex;align-items:center;gap:6px;flex-wrap:nowrap}
+body:not(.foundstore-public-catalog):not(.foundstore-public-landing) .top-actions .back{position:relative;width:44px;min-width:44px;height:44px;min-height:44px;padding:0;display:inline-grid;place-items:center;gap:0}
+body:not(.foundstore-public-catalog):not(.foundstore-public-landing) .top-actions .back svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+body.foundstore-public-catalog .profile-quick-link{width:44px!important;min-width:44px!important;height:44px!important;min-height:44px!important;padding:0!important;display:inline-grid!important;place-items:center!important;gap:0!important}
+body.foundstore-public-catalog .profile-quick-link span{position:absolute!important;width:1px!important;height:1px!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important}
+body.foundstore-public-catalog .profile-quick-link svg{width:20px;height:20px}
+@media(max-width:680px){
+  body:not(.foundstore-public-catalog):not(.foundstore-public-landing) .shell{width:calc(100% - 20px);padding-top:10px}
+  body:not(.foundstore-public-catalog):not(.foundstore-public-landing) .top{gap:8px;min-height:44px}
+  body:not(.foundstore-public-catalog):not(.foundstore-public-landing) .top-actions{margin-left:auto}
+  body:not(.foundstore-public-catalog):not(.foundstore-public-landing) .hero{margin:22px 0 14px}
+  body:not(.foundstore-public-catalog):not(.foundstore-public-landing) .hero .sub{font-size:15px;line-height:1.5}
+  body:not(.foundstore-public-catalog):not(.foundstore-public-landing) .nav-card{border-radius:var(--fs-flat-radius)!important;box-shadow:var(--fs-flat-shadow)!important}
+}
+
+/* Brand control: the language label is accessible but not a second visible toolbar item. */
+.visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.foundstore-brand-wrap{display:flex;align-items:center;gap:8px;min-width:0}
+.foundstore-language-label{display:inline-flex;align-items:center;min-width:0}
+.foundstore-language{width:112px;min-width:0;min-height:40px;padding:8px 28px 8px 10px;border:1px solid var(--fs-flat-line)!important;border-radius:var(--fs-flat-radius)!important;background:var(--fs-flat-surface)!important;color:var(--fs-flat-ink)!important;font-size:12px;line-height:1.2}
+@media(max-width:680px){.foundstore-language{width:104px;max-width:104px;min-height:40px;font-size:11px}.foundstore-brand-wrap{gap:6px}}
+@media(max-width:390px){.foundstore-language{width:96px;max-width:96px;font-size:10px}.foundstore-brand-word{font-size:16px!important}}
+
+/* Final mobile geometry overrides must win over legacy media rules. */
+@media(max-width:680px){
+  body.foundstore-public-catalog .topline{flex-direction:row!important;align-items:center!important}
+  body.foundstore-public-catalog .topline-actions{width:auto!important;height:44px;display:flex!important;align-items:center!important;flex-wrap:nowrap!important}
+  body.foundstore-public-catalog .account{height:44px;min-height:44px}
+  body.foundstore-public-developer .profile-nav{align-items:center!important}
+  body.foundstore-public-developer .profile-nav-actions{width:auto!important;height:44px;display:flex!important;align-items:center!important;flex-wrap:nowrap!important}
+}
+
+@media(max-width:680px){
+  body.foundstore-public-developer .foundstore-brand-word{display:none}
+  body.foundstore-public-developer .foundstore-brand-wrap{flex:0 0 auto}
+}
+
+/* Brand + language are one layout unit, never an accidental inline row. */
+.foundstore-brand-wrap{display:grid!important;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;width:100%;min-width:0}
+.foundstore-brand{min-width:0;max-width:100%;overflow:hidden}
+.foundstore-brand-word{overflow:hidden;text-overflow:ellipsis}
+.foundstore-language-label{justify-self:end;min-width:0;max-width:100%}
+.foundstore-language{display:block;width:112px;max-width:100%;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.foundstore-public-catalog .sidebar .foundstore-brand-wrap{grid-template-columns:minmax(0,1fr) auto}
+body.foundstore-public-catalog .sidebar .foundstore-brand-word{font-size:18px}
+body.foundstore-public-landing .foundstore-brand-wrap{width:auto;grid-template-columns:auto auto}
+body.foundstore-public-package .foundstore-brand-wrap,
+body.foundstore-public-developer .foundstore-brand-wrap{width:auto;grid-template-columns:auto auto}
+@media(max-width:680px){
+  .foundstore-language{width:104px;max-width:104px}
+  body.foundstore-public-catalog .sidebar .foundstore-brand-wrap{width:100%}
+  body.foundstore-public-landing .foundstore-brand-wrap{grid-template-columns:auto auto;max-width:100%}
+  body.foundstore-public-package .foundstore-brand-wrap,
+  body.foundstore-public-developer .foundstore-brand-wrap{grid-template-columns:auto auto;max-width:100%}
+}
+@media(max-width:390px){
+  .foundstore-language{width:96px;max-width:96px}
+  body.foundstore-public-catalog .sidebar .foundstore-brand-word{font-size:16px}
+}
+
+/* Global overflow guard and native language control. */
+html,body{max-width:100%;overflow-x:hidden}
+main,.shell,.page,.profile-shell,.detail,.profile-nav,.bar,.landing-nav,.foundstore-brand-wrap,.foundstore-brand,.foundstore-flat-toolbar,.top,.nav{min-width:0;max-width:100%}
+img,svg,video,canvas{max-width:100%}
+pre,code{max-width:100%;overflow-wrap:anywhere}
+.foundstore-language-label{display:block;width:clamp(92px,24vw,132px);min-width:0}
+.foundstore-language{appearance:none;-webkit-appearance:none;width:100%;min-height:40px;padding:8px 30px 8px 10px;border:1px solid var(--fs-flat-line)!important;border-radius:var(--fs-flat-radius)!important;background-color:var(--fs-flat-surface)!important;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%230b8b57' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 10 5 5 5-5'/%3E%3C/svg%3E");background-position:right 9px center;background-repeat:no-repeat;background-size:16px 16px;color:var(--fs-flat-ink)!important;font-size:12px;font-weight:600;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.foundstore-language:focus-visible{border-color:var(--fs-flat-green)!important;box-shadow:inset 0 -2px 0 var(--fs-flat-green)!important}
+body.foundstore-public-catalog .sidebar .foundstore-brand-wrap{width:100%;grid-template-columns:minmax(0,1fr) minmax(92px,112px)}
+body.foundstore-public-catalog .sidebar .foundstore-language-label{width:100%}
+@media(max-width:680px){
+  .foundstore-language-label{width:104px;max-width:104px}
+  body.foundstore-public-landing .foundstore-language-label,
+  body.foundstore-public-package .foundstore-language-label,
+  body.foundstore-public-developer .foundstore-language-label{width:96px;max-width:96px}
+}
+@media(max-width:390px){
+  .foundstore-language-label{width:92px;max-width:92px}
+  body.foundstore-public-catalog .sidebar .foundstore-brand-wrap{grid-template-columns:minmax(0,1fr) 92px}
+}
