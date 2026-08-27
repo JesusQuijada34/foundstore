@@ -2216,7 +2216,11 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return blocked
         if not valid_github_login(github_login):
             return jsonify({"error": "Desarrollador no encontrado"}), 404
-        return render_template("developer.html", github_login=github_login, visitor_country=request.headers.get("CF-IPCountry", ""))
+        response = Response(render_template("developer.html", github_login=github_login, visitor_country=request.headers.get("CF-IPCountry", "")), content_type="text/html; charset=utf-8")
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Vary"] = "Cookie"
+        return response
 
     @app.route("/link/<link_id>", methods=["GET", "POST"])
     def license_link_page(link_id: str) -> Response | str:
@@ -2367,7 +2371,10 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         followers = store.developer_follower_count(github_login)
         following_count = store.developer_following_count(github_login)
         visibility = {field: own_profile or privacy[field] == "public" for field in DEFAULT_PROFILE_PRIVACY}
-        return jsonify({"profile": public_profile, "catalog": public_catalog, "catalogAvailable": bool(public_catalog and public_catalog.get("packages")), "visibility": visibility, "followerCount": followers if visibility["followers"] else None, "followingCount": following_count if visibility["following"] else None, "following": bool(viewer and store.is_following_developer(str(viewer), github_login)), "isOwnProfile": own_profile})
+        response = jsonify({"profile": public_profile, "catalog": public_catalog, "catalogAvailable": bool(public_catalog and public_catalog.get("packages")), "visibility": visibility, "followerCount": followers if visibility["followers"] else None, "followingCount": following_count if visibility["following"] else None, "following": bool(viewer and store.is_following_developer(str(viewer), github_login)), "isOwnProfile": own_profile})
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers["Vary"] = "Cookie"
+        return response
 
     @app.route("/api/v1/me/starred/<author>/<slug>", methods=["GET", "PUT", "DELETE"])
     def starred_package(author: str, slug: str) -> Response:
