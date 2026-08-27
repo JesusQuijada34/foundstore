@@ -1912,7 +1912,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         SECRET_KEY=os.environ.get("NULL_HV", ""),
         GITHUB_CLIENT_ID=os.environ.get("GITHUB_OAUTH_CLIENT_ID", ""),
         GITHUB_CLIENT_SECRET=os.environ.get("GITHUB_OAUTH_CLIENT_SECRET", ""),
-        PUBLIC_ORIGIN=os.environ.get("PUBLIC_ORIGIN", "https://hifoundstore.onrender.com").rstrip("/"),
+        GITHUB_OAUTH_REDIRECT_URI=os.environ.get("GITHUB_OAUTH_REDIRECT_URI", "").rstrip("/"),
+        PUBLIC_ORIGIN=os.environ.get("PUBLIC_ORIGIN", "https://myfoundstore.onrender.com").rstrip("/"),
         SESSION_COOKIE_SECURE=True,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
@@ -1942,6 +1943,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             "current_locale": locale,
             "locale_preference": preference,
             "available_locales": SUPPORTED_LOCALES,
+            "public_origin": public_origin(),
             "locale_catalog": locale_catalog(),
             "t": lambda key, **values: translate(key, locale, **values),
         }
@@ -1967,9 +1969,17 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     def public_origin() -> str:
         host = request.host.split(":", 1)[0].lower()
-        if host in {"hifoundstore.onrender.com", "imfoundstore.onrender.com"}:
-            return "https://hifoundstore.onrender.com"
-        return str(app.config.get("PUBLIC_ORIGIN") or "https://hifoundstore.onrender.com").rstrip("/")
+        canonical = "https://myfoundstore.onrender.com"
+        if host == "myfoundstore.onrender.com" or host in {"hifoundstore.onrender.com", "imfoundstore.onrender.com"}:
+            return canonical
+        configured = str(app.config.get("PUBLIC_ORIGIN") or canonical).rstrip("/")
+        if configured in {"https://hifoundstore.onrender.com", "https://imfoundstore.onrender.com"}:
+            return canonical
+        return configured
+
+    def oauth_callback_url() -> str:
+        configured = str(app.config.get("GITHUB_OAUTH_REDIRECT_URI") or "").rstrip("/")
+        return configured or f"{public_origin()}/auth/github/callback"
 
     def safe_next_path(value: str) -> str:
         return value if value.startswith("/") and not value.startswith("//") else ""
@@ -2061,7 +2071,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             session["github_oauth_link"] = link_id
         if next_path:
             session["github_oauth_next"] = next_path
-        callback = f"{public_origin()}/auth/github/callback"
+        callback = oauth_callback_url()
         query = urlencode({"client_id": app.config["GITHUB_CLIENT_ID"], "redirect_uri": callback, "state": state, "scope": "read:user"})
         return redirect(f"https://github.com/login/oauth/authorize?{query}")
 
@@ -2074,7 +2084,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         state = secrets.token_urlsafe(24)
         session["github_star_oauth_state"] = state
         session["github_star_target"] = {"author": author, "slug": slug}
-        callback = f"{public_origin()}/auth/github/callback"
+        callback = oauth_callback_url()
         query = urlencode({"client_id": app.config["GITHUB_CLIENT_ID"], "redirect_uri": callback, "state": state, "scope": "read:user public_repo"})
         return redirect(f"https://github.com/login/oauth/authorize?{query}")
 
@@ -2520,7 +2530,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             "account": login,
             "serialEndpoint": "/api/v1/me/access-serials",
             "licenseLinkEndpoint": "/api/v1/license-links",
-            "bootstrapGuide": f"{app.config['PUBLIC_ORIGIN'].rstrip('/')}/api/v1/agent/bootstrap-guide",
+            "bootstrapGuide": f"{public_origin()}/api/v1/agent/bootstrap-guide",
             "supportedPlatforms": ["Danenone", "Knosthalij"],
             "localApprovalRequired": True,
         })
@@ -2577,7 +2587,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         platform = canonical_platform(str(request.args.get("platform", "Danenone")))
         if platform not in {"Danenone", "Knosthalij"}:
             return jsonify({"error": "La plataforma debe ser Danenone o Knosthalij"}), 400
-        guide_url = f"{app.config['PUBLIC_ORIGIN'].rstrip('/')}/api/v1/agent/bootstrap-guide?platform={quote(platform)}"
+        guide_url = f"{public_origin()}/api/v1/agent/bootstrap-guide?platform={quote(platform)}"
         return jsonify({
             "platform": platform,
             "mode": "web_first",
@@ -2644,7 +2654,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         link = app.extensions["device_store"].begin_license_link(license_code, display_name, platform)
         if not link:
             return jsonify({"error": "La licencia no es válida, fue revocada o ya está vinculada"}), 401
-        verification_uri = f"{app.config['PUBLIC_ORIGIN'].rstrip('/')}{url_for('license_link_page', link_id=link['linkId'])}"
+        verification_uri = f"{public_origin()}{url_for('license_link_page', link_id=link['linkId'])}"
         return jsonify({**link, "verificationUri": verification_uri}), 201
 
     @app.get("/api/v1/license-links/<link_id>")

@@ -117,7 +117,7 @@ class StoreWindow(QMainWindow):
         refresh.clicked.connect(self.refresh_catalog)
         toolbar.addWidget(refresh)
         website = QPushButton("Abrir tienda web")
-        website.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://imfoundstore.onrender.com")))
+        website.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://myfoundstore.onrender.com")))
         toolbar.addWidget(website)
         cloud = QPushButton("Cloud Devices")
         cloud.clicked.connect(self.show_cloud_devices)

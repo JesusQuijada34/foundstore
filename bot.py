@@ -37,7 +37,7 @@ log = logging.getLogger("foundstore-bot")
 active_chats: dict = {}
 
 # URL base de la web (para callbacks al SSE y para mostrar en mensajes)
-WEB_BASE_URL = os.environ.get("WEB_BASE_URL", "https://imfoundstore.onrender.com").rstrip("/")
+WEB_BASE_URL = os.environ.get("WEB_BASE_URL", "https://myfoundstore.onrender.com").rstrip("/")
 
 # =====================================================================
 # MURO DE AUTENTICACION
