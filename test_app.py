@@ -64,7 +64,7 @@ class FlaskRenderAppTests(unittest.TestCase):
             if url.endswith("/followers"):
                 return ApiResponse([{"login": "follower-one", "avatar_url": "https://github.example/follower.png", "html_url": "https://github.com/follower-one"}])
             if url.endswith("/following"):
-                return ApiResponse([{"login": "following-one", "avatar_url": "https://github.example/following.png", "html_url": "https://github.com/following-one"}])
+                return ApiResponse([{"login": f"following-{index}", "avatar_url": f"https://github.example/following-{index}.png", "html_url": f"https://github.com/following-{index}"} for index in range(12)])
             raise AssertionError(url)
 
         with patch("app.GITHUB_PROFILE_CACHE", {}), patch("app.requests.get", side_effect=fake_get):
@@ -74,7 +74,8 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertEqual(profile["githubFollowingCount"], 2)
         self.assertEqual(profile["githubPublicReposCount"], 8)
         self.assertEqual(profile["githubFollowers"][0]["githubLogin"], "follower-one")
-        self.assertEqual(profile["githubFollowing"][0]["githubLogin"], "following-one")
+        self.assertEqual(profile["githubFollowing"][0]["githubLogin"], "following-0")
+        self.assertEqual(len(profile["githubFollowing"]), 10)
 
     def test_social_preview_crawler_can_read_public_metadata_without_browser_session(self) -> None:
         response = self.client.get("/", headers={"User-Agent": "TelegramBot (like TwitterBot)"})
@@ -738,24 +739,61 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertIsNone(public.json["followerCount"])
         self.assertIsNone(public.json["followingCount"])
 
-    def test_authenticated_user_can_follow_and_unfollow_a_developer(self) -> None:
+    def test_authenticated_user_can_follow_and_unfollow_a_developer_on_github(self) -> None:
         with self.client.session_transaction() as browser_session:
             browser_session["github_login"] = "reader"
+            browser_session["github_follow_grant_id"] = "follow-grant"
+        self.app.extensions["github_follow_grants"]["follow-grant"] = {
+            "accessToken": "follow-token",
+            "login": "reader",
+            "confirmation": "follow-confirm",
+            "expiresAt": 4_102_444_800,
+        }
         identity = {"githubLogin": "ExternalDev", "githubName": "External Dev", "avatarUrl": "https://github.com/ExternalDev.png?size=176", "githubUrl": "https://github.com/ExternalDev"}
         snapshot = {"packages": [], "fetchedAt": "2026-01-01T00:00:00+00:00", "source": "GitHub API"}
-        with patch("app.github_public_profile", return_value=identity), patch("app.catalog_snapshot", return_value=snapshot):
+        following_state = {"value": False}
+
+        class GitHubResponse:
+            def __init__(self, status_code: int, payload: object = None) -> None:
+                self.status_code = status_code
+                self.ok = 200 <= status_code < 300
+                self._payload = payload
+
+            def json(self) -> object:
+                return self._payload
+
+        def fake_get(url: str, **_: object) -> GitHubResponse:
+            if url.endswith("/user/following"):
+                return GitHubResponse(200, [{"login": "following-one", "avatar_url": "https://github.example/following.png", "html_url": "https://github.com/following-one"}])
+            if url.endswith("/user/following/ExternalDev"):
+                return GitHubResponse(204 if following_state["value"] else 404)
+            raise AssertionError(url)
+
+        def fake_put(url: str, **_: object) -> GitHubResponse:
+            self.assertTrue(url.endswith("/user/following/ExternalDev"))
+            following_state["value"] = True
+            return GitHubResponse(204)
+
+        def fake_delete(url: str, **_: object) -> GitHubResponse:
+            self.assertTrue(url.endswith("/user/following/ExternalDev"))
+            following_state["value"] = False
+            return GitHubResponse(204)
+
+        with patch("app.github_public_profile", return_value=identity), patch("app.catalog_snapshot", return_value=snapshot), patch("app.requests.get", side_effect=fake_get), patch("app.requests.put", side_effect=fake_put), patch("app.requests.delete", side_effect=fake_delete):
             before = self.client.get("/api/v1/developers/ExternalDev")
-            followed = self.client.post("/api/v1/me/following/ExternalDev")
+            missing_confirmation = self.client.post("/api/v1/me/following/ExternalDev")
+            followed = self.client.post("/api/v1/me/following/ExternalDev", headers={"X-Foundstore-Follow-Confirm": "follow-confirm"})
             listed = self.client.get("/api/v1/me/following")
             after = self.client.get("/api/v1/developers/ExternalDev")
-            removed = self.client.delete("/api/v1/me/following/ExternalDev")
+            removed = self.client.delete("/api/v1/me/following/ExternalDev", headers={"X-Foundstore-Follow-Confirm": "follow-confirm"})
             page = self.client.get("/developer/ExternalDev")
         self.assertFalse(before.json["following"])
+        self.assertEqual(missing_confirmation.status_code, 428)
         self.assertEqual(followed.status_code, 200)
         self.assertTrue(followed.json["following"])
-        self.assertEqual(listed.json["developers"], ["ExternalDev"])
+        self.assertEqual(listed.json["developers"], ["following-one"])
         self.assertTrue(after.json["following"])
-        self.assertEqual(after.json["followerCount"], 1)
+        self.assertEqual(removed.status_code, 200)
         self.assertFalse(removed.json["following"])
         self.assertIn('id="profileAvatarFallback"', page.get_data(as_text=True))
         self.assertIn('id="profileFollow"', page.get_data(as_text=True))
@@ -764,6 +802,28 @@ class FlaskRenderAppTests(unittest.TestCase):
         self.assertIn("foundstore-profile.css", page.get_data(as_text=True))
         self.assertIn("profile-stats", page.get_data(as_text=True))
         self.assertIn("profile-package-list", page.get_data(as_text=True))
+
+    def test_follow_requires_separate_github_consent_scope(self) -> None:
+        oauth_app = create_app({"TESTING": True, "DATA_DIR": self.tempdir.name, "MONGODB_URI": None, "SECRET_KEY": "follow-session", "GITHUB_CLIENT_ID": "client-id", "GITHUB_CLIENT_SECRET": "client-secret", "GITHUB_OAUTH_REDIRECT_URI": "https://example.test/auth/github/callback"})
+        client = oauth_app.test_client()
+        with client.session_transaction() as browser_session:
+            browser_session["github_login"] = "reader"
+        required = client.post("/api/v1/me/following/ExternalDev")
+        self.assertEqual(required.status_code, 403)
+        self.assertIn("/auth/github/follow/consent", required.json["consentUrl"])
+        consent = client.get(required.json["consentUrl"])
+        self.assertEqual(consent.status_code, 302)
+        self.assertIn("scope=read%3Auser+user%3Afollow", consent.headers["Location"])
+
+    def test_catalog_omits_web_notification_controls(self) -> None:
+        with self.client.session_transaction() as browser_session:
+            browser_session["github_login"] = "reader"
+        page = self.client.get("/")
+        html = page.get_data(as_text=True)
+        self.assertEqual(page.status_code, 200)
+        self.assertNotIn('id="notificationButton"', html)
+        self.assertNotIn('id="notificationPanel"', html)
+        self.assertNotIn('id="enableAlerts"', html)
 
     def test_catalog_install_rejects_platform_incompatible_device(self) -> None:
         with self.client.session_transaction() as browser_session:

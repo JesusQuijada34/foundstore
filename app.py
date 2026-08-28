@@ -1713,7 +1713,7 @@ def github_public_profile(github_login: str) -> dict[str, Any]:
     cached = GITHUB_PROFILE_CACHE.get(cache_key)
     if cached and cached[0] > time.time():
         return dict(cached[1])
-    headers = {"Accept": "application/vnd.github+json", "User-Agent": "Foundstore-Flask-Render"}
+    headers = {"Accept": "application/vnd.github+json", "User-Agent": "Foundstore-Flask-Render", "X-GitHub-Api-Version": "2022-11-28"}
     try:
         response = requests.get(f"https://api.github.com/users/{quote(github_login)}", headers=headers, timeout=6)
         if not response.ok:
@@ -1736,7 +1736,7 @@ def github_public_profile(github_login: str) -> dict[str, Any]:
         }
         for endpoint, key in (("followers", "githubFollowers"), ("following", "githubFollowing")):
             try:
-                people_response = requests.get(f"https://api.github.com/users/{quote(resolved_login)}/{endpoint}", params={"per_page": 12}, headers=headers, timeout=6)
+                people_response = requests.get(f"https://api.github.com/users/{quote(resolved_login)}/{endpoint}", params={"per_page": 10}, headers=headers, timeout=6)
                 people = people_response.json() if people_response.ok else []
                 profile[key] = [
                     {
@@ -1746,7 +1746,7 @@ def github_public_profile(github_login: str) -> dict[str, Any]:
                         "githubUrl": str(person.get("html_url") or ""),
                     }
                     for person in people if isinstance(person, dict) and valid_github_login(str(person.get("login") or ""))
-                ]
+                ][:10]
             except (requests.RequestException, ValueError, TypeError):
                 profile[key] = []
         GITHUB_PROFILE_CACHE[cache_key] = (time.time() + 300, profile)
@@ -2092,6 +2092,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         app.config["COMMAND_SIGNING_KEY"] = app.config["SECRET_KEY"]
     app.extensions["device_store"] = build_store(app.config)
     app.extensions["github_star_grants"] = {}
+    app.extensions["github_follow_grants"] = {}
 
     @app.before_request
     def load_locale() -> None:
@@ -2189,6 +2190,54 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             session.pop("github_star_grant_id", None)
             return None
         return grant
+
+    def github_follow_grant() -> dict[str, Any] | None:
+        grant_id = str(session.get("github_follow_grant_id") or "")
+        grant = app.extensions["github_follow_grants"].get(grant_id)
+        if not grant or grant.get("expiresAt", 0) <= time.time() or grant.get("login", "").lower() != str(github_login() or "").lower():
+            if grant_id:
+                app.extensions["github_follow_grants"].pop(grant_id, None)
+            session.pop("github_follow_grant_id", None)
+            return None
+        return grant
+
+    def github_following_people(grant: dict[str, Any]) -> list[dict[str, str]] | None:
+        headers = {"Accept": "application/vnd.github+json", "Authorization": f"Bearer {grant['accessToken']}", "X-GitHub-Api-Version": "2022-11-28"}
+        try:
+            response = requests.get("https://api.github.com/user/following", params={"per_page": 10}, headers=headers, timeout=10)
+            if not response.ok:
+                return None
+            payload = response.json()
+        except (requests.RequestException, ValueError, TypeError):
+            return None
+        if not isinstance(payload, list):
+            return []
+        return [
+            {
+                "githubLogin": str(person.get("login") or ""),
+                "githubName": str(person.get("login") or ""),
+                "avatarUrl": str(person.get("avatar_url") or ""),
+                "githubUrl": str(person.get("html_url") or ""),
+            }
+            for person in payload
+            if isinstance(person, dict) and valid_github_login(str(person.get("login") or ""))
+        ][:10]
+
+    def github_follow_consent_url(developer_login: str) -> str:
+        session["github_follow_target"] = developer_login
+        return url_for("github_follow_consent")
+
+    def github_is_following(grant: dict[str, Any], developer_login: str) -> bool | None:
+        headers = {"Accept": "application/vnd.github+json", "Authorization": f"Bearer {grant['accessToken']}", "X-GitHub-Api-Version": "2022-11-28"}
+        try:
+            response = requests.get(f"https://api.github.com/user/following/{quote(developer_login)}", headers=headers, timeout=10)
+        except requests.RequestException:
+            return None
+        if response.status_code == 204:
+            return True
+        if response.status_code == 404:
+            return False
+        return None
 
     @app.get("/")
     def index() -> Response | str:
@@ -2305,6 +2354,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         state = secrets.token_urlsafe(24)
         session.pop("github_star_oauth_state", None)
         session.pop("github_star_target", None)
+        session.pop("github_follow_oauth_state", None)
+        session.pop("github_follow_target", None)
         session["github_oauth_state"] = state
         link_id = request.args.get("link", "")
         next_path = safe_next_path(str(request.args.get("next", "")))
@@ -2329,6 +2380,19 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         query = urlencode({"client_id": app.config["GITHUB_CLIENT_ID"], "redirect_uri": callback, "state": state, "scope": "read:user public_repo"})
         return redirect(f"https://github.com/login/oauth/authorize?{query}")
 
+    @app.get("/auth/github/follow/consent")
+    def github_follow_consent() -> Response:
+        if not oauth_ready():
+            return jsonify({"error": "GitHub OAuth no está configurado"}), 503
+        developer_login = str(session.get("github_follow_target") or "")
+        if not valid_github_login(developer_login) or not github_login() or developer_login.lower() == str(github_login()).lower():
+            return jsonify({"error": "El desarrollador elegido no es válido"}), 400
+        state = secrets.token_urlsafe(24)
+        session["github_follow_oauth_state"] = state
+        callback = oauth_callback_url()
+        query = urlencode({"client_id": app.config["GITHUB_CLIENT_ID"], "redirect_uri": callback, "state": state, "scope": "read:user user:follow"})
+        return redirect(f"https://github.com/login/oauth/authorize?{query}")
+
     @app.get("/login")
     def legacy_login() -> Response | str:
         if github_login():
@@ -2340,6 +2404,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         grant_id = str(session.get("github_star_grant_id") or "")
         if grant_id:
             app.extensions["github_star_grants"].pop(grant_id, None)
+        follow_grant_id = str(session.get("github_follow_grant_id") or "")
+        if follow_grant_id:
+            app.extensions["github_follow_grants"].pop(follow_grant_id, None)
         session.clear()
         response = redirect(url_for("index"))
         response.headers["Cache-Control"] = "no-store"
@@ -2410,17 +2477,26 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         incoming_state = str(request.args.get("state", ""))
         star_target = session.get("github_star_target")
         star_state = str(session.get("github_star_oauth_state", ""))
+        follow_target = session.get("github_follow_target")
+        follow_state = str(session.get("github_follow_oauth_state", ""))
         regular_state = str(session.get("github_oauth_state", ""))
         is_star_flow = bool(star_target and star_state and secrets.compare_digest(star_state, incoming_state))
+        is_follow_flow = bool(follow_target and follow_state and secrets.compare_digest(follow_state, incoming_state))
         is_regular_flow = bool(regular_state and secrets.compare_digest(regular_state, incoming_state))
-        if not oauth_ready() or not (is_star_flow or is_regular_flow):
+        if not oauth_ready() or not (is_star_flow or is_follow_flow or is_regular_flow):
             return jsonify({"error": "La confirmación de GitHub no es válida"}), 400
         if is_star_flow:
             star_target = session.pop("github_star_target", None)
             session.pop("github_star_oauth_state", None)
+        elif is_follow_flow:
+            follow_target = session.pop("github_follow_target", None)
+            session.pop("github_follow_oauth_state", None)
         else:
             star_target = None
+            follow_target = None
             session.pop("github_oauth_state", None)
+            session.pop("github_follow_target", None)
+            session.pop("github_follow_oauth_state", None)
         code = request.args.get("code", "")
         try:
             token_response = requests.post("https://github.com/login/oauth/access_token", data={"client_id": app.config["GITHUB_CLIENT_ID"], "client_secret": app.config["GITHUB_CLIENT_SECRET"], "code": code}, headers={"Accept": "application/json"}, timeout=10).json()
@@ -2447,6 +2523,11 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             app.extensions["github_star_grants"][grant_id] = {"accessToken": access_token, "login": login, "confirmation": secrets.token_urlsafe(24), "expiresAt": time.time() + app.permanent_session_lifetime.total_seconds()}
             session["github_star_grant_id"] = grant_id
             return redirect(url_for("package_detail", author=author, slug=slug, starConsent="granted"))
+        if isinstance(follow_target, str) and valid_github_login(follow_target):
+            grant_id = secrets.token_urlsafe(24)
+            app.extensions["github_follow_grants"][grant_id] = {"accessToken": access_token, "login": login, "confirmation": secrets.token_urlsafe(24), "expiresAt": time.time() + app.permanent_session_lifetime.total_seconds()}
+            session["github_follow_grant_id"] = grant_id
+            return redirect(url_for("developer_page", profile_login=follow_target))
         link_id = session.pop("github_oauth_link", "")
         next_path = safe_next_path(str(session.pop("github_oauth_next", "")))
         return redirect(url_for("license_link_page", link_id=link_id) if link_id else next_path or url_for("index"))
@@ -2700,6 +2781,12 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         visibility = {field: own_profile or privacy[field] == "public" for field in DEFAULT_PROFILE_PRIVACY}
         public_profile = dict(profile_data)
         public_profile.pop("privacy", None)
+        if own_profile:
+            grant = github_follow_grant()
+            if grant:
+                authenticated_following = github_following_people(grant)
+                if authenticated_following is not None:
+                    public_profile["githubFollowing"] = authenticated_following
         if not visibility["avatar"]:
             public_profile["avatarUrl"] = ""
         if not visibility["bio"]:
@@ -2714,9 +2801,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         public_catalog = snapshot
         if not visibility["repositories"]:
             public_catalog = {**(snapshot or {}), "packages": []} if snapshot else snapshot
-        followers = store.developer_follower_count(github_login)
-        following_count = store.developer_following_count(github_login)
-        response = jsonify({"profile": public_profile, "catalog": public_catalog, "catalogAvailable": bool(public_catalog and public_catalog.get("packages")), "visibility": visibility, "followerCount": followers if visibility["followers"] else None, "followingCount": following_count if visibility["following"] else None, "following": bool(viewer and store.is_following_developer(str(viewer), github_login)), "isOwnProfile": own_profile})
+        follow_grant = github_follow_grant() if viewer else None
+        github_following = github_is_following(follow_grant, github_login) if follow_grant and not own_profile else None
+        response = jsonify({"profile": public_profile, "catalog": public_catalog, "catalogAvailable": bool(public_catalog and public_catalog.get("packages")), "visibility": visibility, "followerCount": public_profile.get("githubFollowersCount") if visibility["followers"] else None, "followingCount": public_profile.get("githubFollowingCount") if visibility["following"] else None, "following": bool(github_following), "followConfirmation": str(follow_grant.get("confirmation", "") if follow_grant else ""), "isOwnProfile": own_profile})
         response.headers["Cache-Control"] = "no-store, max-age=0"
         response.headers["Vary"] = "Cookie"
         return response
@@ -2758,7 +2845,13 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         login = github_login()
         if not login:
             return jsonify({"error": "Inicia sesión con GitHub para seguir desarrolladores"}), 401
-        return jsonify({"developers": app.extensions["device_store"].list_followed_developers(login)})
+        grant = github_follow_grant()
+        if not grant:
+            return jsonify({"state": "consent_required", "developers": [], "changesGitHub": True})
+        people = github_following_people(grant)
+        if people is None:
+            return jsonify({"error": "GitHub no permitió consultar tus seguidos; vuelve a conceder permiso"}), 502
+        return jsonify({"state": "granted", "developers": [person["githubLogin"] for person in people], "people": people, "changesGitHub": True})
 
     @app.get("/api/v1/me/repositories")
     def my_public_repositories() -> Response:
@@ -2784,16 +2877,35 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             "source": "GitHub public repositories + Packagemaker audit",
         })
 
-    @app.route("/api/v1/me/following/<developer_login>", methods=["POST", "DELETE"])
+    @app.route("/api/v1/me/following/<developer_login>", methods=["GET", "POST", "DELETE"])
     def following_developer(developer_login: str) -> Response:
         login = github_login()
         if not login:
             return jsonify({"error": "Inicia sesión con GitHub para seguir desarrolladores"}), 401
         if not valid_github_login(developer_login) or developer_login.lower() == login.lower():
             return jsonify({"error": "El desarrollador elegido no es válido"}), 400
-        store = app.extensions["device_store"]
-        following = store.follow_developer(login, developer_login) if request.method == "POST" else not store.unfollow_developer(login, developer_login)
-        return jsonify({"developer": developer_login, "following": following, "followerCount": store.developer_follower_count(developer_login)})
+        consent_url = github_follow_consent_url(developer_login)
+        grant = github_follow_grant()
+        if not grant:
+            if request.method == "GET":
+                return jsonify({"state": "consent_required", "developer": developer_login, "following": False, "consentUrl": consent_url, "changesGitHub": True})
+            return jsonify({"error": "Se requiere consentimiento separado de GitHub para seguir desarrolladores", "consentUrl": consent_url, "changesGitHub": True}), 403
+        headers = {"Accept": "application/vnd.github+json", "Authorization": f"Bearer {grant['accessToken']}", "X-GitHub-Api-Version": "2022-11-28"}
+        endpoint = f"https://api.github.com/user/following/{quote(developer_login)}"
+        if request.method == "GET":
+            state = github_is_following(grant, developer_login)
+            if state is None:
+                return jsonify({"error": "GitHub no permitió consultar el seguimiento; vuelve a conceder permiso", "consentUrl": consent_url}), 502
+            return jsonify({"state": "granted", "developer": developer_login, "following": state, "confirmation": grant["confirmation"], "changesGitHub": True})
+        if not secrets.compare_digest(str(request.headers.get("X-Foundstore-Follow-Confirm", "")), str(grant["confirmation"])):
+            return jsonify({"error": "Confirma explícitamente la modificación del seguimiento antes de continuar"}), 428
+        try:
+            response = requests.put(endpoint, headers=headers, timeout=10) if request.method == "POST" else requests.delete(endpoint, headers=headers, timeout=10)
+        except requests.RequestException:
+            return jsonify({"error": "No se pudo actualizar el seguimiento en GitHub"}), 502
+        if response.status_code != 204:
+            return jsonify({"error": "GitHub no aceptó el cambio de seguimiento; vuelve a conceder permiso", "consentUrl": consent_url}), 502
+        return jsonify({"state": "granted", "developer": developer_login, "following": request.method == "POST", "changesGitHub": True})
 
     @app.get("/api/v1/devices")
     def devices() -> Response:
