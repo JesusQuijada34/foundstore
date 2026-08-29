@@ -1,0 +1,138 @@
+/* Foundstore Liquid UI — internal surfaces only */
+:root{
+  --fs-liquid-bg: #eef4f1;
+  --fs-liquid-surface: rgba(255,255,255,.72);
+  --fs-liquid-surface-strong: rgba(255,255,255,.88);
+  --fs-liquid-line: rgba(255,255,255,.78);
+  --fs-liquid-ink: #14251d;
+  --fs-liquid-muted: #607269;
+  --fs-liquid-green: #0b7a4b;
+  --fs-liquid-green-soft: rgba(11,122,75,.12);
+  --fs-liquid-shadow: 0 14px 38px rgba(21,55,39,.12), 0 2px 8px rgba(21,55,39,.08);
+  --fs-liquid-blur: blur(22px) saturate(140%);
+}
+html[data-theme="dark"]{
+  --fs-liquid-bg: #0b1110;
+  --fs-liquid-surface: rgba(20,31,27,.72);
+  --fs-liquid-surface-strong: rgba(22,35,30,.9);
+  --fs-liquid-line: rgba(176,224,201,.19);
+  --fs-liquid-ink: #edf8f1;
+  --fs-liquid-muted: #a9bdb1;
+  --fs-liquid-green: #55d497;
+  --fs-liquid-green-soft: rgba(45,183,116,.17);
+  --fs-liquid-shadow: 0 18px 44px rgba(0,0,0,.28), 0 2px 10px rgba(0,0,0,.18);
+}
+
+/* Keep the brand visible at every breakpoint. */
+.foundstore-brand-wrap{display:flex;align-items:center;gap:12px;min-width:0}
+.foundstore-brand{display:inline-flex!important;align-items:center;gap:9px;min-height:44px;color:var(--fs-liquid-ink)!important;text-decoration:none!important;white-space:nowrap}
+.foundstore-brand-icon{display:grid;place-items:center;flex:0 0 34px;width:34px;height:34px;border:1px solid var(--fs-liquid-line);border-radius:11px;background:var(--fs-liquid-green-soft);overflow:hidden}
+.foundstore-brand-logo{display:block;width:25px;height:25px;object-fit:contain}
+.foundstore-brand-word{display:inline!important;color:var(--fs-liquid-ink);font-size:15px;font-weight:850;letter-spacing:-.02em}
+.foundstore-brand:hover .foundstore-brand-word{color:var(--fs-liquid-green)}
+.foundstore-language-label{display:inline-flex;align-items:center;min-width:0}
+.foundstore-language{min-height:40px;max-width:150px;border:1px solid var(--fs-liquid-line)!important;border-radius:14px!important;background:var(--fs-liquid-surface)!important;color:var(--fs-liquid-ink)!important;box-shadow:var(--fs-liquid-shadow);backdrop-filter:var(--fs-liquid-blur);-webkit-backdrop-filter:var(--fs-liquid-blur)}
+
+/* Shared internal chrome. Landing keeps its own design system. */
+body:not(.foundstore-public-landing) .bar,
+body:not(.foundstore-public-landing) .nav,
+body:not(.foundstore-public-landing) .profile-nav,
+body:not(.foundstore-public-landing) .sidebar{
+  color:var(--fs-liquid-ink)!important;
+  background:var(--fs-liquid-surface)!important;
+  border-color:var(--fs-liquid-line)!important;
+  box-shadow:var(--fs-liquid-shadow)!important;
+  backdrop-filter:var(--fs-liquid-blur)!important;
+  -webkit-backdrop-filter:var(--fs-liquid-blur)!important;
+}
+body:not(.foundstore-public-landing) .bar a,
+body:not(.foundstore-public-landing) .nav a,
+body:not(.foundstore-public-landing) .profile-nav a{color:var(--fs-liquid-ink)}
+body:not(.foundstore-public-landing) .bar a:hover,
+body:not(.foundstore-public-landing) .nav a:hover,
+body:not(.foundstore-public-landing) .profile-nav a:hover{color:var(--fs-liquid-green)!important}
+
+/* Liquid cards: one restrained highlight, no decorative gradients behind logos. */
+body:not(.foundstore-public-landing) .panel,
+body:not(.foundstore-public-landing) .card,
+body:not(.foundstore-public-landing) .profile-hero,
+body:not(.foundstore-public-landing) .profile-section,
+body:not(.foundstore-public-landing) .profile-community-card,
+body:not(.foundstore-public-landing) .profile-person,
+body:not(.foundstore-public-landing) .foundstore-store-card,
+body:not(.foundstore-public-landing) .detail,
+body:not(.foundstore-public-landing) .install,
+body:not(.foundstore-public-landing) .readme,
+body:not(.foundstore-public-landing) .security{
+  background:var(--fs-liquid-surface)!important;
+  border-color:var(--fs-liquid-line)!important;
+  box-shadow:var(--fs-liquid-shadow)!important;
+  backdrop-filter:var(--fs-liquid-blur);
+  -webkit-backdrop-filter:var(--fs-liquid-blur);
+}
+body:not(.foundstore-public-landing) .foundstore-store-card-icon,
+body:not(.foundstore-public-landing) .mark{
+  background:var(--fs-liquid-surface-strong)!important;
+  border-color:var(--fs-liquid-line)!important;
+  box-shadow:0 8px 20px rgba(16,54,36,.12)!important;
+  backdrop-filter:blur(12px) saturate(125%);
+  -webkit-backdrop-filter:blur(12px) saturate(125%);
+}
+
+/* iOS-like line controls: clear states, one primary visual language. */
+body:not(.foundstore-public-landing) button,
+body:not(.foundstore-public-landing) .button,
+body:not(.foundstore-public-landing) .profile-action,
+body:not(.foundstore-public-landing) .profile-follow,
+body:not(.foundstore-public-landing) .pwa-button,
+body:not(.foundstore-public-landing) .foundstore-share-button{
+  min-height:44px;
+  border:1px solid var(--fs-liquid-line)!important;
+  border-radius:14px!important;
+  background:var(--fs-liquid-surface-strong)!important;
+  color:var(--fs-liquid-ink)!important;
+  box-shadow:0 4px 14px rgba(15,54,35,.08), inset 0 1px rgba(255,255,255,.45)!important;
+}
+body:not(.foundstore-public-landing) button:hover,
+body:not(.foundstore-public-landing) .button:hover,
+body:not(.foundstore-public-landing) .profile-action:hover,
+body:not(.foundstore-public-landing) .profile-follow:hover,
+body:not(.foundstore-public-landing) .pwa-button:hover,
+body:not(.foundstore-public-landing) .foundstore-share-button:hover{background:var(--fs-liquid-green-soft)!important;color:var(--fs-liquid-green)!important}
+body:not(.foundstore-public-landing) button:active,
+body:not(.foundstore-public-landing) .button:active,
+body:not(.foundstore-public-landing) .profile-action:active,
+body:not(.foundstore-public-landing) .profile-follow:active,
+body:not(.foundstore-public-landing) .pwa-button:active,
+body:not(.foundstore-public-landing) .foundstore-share-button:active{transform:scale(.98)}
+body:not(.foundstore-public-landing) button:focus-visible,
+body:not(.foundstore-public-landing) a:focus-visible,
+body:not(.foundstore-public-landing) input:focus-visible,
+body:not(.foundstore-public-landing) select:focus-visible{outline:2px solid var(--fs-liquid-green)!important;outline-offset:3px!important}
+
+@media(max-width:560px){
+  .foundstore-brand-wrap{gap:7px}
+  .foundstore-brand{gap:7px}
+  .foundstore-brand-icon{width:32px;height:32px;flex-basis:32px}
+  .foundstore-brand-logo{width:23px;height:23px}
+  .foundstore-brand-word{font-size:14px}
+  .foundstore-language{max-width:116px;font-size:12px}
+}
+@media(prefers-reduced-transparency:reduce){
+  body:not(.foundstore-public-landing) .bar,
+  body:not(.foundstore-public-landing) .nav,
+  body:not(.foundstore-public-landing) .profile-nav,
+  body:not(.foundstore-public-landing) .sidebar,
+  body:not(.foundstore-public-landing) .panel,
+  body:not(.foundstore-public-landing) .card,
+  body:not(.foundstore-public-landing) .profile-hero,
+  body:not(.foundstore-public-landing) .profile-section,
+  body:not(.foundstore-public-landing) .profile-community-card,
+  body:not(.foundstore-public-landing) .profile-person,
+  body:not(.foundstore-public-landing) .foundstore-store-card,
+  body:not(.foundstore-public-landing) .detail,
+  body:not(.foundstore-public-landing) .install,
+  body:not(.foundstore-public-landing) .readme,
+  body:not(.foundstore-public-landing) .security{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:var(--fs-liquid-surface-strong)!important}
+}
+@media(prefers-reduced-motion:reduce){body:not(.foundstore-public-landing) *{transition:none!important}}
