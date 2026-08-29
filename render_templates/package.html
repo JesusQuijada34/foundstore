@@ -20,6 +20,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-components.css') }}"><script defer src="{{ url_for('static', filename='js/foundstore-motion.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-v2.css') }}?v=pwa13">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-flat.css') }}?v=flat3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/foundstore-liquid.css') }}?v=liquid3">
   </head>
   <body class="foundstore-public-package">
     <header class="bar">{{ foundstore_brand('brand') }}<div class="foundstore-flat-toolbar"><a class="back" href="/" id="back" aria-label="Volver al catálogo"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="{{ url_for('static', filename='foundstore-icons.svg') }}#arrow-left"></use></svg><span class="fs-icon-label" data-i18n="back">Catálogo</span></a><button class="foundstore-share-button" type="button" data-share-endpoint="/api/v1/share/package/{{ package.author }}/{{ package.slug }}" data-share-title="{{ package.name }} · Foundstore" aria-label="Compartir paquete"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="{{ url_for('static', filename='foundstore-icons.svg') }}#share"></use></svg><span class="fs-icon-label">Compartir paquete</span></button></div></header>

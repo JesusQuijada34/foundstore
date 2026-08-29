@@ -24,8 +24,12 @@ html[data-theme="dark"]{
 }
 
 /* Keep the brand visible at every breakpoint. */
-.foundstore-brand-wrap{display:flex;align-items:center;gap:12px;min-width:0}
-.foundstore-brand{display:inline-flex!important;align-items:center;gap:9px;min-height:44px;color:var(--fs-liquid-ink)!important;text-decoration:none!important;white-space:nowrap}
+body:not(.foundstore-public-landing){background:var(--fs-liquid-bg)!important;color:var(--fs-liquid-ink)!important}
+.foundstore-brand-wrap{display:flex!important;align-items:center!important;gap:12px!important;min-width:0!important;margin:0!important;width:auto!important;max-width:100%!important;flex:0 0 auto!important;grid-template-columns:none!important}
+body.foundstore-public-catalog .sidebar .foundstore-brand-wrap{width:100%!important;flex:0 1 auto!important}
+body:not(.foundstore-public-catalog):not(.foundstore-public-landing) .foundstore-brand-wrap{width:max-content!important;flex:0 0 auto!important;overflow:visible!important}
+body:not(.foundstore-public-catalog):not(.foundstore-public-landing) .foundstore-brand{overflow:visible!important}
+.foundstore-brand{display:inline-flex!important;align-items:center!important;gap:9px!important;min-height:44px!important;margin:0!important;min-width:0!important;max-width:100%!important;flex:0 0 auto!important;color:var(--fs-liquid-ink)!important;text-decoration:none!important;white-space:nowrap!important}
 .foundstore-brand-icon{display:grid;place-items:center;flex:0 0 34px;width:34px;height:34px;border:1px solid var(--fs-liquid-line);border-radius:11px;background:var(--fs-liquid-green-soft);overflow:hidden}
 .foundstore-brand-logo{display:block;width:25px;height:25px;object-fit:contain}
 .foundstore-brand-word{display:inline!important;color:var(--fs-liquid-ink);font-size:15px;font-weight:850;letter-spacing:-.02em}
@@ -38,6 +42,8 @@ body:not(.foundstore-public-landing) .bar,
 body:not(.foundstore-public-landing) .nav,
 body:not(.foundstore-public-landing) .profile-nav,
 body:not(.foundstore-public-landing) .sidebar{
+  position:relative;
+  z-index:20;
   color:var(--fs-liquid-ink)!important;
   background:var(--fs-liquid-surface)!important;
   border-color:var(--fs-liquid-line)!important;
