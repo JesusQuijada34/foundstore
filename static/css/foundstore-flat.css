@@ -71,7 +71,7 @@ body.foundstore-public-catalog .foundstore-store-card:hover{border-color:var(--f
 body.foundstore-public-catalog .foundstore-store-card:active{transform:translateY(1px)!important}
 body.foundstore-public-catalog .foundstore-store-card-name{color:var(--fs-flat-ink)!important}
 body.foundstore-public-catalog .foundstore-store-card-publisher{color:var(--fs-flat-muted)!important}
-body.foundstore-public-catalog .foundstore-store-card-icon{border-radius:var(--fs-flat-radius)!important;box-shadow:none!important}
+body.foundstore-public-catalog .foundstore-store-card-icon{border-radius:var(--fs-flat-radius)!important;background:var(--fs-flat-surface)!important;border-color:var(--fs-flat-line)!important;box-shadow:none!important}
 
 /* Account pages */
 body:not(.foundstore-public-catalog):not(.foundstore-public-landing) .back,

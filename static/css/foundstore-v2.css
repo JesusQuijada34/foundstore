@@ -130,9 +130,9 @@ body.foundstore-public-catalog .grid#catalog{grid-template-columns:repeat(3,minm
 .foundstore-store-card:hover{transform:translateY(-3px);border-color:rgba(57,230,160,.64);box-shadow:0 21px 42px rgba(0,0,0,.26)}
 .foundstore-store-card:focus-visible{outline:3px solid #7df4bc;outline-offset:3px}
 .foundstore-store-card:active{transform:scale(.985)}
-.foundstore-store-card-icon{position:relative;width:clamp(56px,6vw,72px);height:clamp(56px,6vw,72px);margin:0 auto;border:1px solid rgba(255,255,255,.18);border-radius:18px;background:linear-gradient(135deg,#273963,#126845);box-shadow:0 10px 22px rgba(0,0,0,.22);isolation:isolate}
+.foundstore-store-card-icon{position:relative;width:clamp(56px,6vw,72px);height:clamp(56px,6vw,72px);margin:0 auto;border:1px solid var(--v2-line);border-radius:18px;background:var(--v2-panel-2);box-shadow:none;isolation:isolate}
 .foundstore-store-card-icon img{position:absolute;inset:0;z-index:1;border-radius:inherit}
-.foundstore-store-card-fallback{position:absolute;inset:0;display:grid;place-items:center;border-radius:inherit;background:linear-gradient(135deg,#6252da,#19885f);color:#fff;font-size:25px;font-weight:900}
+.foundstore-store-card-fallback{position:absolute;inset:0;display:grid;place-items:center;border-radius:inherit;background:#0b7a4b;color:#fff;font-size:25px;font-weight:900}
 .foundstore-store-card-icon img:not([hidden]) + .foundstore-store-card-fallback{display:none}
 .foundstore-store-card-body{display:grid;grid-template-rows:auto minmax(2.35em,auto) auto auto;align-content:start;gap:6px;flex:1}
 .foundstore-store-card-badge{display:block;min-width:0;overflow:hidden;color:var(--v2-green);font-size:10px;font-weight:850;letter-spacing:.06em;line-height:1.25;text-overflow:ellipsis;text-transform:uppercase;white-space:nowrap}

@@ -1667,11 +1667,11 @@ def catalog_snapshot(catalog_owner: str = CATALOG_OWNER, catalog_repository: str
             "platform": metadata.get("platform", ""),
             "platformTargets": metadata.get("platformTargets", []),
             "visuals": {
-                "icon": f"{asset_base}/product_logo.png",
-                "splash": f"{asset_base}/splash.png",
-                "portrait": f"{asset_base}/splash_setup.png",
+                "icon": f"/assets/package/{author}/{slug}/product_logo.png",
+                "splash": f"/assets/package/{author}/{slug}/splash.png",
+                "portrait": f"/assets/package/{author}/{slug}/splash_setup.png",
             },
-            "packageIcon": f"https://raw.githubusercontent.com/{author}/{slug}/{branch}/app/app-icon.ico",
+            "packageIcon": f"/assets/package/{author}/{slug}/app-icon.ico",
         }
         package["revision"] = package_revision(package)
         return package, audit
@@ -2665,6 +2665,31 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return favicon()
         return github_avatar(github_login)
 
+    @app.get("/assets/package/<author>/<slug>/<asset_name>")
+    def package_asset(author: str, slug: str, asset_name: str) -> Response:
+        allowed_assets = {
+            "product_logo.png": "assets/product_logo.png",
+            "splash.png": "assets/splash.png",
+            "splash_setup.png": "assets/splash_setup.png",
+            "app-icon.ico": "app/app-icon.ico",
+        }
+        if not valid_github_login(author) or not valid_repository_name(slug) or asset_name not in allowed_assets:
+            return Response(status=404)
+        _, snapshot = developer_catalog(author)
+        package = next((item for item in (snapshot or {}).get("packages", []) if str(item.get("slug", "")).lower() == slug.lower()), None)
+        if not package:
+            return Response(status=404)
+        branch = str(package.get("branch") or "main")
+        raw_url = f"https://raw.githubusercontent.com/{quote(author)}/{quote(slug)}/{quote(branch)}/{allowed_assets[asset_name]}"
+        try:
+            asset = requests.get(raw_url, headers={"User-Agent": "Foundstore-Flask-Render"}, timeout=8)
+            content_type = asset.headers.get("Content-Type", "")
+            if not asset.ok or not content_type.startswith("image/") or len(asset.content) > 8_000_000:
+                return Response(status=404)
+            return Response(asset.content, content_type=content_type, headers={"Cache-Control": "public, max-age=300"})
+        except requests.RequestException:
+            return Response(status=502)
+
     @app.get("/assets/package-favicon/<author>/<slug>.ico")
     def package_favicon(author: str, slug: str) -> Response:
         if not valid_github_login(author) or not valid_repository_name(slug):
@@ -2674,7 +2699,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if not package:
             return Response(status=404)
         try:
-            icon = requests.get(str(package["packageIcon"]), headers={"User-Agent": "Foundstore-Flask-Render"}, timeout=8)
+            branch = str(package.get("branch") or "main")
+            raw_url = f"https://raw.githubusercontent.com/{quote(author)}/{quote(slug)}/{quote(branch)}/app/app-icon.ico"
+            icon = requests.get(raw_url, headers={"User-Agent": "Foundstore-Flask-Render"}, timeout=8)
             content_type = icon.headers.get("Content-Type", "")
             if not icon.ok or not content_type.startswith("image/") or len(icon.content) > 2_000_000:
                 return Response(status=404)
